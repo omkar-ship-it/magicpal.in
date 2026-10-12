@@ -356,6 +356,13 @@ h1, h2, h3 {
   border-color: var(--line);
   color: var(--ink-soft);
 }
+/* At the topic cap. Dimmed rather than hidden so the vocabulary stays
+   readable — you need to see what you *didn't* pick to decide whether to
+   swap one out. */
+.chip-toggle:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 
 /* ------------------------------------------------- layer & group pins */
 

@@ -1,48 +1,34 @@
 import { getSessionUser } from "@/lib/session";
 import { getProfileById } from "@/lib/profiles";
-import MapView from "@/components/MapViewLoader";
+import OpenMap from "@/components/OpenMapLoader";
 
 /**
- * This is the app. Not a homepage with a map on it — the map, full-bleed,
- * with everything else (search, filters, account) floating on top of it,
- * the way Google Maps' own web app works. See MapView for the actual shell.
+ * The app opens on the map — no landing page.
+ *
+ * A marketing page in front of a map costs the one thing this product has
+ * to prove in the first three seconds: that real people are already on it.
  */
 export default async function Home() {
   const user = await getSessionUser();
   const row = user ? await getProfileById(user.id) : null;
-  const canAct = Boolean(user?.onboarded);
+
+  // Centre on whatever the viewer has actually told us, in descending order
+  // of how much they meant it: their exact pin, then their base city, then
+  // Hyderabad — where the first boards are, so a cold visitor lands
+  // somewhere with people on it rather than in the middle of the ocean.
+  const center =
+    row?.lat != null && row?.lng != null
+      ? { lat: row.lat, lng: row.lng, label: row.locationLabel }
+      : row?.baseLat != null && row?.baseLng != null
+        ? { lat: row.baseLat, lng: row.baseLng, label: row.baseLabel }
+        : { lat: 17.4065, lng: 78.4772, label: "Hyderabad" };
 
   return (
-    <MapView
-      ownId={user?.id ?? null}
-      ownLat={row?.lat ?? null}
-      ownLng={row?.lng ?? null}
-      ownName={user?.name ?? "You"}
-      ownPhotoUrl={user?.photoUrl ?? null}
-      ownVisible={row?.visibleOnMap ?? false}
-      // The whole saved profile, so the You page opens in-world with no extra
-      // fetch — there's no /profile route to send people to any more.
-      ownProfile={
-        user
-          ? {
-              name: row?.name ?? user.name ?? "",
-              headline: row?.headline ?? "",
-              company: row?.company ?? "",
-              bio: row?.bio ?? "",
-              skills: row?.skills ?? [],
-              photoUrl: row?.photoUrl ?? null,
-              locationLabel: row?.locationLabel ?? "",
-              lat: row?.lat ?? null,
-              lng: row?.lng ?? null,
-              visibleOnMap: row?.visibleOnMap ?? true,
-              linkedinUrl: row?.linkedinUrl ?? "",
-              instagramUrl: row?.instagramUrl ?? "",
-              websiteUrl: row?.websiteUrl ?? "",
-            }
-          : null
-      }
-      canAct={canAct}
-      isSignedIn={Boolean(user)}
+    <OpenMap
+      center={center}
+      signedIn={Boolean(user)}
+      onboarded={Boolean(user?.onboarded)}
+      myVisibility={user?.visibility ?? "off"}
     />
   );
 }

@@ -12,9 +12,6 @@
     "test:flows": "node --env-file=.env.local scripts/flowtest.mjs"
   },
   "dependencies": {
-    "@deck.gl/core": "^9.4.0",
-    "@deck.gl/layers": "^9.4.0",
-    "@deck.gl/mapbox": "^9.4.0",
     "@neondatabase/serverless": "^1.2.0",
     "@vercel/blob": "^2.8.0",
     "drizzle-orm": "^0.45.3",

@@ -1,4 +1,16 @@
-import { pgTable, text, timestamp, uuid, uniqueIndex, boolean, doublePrecision, check } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+  uniqueIndex,
+  index,
+  boolean,
+  doublePrecision,
+  real,
+  check,
+  type AnyPgColumn,
+} from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 // ---------------------------------------------------------------- auth
@@ -6,53 +18,106 @@ import { sql } from "drizzle-orm";
 // codes are hashed at rest, and the session id is itself the opaque bearer
 // token stored in an httpOnly cookie. No password anywhere.
 
-export const users = pgTable("users", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  email: text("email").notNull().unique(),
+export const users = pgTable(
+  "users",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    email: text("email").notNull().unique(),
 
-  // ------------------------------------------------------------ profile
-  // Null until onboarding completes. A user can exist (has signed in) with
-  // no profile yet — that's the state right after their first OTP verify.
-  name: text("name"),
-  headline: text("headline"), // "Product Manager at Acme"
-  company: text("company"),
-  bio: text("bio"),
-  skills: text("skills").array().notNull().default(sql`'{}'::text[]`),
-  photoUrl: text("photo_url"),
+    // ------------------------------------------------------------ profile
+    // Null until onboarding completes. A user can exist (has signed in) with
+    // no profile yet — that's the state right after their first OTP verify.
+    name: text("name"),
+    headline: text("headline"), // "Product Manager at Acme"
+    company: text("company"),
+    bio: text("bio"),
+    skills: text("skills").array().notNull().default(sql`'{}'::text[]`),
+    photoUrl: text("photo_url"),
 
-  // Optional — shown as icon links on the profile card when set.
-  linkedinUrl: text("linkedin_url"),
-  instagramUrl: text("instagram_url"),
-  websiteUrl: text("website_url"),
+    // Optional — shown as icon links on the profile card when set.
+    linkedinUrl: text("linkedin_url"),
+    instagramUrl: text("instagram_url"),
+    websiteUrl: text("website_url"),
 
-  // -------------------------------------------------------- location
-  // Exact coordinates, never sent to the client as-is for anyone but the
-  // profile's own owner — see lib/geo.ts:jitter for what other people see.
-  lat: doublePrecision("lat"),
-  lng: doublePrecision("lng"),
-  // The human-readable place name from geocoding ("Koramangala, Bengaluru"),
-  // shown instead of coordinates everywhere in the UI.
-  locationLabel: text("location_label"),
-  /**
-   * On by default once a location is set — a networking map where everyone
-   * starts invisible has nothing on it, and the entire pitch is "be found".
-   * Setting a location is the opt-in; this is the opt-out on top of it.
-   * Enforced at every query that powers the map, not just hidden in the UI.
-   */
-  visibleOnMap: boolean("visible_on_map").notNull().default(true),
+    // ------------------------------------------------------------- intents
+    /**
+     * The two halves of every match, and the only fields the matcher scores
+     * on. Both are picked from the fixed vocabularies in lib/intents.ts
+     * rather than typed freely — an enumerated overlap is exactly computable
+     * *and* exactly explainable ("you want a technical co-founder; they've
+     * shipped two Android apps"), which is what makes a recommendation
+     * trustworthy at the point a stranger decides whether to walk over. Free
+     * text goes in `workingOn`, which colours the reason but never the score.
+     */
+    lookingFor: text("looking_for").array().notNull().default(sql`'{}'::text[]`),
+    canHelpWith: text("can_help_with").array().notNull().default(sql`'{}'::text[]`),
+    /** One line, their words — the humanising detail in a generated intro. */
+    workingOn: text("working_on"),
 
-  /**
-   * Touched by a heartbeat ping while any authenticated page is open —
-   * powers the "N people active nearby right now" pulse. Deliberately
-   * bucketed to a wide window at read time (see ACTIVE_WINDOW_MINUTES in
-   * rules.ts) rather than shown as an exact last-seen time: a precise
-   * "active 2 min ago" reads as surveillance the way Facebook's old green
-   * dot did, "active recently" reads as ambient energy.
-   */
-  lastActiveAt: timestamp("last_active_at", { withTimezone: true }),
+    /**
+     * Mentorship, carried as two flags and nothing else.
+     *
+     * The matching surface is deliberately not built yet: it needs a board
+     * that already has retention and verified members, which is months after
+     * launch. Collecting the signal from day one costs one checkbox each and
+     * means the feature ships later as a query over real data rather than as
+     * a schema migration against a populated table.
+     */
+    openToMentor: boolean("open_to_mentor").notNull().default(false),
+    seekingMentor: boolean("seeking_mentor").notNull().default(false),
 
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+    // -------------------------------------------------------- location
+    // Exact coordinates, never sent to the client as-is for anyone but the
+    // profile's own owner — see lib/geo.ts:jitter for what other people see.
+    lat: doublePrecision("lat"),
+    lng: doublePrecision("lng"),
+    // The human-readable place name from geocoding ("Koramangala, Bengaluru"),
+    // shown instead of coordinates everywhere in the UI.
+    locationLabel: text("location_label"),
+
+    /**
+     * The city the person is willing to be placed in when they don't want to
+     * be findable at street level. Stored separately rather than derived by
+     * rounding `lat`/`lng`, because rounding leaks: a rounded coordinate still
+     * points inside the neighbourhood, and the person who chose "city only"
+     * was asking us not to do that. Picked explicitly, centroid and all.
+     */
+    baseLat: doublePrecision("base_lat"),
+    baseLng: doublePrecision("base_lng"),
+    baseLabel: text("base_label"),
+
+    /**
+     * How this person appears on the open map — the promise the product makes
+     * about location, so it is one column read by every query rather than a
+     * UI preference:
+     *
+     *   exact — the real pin, street level. For "I'm at this venue, find me".
+     *   base  — the city centroid only. Discoverable, not locatable.
+     *   off   — absent from the open map entirely. Boards they joined still
+     *           show them, because joining a board is its own consent.
+     *
+     * Defaults to `off`: the previous schema defaulted visible-on because an
+     * empty map has nothing to sell, but that reasoning doesn't survive
+     * contact with real users' locations. Boards solve the empty map instead
+     * (an event has a room full of people on day one), which means the open
+     * map can afford to be opt-in and honest.
+     */
+    visibility: text("visibility").notNull().default("off"),
+
+    /**
+     * Touched by a heartbeat ping while any authenticated page is open —
+     * powers the "N people active nearby right now" pulse. Deliberately
+     * bucketed to a wide window at read time (see ACTIVE_WINDOW_MINUTES in
+     * rules.ts) rather than shown as an exact last-seen time: a precise
+     * "active 2 min ago" reads as surveillance the way Facebook's old green
+     * dot did, "active recently" reads as ambient energy.
+     */
+    lastActiveAt: timestamp("last_active_at", { withTimezone: true }),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check("users_visibility", sql`${t.visibility} in ('off','base','exact')`)]
+);
 
 export const otpCodes = pgTable("otp_codes", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -134,25 +199,192 @@ export const messages = pgTable("messages", {
   readAt: timestamp("read_at", { withTimezone: true }),
 });
 
-// ----------------------------------------------------------------- drops
+// ---------------------------------------------------------------- boards
 
 /**
- * A time-boxed "I'm here, come say hi" signal — separate from a person's
- * permanent home pin. One row per drop; expiry is just `expiresAt` checked
- * at query time (`expiresAt > now()`), the same "good enough, no cron"
- * choice made everywhere else in this schema. A person has at most one live
- * drop at a time — enforced in lib/drops.ts by clearing any existing drop
- * before inserting a new one, rather than as a DB constraint, since "at most
- * one *unexpired* row" isn't something a plain unique index can express.
+ * A board is a bounded set of people with a host, a URL and a QR code.
+ *
+ * One table covers both of the things it turns out people ask for, because
+ * they differ by a column and a date and nothing else:
+ *
+ *   event     — one room, one afternoon. `startsAt` set. The value is
+ *               entirely in the first ten minutes: three hundred badges
+ *               with first names on them and no way to find the four
+ *               people worth crossing the room for.
+ *   community — an alumni batch, a WhatsApp group, a company's ex-employees.
+ *               No end date. The value is "who here is in Berlin", which
+ *               the group genuinely cannot answer about itself.
+ *
+ * The open map is deliberately *not* a board. It has no host, no URL and
+ * no member list — it is `select … where visibility <> 'off'`. Making it a
+ * board row would have meant a fake host, a membership row per signup, and
+ * a cascade delete that could empty the public map; a query has none of
+ * those failure modes.
+ *
+ * `parentBoardId` is what makes "members can create events inside a
+ * community" free: a community event is a board whose parent is the
+ * community, an open-network event is a board with no parent at all. Same
+ * row shape, same matcher, same QR.
  */
-export const drops = pgTable("drops", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  lat: doublePrecision("lat").notNull(),
-  lng: doublePrecision("lng").notNull(),
-  label: text("label").notNull(),
-  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const boards = pgTable(
+  "boards",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    /**
+     * The whole address of the product. It goes on a slide as a QR code and
+     * into a WhatsApp group as a link, so it has to be short, readable, and
+     * not guessable by counting up from one — a four-character random salt
+     * after the slug, never a sequential id.
+     */
+    slug: text("slug").notNull().unique(),
+    type: text("type").notNull(), // event | community
+    parentBoardId: uuid("parent_board_id").references((): AnyPgColumn => boards.id, {
+      onDelete: "set null",
+    }),
+    hostUserId: uuid("host_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+
+    name: text("name").notNull(),
+    blurb: text("blurb"),
+    /** Free text: a venue for an event, a city or "everywhere" for a group. */
+    place: text("place"),
+    /** Where the board centres its map. Null for a community with no home. */
+    lat: doublePrecision("lat"),
+    lng: doublePrecision("lng"),
+
+    /** Events only. A board with no `startsAt` is a community. */
+    startsAt: timestamp("starts_at", { withTimezone: true }),
+    endsAt: timestamp("ends_at", { withTimezone: true }),
+
+    /**
+     * The admin pays and the members don't, because the admin is the one
+     * with the problem — and a per-head price on a free WhatsApp group is a
+     * product nobody buys. See lib/plans.ts for what each id allows.
+     */
+    plan: text("plan").notNull().default("free"),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+  },
+  (t) => [
+    check("boards_type", sql`${t.type} in ('event','community')`),
+    // An event without a start time can't be placed on a timeline, and a
+    // community with one is just an event that forgot to end.
+    check(
+      "boards_type_dates",
+      sql`(${t.type} = 'event' and ${t.startsAt} is not null) or (${t.type} = 'community' and ${t.startsAt} is null)`
+    ),
+    index("boards_host_idx").on(t.hostUserId),
+    index("boards_parent_idx").on(t.parentBoardId),
+  ]
+);
+
+/**
+ * Who is on a board, and who runs it.
+ *
+ * Membership is also the consent record for board visibility: a person who
+ * scanned a QR and joined has agreed to be visible *to that board*, which
+ * is a different and much narrower grant than appearing on the open map.
+ * That's why deleting a board removes its memberships but never touches
+ * `users.visibility`.
+ */
+export const memberships = pgTable(
+  "memberships",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    boardId: uuid("board_id")
+      .notNull()
+      .references(() => boards.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: text("role").notNull().default("member"), // host | member
+    /**
+     * Set while the person is physically at the event, cleared when they
+     * leave. Powers "here now", which is the difference between a directory
+     * and something you use during the coffee break.
+     */
+    checkedInAt: timestamp("checked_in_at", { withTimezone: true }),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("memberships_board_user_idx").on(t.boardId, t.userId),
+    check("memberships_role", sql`${t.role} in ('host','member')`),
+  ]
+);
+
+// --------------------------------------------------------------- matches
+
+/**
+ * A cached recommendation, with the sentence that justifies it.
+ *
+ * Scoring is deterministic (lib/matching.ts) and cheap enough to redo on
+ * every request; `reason` is not — it's one model call to turn a structured
+ * overlap into a sentence a human will act on, so it is written once per
+ * pair and kept. That split is the whole cost model: the maths is free and
+ * runs always, the prose is paid for and runs once.
+ *
+ * `aUserId`/`bUserId` are in canonical order (A < B) for the same reason
+ * `connections` is — one pair, one row, whichever direction it was computed
+ * from. `boardId` null means the pair was matched on the open map.
+ */
+export const matches = pgTable(
+  "matches",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    boardId: uuid("board_id").references(() => boards.id, { onDelete: "cascade" }),
+    userAId: uuid("user_a_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    userBId: uuid("user_b_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    score: real("score").notNull(),
+    /** The generated one-liner. Null until it has been written. */
+    reason: text("reason"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("matches_pair_order", sql`${t.userAId} < ${t.userBId}`),
+    // Two partial indexes rather than one over (board, a, b): Postgres
+    // treats NULLs as distinct in a unique index, so open-map pairs — which
+    // all have board_id null — would not be constrained by the first index
+    // at all, and the cache would fill with duplicates of the same pair.
+    uniqueIndex("matches_board_pair_idx")
+      .on(t.boardId, t.userAId, t.userBId)
+      .where(sql`${t.boardId} is not null`),
+    uniqueIndex("matches_open_pair_idx")
+      .on(t.userAId, t.userBId)
+      .where(sql`${t.boardId} is null`),
+  ]
+);
+
+// -------------------------------------------------------------- consents
+
+/**
+ * One append-only row per grant or withdrawal of consent.
+ *
+ * Precise location is sensitive personal data under the DPDP Act, and the
+ * obligation is to be able to show *what* was agreed to and *when* — which
+ * a mutable boolean on `users` can never do, because it only ever knows the
+ * current value. Rows are never updated or deleted, only superseded by a
+ * later row for the same `kind`; `users.visibility` is the fast read, this
+ * is the record. Far cheaper to write now than to reconstruct later.
+ */
+export const consents = pgTable(
+  "consents",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** e.g. location_exact, location_base, open_map, terms_18plus */
+    kind: text("kind").notNull(),
+    granted: boolean("granted").notNull(),
+    /** What the person was actually shown when they agreed. */
+    copyVersion: text("copy_version"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("consents_user_kind_idx").on(t.userId, t.kind, t.createdAt)]
+);

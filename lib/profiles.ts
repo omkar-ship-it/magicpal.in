@@ -1,9 +1,19 @@
-import { and, eq, gt, isNotNull, ne } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, lt, ne, or } from "drizzle-orm";
 import { db, hasDb } from "./db";
-import { drops, users } from "./db/schema";
-import { distanceKm, jitterLocation } from "./geo";
+import { memberships, users } from "./db/schema";
+import { distanceKm } from "./geo";
 import { ACTIVE_WINDOW_MINUTES, MAX_MAP_RESULTS } from "./rules";
 
+export type Visibility = "off" | "base" | "exact";
+
+/**
+ * A person as the map and the matcher both see them.
+ *
+ * One shape for every surface — open map, event board, community board —
+ * because the matcher is one function over a candidate set, and a candidate
+ * from a board has to be indistinguishable from a candidate from the open
+ * map for that to hold.
+ */
 export type MapProfile = {
   id: string;
   name: string;
@@ -16,109 +26,259 @@ export type MapProfile = {
   linkedinUrl: string | null;
   instagramUrl: string | null;
   websiteUrl: string | null;
-  /** Jittered — never the profile owner's exact coordinates. */
+
+  /** What the matcher scores on. */
+  lookingFor: string[];
+  canHelpWith: string[];
+  workingOn: string | null;
+
+  /**
+   * Where to draw them, already resolved against their visibility choice —
+   * the exact pin for `exact`, the city centroid for `base`. A caller can
+   * never accidentally render a precise location for someone who asked for
+   * city-level, because the precise one is not in this object.
+   */
   lat: number;
   lng: number;
-  distanceKm: number;
+  /** Which of the two the coordinates above actually are. */
+  placed: "exact" | "base";
+  /** Null when the caller gave no centre to measure from. */
+  distanceKm: number | null;
   /** Heartbeat landed within ACTIVE_WINDOW_MINUTES. */
   active: boolean;
-  /** A live, time-boxed "come say hi" — null if they have none right now. */
-  drop: { label: string; expiresAt: string } | null;
+  /** Board surfaces only: physically present right now. */
+  hereNow?: boolean;
 };
 
+const PROFILE_COLUMNS = {
+  id: users.id,
+  name: users.name,
+  headline: users.headline,
+  company: users.company,
+  bio: users.bio,
+  skills: users.skills,
+  photoUrl: users.photoUrl,
+  locationLabel: users.locationLabel,
+  linkedinUrl: users.linkedinUrl,
+  instagramUrl: users.instagramUrl,
+  websiteUrl: users.websiteUrl,
+  lookingFor: users.lookingFor,
+  canHelpWith: users.canHelpWith,
+  workingOn: users.workingOn,
+  lat: users.lat,
+  lng: users.lng,
+  baseLat: users.baseLat,
+  baseLng: users.baseLng,
+  visibility: users.visibility,
+  lastActiveAt: users.lastActiveAt,
+} as const;
+
 /**
- * Everyone visible on the map within a radius of a point, nearest first.
+ * Resolve a row's stored coordinates down to the one pair the viewer is
+ * allowed to see.
  *
- * The dataset is small enough that computing distance in application code
- * rather than in SQL (PostGIS, or a bounding-box index) is the honest
- * trade-off for a first version — this is the thing to replace first if the
- * table ever gets large enough for a full scan to matter.
- *
- * `visibleOnMap` is checked here, in the one function every map view goes
- * through, rather than trusted to be filtered by every caller — the
- * guarantee this makes is "a profile with the toggle off is never in this
- * result set", not "the UI happens to hide it".
+ * Fails closed, deliberately: somebody who chose `base` but has no base
+ * city saved yet is dropped from the result rather than falling back to
+ * their exact pin. The fallback would be the more "helpful" behaviour and
+ * it would also be the exact leak the setting exists to prevent.
  */
-export async function getNearbyProfiles(opts: {
+function place(r: {
+  visibility: string;
+  lat: number | null;
+  lng: number | null;
+  baseLat: number | null;
+  baseLng: number | null;
+}): { lat: number; lng: number; placed: "exact" | "base" } | null {
+  if (r.visibility === "exact" && r.lat != null && r.lng != null) {
+    // No jitter. Someone who picked "exact" is asking to be findable at the
+    // venue they're standing in; blurring it would quietly break that deal.
+    return { lat: r.lat, lng: r.lng, placed: "exact" };
+  }
+  if (r.visibility === "base" && r.baseLat != null && r.baseLng != null) {
+    return { lat: r.baseLat, lng: r.baseLng, placed: "base" };
+  }
+  return null;
+}
+
+function toMapProfile(r: Record<string, any>, centre?: { lat: number; lng: number }): MapProfile | null {
+  const placed = place(r as any);
+  if (!placed) return null;
+  const activeSince = new Date(Date.now() - ACTIVE_WINDOW_MINUTES * 60_000);
+  return {
+    id: r.id,
+    name: r.name,
+    headline: r.headline,
+    company: r.company,
+    bio: r.bio,
+    skills: r.skills ?? [],
+    photoUrl: r.photoUrl,
+    locationLabel: r.locationLabel,
+    linkedinUrl: r.linkedinUrl,
+    instagramUrl: r.instagramUrl,
+    websiteUrl: r.websiteUrl,
+    lookingFor: r.lookingFor ?? [],
+    canHelpWith: r.canHelpWith ?? [],
+    workingOn: r.workingOn,
+    lat: placed.lat,
+    lng: placed.lng,
+    placed: placed.placed,
+    distanceKm: centre ? distanceKm(centre.lat, centre.lng, placed.lat, placed.lng) : null,
+    active: Boolean(r.lastActiveAt && new Date(r.lastActiveAt) > activeSince),
+  };
+}
+
+/**
+ * The open map: everyone who opted in, within a radius, nearest first.
+ *
+ * `visibility <> 'off'` is checked here, in the one function every open-map
+ * view goes through, rather than trusted to every caller — the guarantee is
+ * "a profile set to off is never in this result set", not "the UI happens
+ * to hide it".
+ *
+ * Distance is still computed in application code. The honest trade-off for
+ * a first version: a bounding-box prefilter in SQL is the next step and
+ * PostGIS the one after that, but neither earns its setup cost until the
+ * table is large enough for a full scan to show up in a trace.
+ */
+export async function getOpenMapProfiles(opts: {
   /** Omit for a signed-out caller — there's no "self" to exclude. */
   excludeUserId?: string;
-  centerLat: number;
-  centerLng: number;
-  radiusKm: number;
-  /** Skip the radius filter entirely — everyone visible, worldwide, nearest-first. */
-  global?: boolean;
+  centerLat?: number;
+  centerLng?: number;
+  radiusKm?: number;
 }): Promise<MapProfile[]> {
   if (!hasDb || !db) return [];
 
-  const activeSince = new Date(Date.now() - ACTIVE_WINDOW_MINUTES * 60_000);
-
   const rows = await db
-    .select({
-      id: users.id,
-      name: users.name,
-      headline: users.headline,
-      company: users.company,
-      bio: users.bio,
-      skills: users.skills,
-      photoUrl: users.photoUrl,
-      locationLabel: users.locationLabel,
-      linkedinUrl: users.linkedinUrl,
-      instagramUrl: users.instagramUrl,
-      websiteUrl: users.websiteUrl,
-      lat: users.lat,
-      lng: users.lng,
-      lastActiveAt: users.lastActiveAt,
-      dropLat: drops.lat,
-      dropLng: drops.lng,
-      dropLabel: drops.label,
-      dropExpiresAt: drops.expiresAt,
-    })
+    .select(PROFILE_COLUMNS)
     .from(users)
-    .leftJoin(drops, and(eq(drops.userId, users.id), gt(drops.expiresAt, new Date())))
     .where(
       and(
-        eq(users.visibleOnMap, true),
-        isNotNull(users.lat),
-        isNotNull(users.lng),
+        ne(users.visibility, "off"),
         isNotNull(users.name), // onboarded
+        // Either an exact pin or a base city must actually be present, or
+        // there is nothing to draw. Mirrors place() so the database does
+        // not hand back rows that function is only going to discard.
+        or(
+          and(eq(users.visibility, "exact"), isNotNull(users.lat), isNotNull(users.lng)),
+          and(eq(users.visibility, "base"), isNotNull(users.baseLat), isNotNull(users.baseLng))
+        ),
         opts.excludeUserId ? ne(users.id, opts.excludeUserId) : undefined
       )
     );
 
+  const centre =
+    opts.centerLat != null && opts.centerLng != null
+      ? { lat: opts.centerLat, lng: opts.centerLng }
+      : undefined;
+
   return rows
-    .map((r) => {
-      // A live drop anchors the pin to where it was dropped, not wherever
-      // the person's home location is set to today.
-      const pinLat = r.dropLat ?? r.lat!;
-      const pinLng = r.dropLng ?? r.lng!;
-      const km = distanceKm(opts.centerLat, opts.centerLng, pinLat, pinLng);
-      const jittered = jitterLocation(r.id, pinLat, pinLng);
-      return {
-        id: r.id,
-        name: r.name!,
-        headline: r.headline,
-        company: r.company,
-        bio: r.bio,
-        skills: r.skills,
-        photoUrl: r.photoUrl,
-        locationLabel: r.locationLabel,
-        linkedinUrl: r.linkedinUrl,
-        instagramUrl: r.instagramUrl,
-        websiteUrl: r.websiteUrl,
-        lat: jittered.lat,
-        lng: jittered.lng,
-        distanceKm: km,
-        active: Boolean(r.lastActiveAt && r.lastActiveAt > activeSince),
-        drop: r.dropExpiresAt ? { label: r.dropLabel!, expiresAt: r.dropExpiresAt.toISOString() } : null,
-      };
-    })
-    .filter((p) => opts.global || p.distanceKm <= opts.radiusKm)
-    .sort((a, b) => a.distanceKm - b.distanceKm)
+    .map((r) => toMapProfile(r, centre))
+    .filter((p): p is MapProfile => p !== null)
+    .filter((p) => opts.radiusKm == null || p.distanceKm == null || p.distanceKm <= opts.radiusKm)
+    .sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0))
     .slice(0, MAX_MAP_RESULTS);
+}
+
+/**
+ * Everyone on a board.
+ *
+ * Note what is *not* in the where clause: `visibility`. Joining a board is
+ * its own, narrower act of consent — you scanned a QR in a room and agreed
+ * to be visible to that room — and it does not require being on the public
+ * map. A member set to `off` still appears to their own board, which is the
+ * single most important asymmetry in the product.
+ *
+ * Their *coordinates* still follow their visibility setting, via place():
+ * on a board you are always listed, but you are only pinned where you
+ * agreed to be pinned.
+ */
+export async function getBoardMembers(
+  boardId: string,
+  opts: { excludeUserId?: string; centerLat?: number; centerLng?: number } = {}
+): Promise<Array<MapProfile & { hereNow: boolean; role: string; unplaced: boolean }>> {
+  if (!hasDb || !db) return [];
+
+  const rows = await db
+    .select({ ...PROFILE_COLUMNS, role: memberships.role, checkedInAt: memberships.checkedInAt })
+    .from(memberships)
+    .innerJoin(users, eq(users.id, memberships.userId))
+    .where(
+      and(
+        eq(memberships.boardId, boardId),
+        isNotNull(users.name),
+        opts.excludeUserId ? ne(users.id, opts.excludeUserId) : undefined
+      )
+    );
+
+  const centre =
+    opts.centerLat != null && opts.centerLng != null
+      ? { lat: opts.centerLat, lng: opts.centerLng }
+      : undefined;
+
+  const checkedInSince = new Date(Date.now() - 12 * 60 * 60_000);
+
+  return rows.map((r) => {
+    const mapped = toMapProfile(r, centre);
+    const hereNow = Boolean(r.checkedInAt && new Date(r.checkedInAt) > checkedInSince);
+    if (mapped) return { ...mapped, hereNow, role: r.role, unplaced: false };
+    // Set to `off`, or no coordinates yet. They are a real member and must
+    // still be listed and matchable — they simply have no pin. The board UI
+    // shows them in the list with no marker rather than dropping them.
+    return {
+      id: r.id as string,
+      name: r.name as string,
+      headline: r.headline as string | null,
+      company: r.company as string | null,
+      bio: r.bio as string | null,
+      skills: (r.skills as string[]) ?? [],
+      photoUrl: r.photoUrl as string | null,
+      locationLabel: r.locationLabel as string | null,
+      linkedinUrl: r.linkedinUrl as string | null,
+      instagramUrl: r.instagramUrl as string | null,
+      websiteUrl: r.websiteUrl as string | null,
+      lookingFor: (r.lookingFor as string[]) ?? [],
+      canHelpWith: (r.canHelpWith as string[]) ?? [],
+      workingOn: r.workingOn as string | null,
+      lat: 0,
+      lng: 0,
+      placed: "base" as const,
+      distanceKm: null,
+      active: false,
+      hereNow,
+      role: r.role,
+      unplaced: true,
+    };
+  });
+}
+
+/**
+ * Mark someone as around, cheaply.
+ *
+ * The prototype ran a client heartbeat on a timer for this, which is a
+ * websocket's worth of infrastructure to power one word on a card. Loading
+ * a map *is* the activity signal, so this piggybacks on it — and the
+ * WHERE clause means a user costs at most one small indexed write per
+ * window however often they pan the map.
+ */
+export async function touchActivity(userId: string): Promise<void> {
+  if (!hasDb || !db) return;
+  const staleBefore = new Date(Date.now() - (ACTIVE_WINDOW_MINUTES / 2) * 60_000);
+  await db
+    .update(users)
+    .set({ lastActiveAt: new Date() })
+    .where(
+      and(eq(users.id, userId), or(isNull(users.lastActiveAt), lt(users.lastActiveAt, staleBefore)))
+    );
 }
 
 export async function getProfileById(id: string) {
   if (!hasDb || !db) return null;
   const [row] = await db.select().from(users).where(eq(users.id, id)).limit(1);
   return row ?? null;
+}
+
+export async function getProfilesByIds(ids: string[]) {
+  if (!hasDb || !db || ids.length === 0) return [];
+  return db.select(PROFILE_COLUMNS).from(users).where(inArray(users.id, ids));
 }

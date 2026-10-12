@@ -12,6 +12,13 @@ export type SessionUser = {
   name: string | null;
   headline: string | null;
   photoUrl: string | null;
+  /**
+   * Carried on the session because nearly every screen needs to say whether
+   * you're on the open map — and a person who can't tell at a glance
+   * assumes the worst, which for a location product means assuming they're
+   * exposed. See users.visibility for what the values mean.
+   */
+  visibility: "off" | "base" | "exact";
   /** True once name is set — onboarding is the gate for everything else. */
   onboarded: boolean;
 };
@@ -63,6 +70,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       name: users.name,
       headline: users.headline,
       photoUrl: users.photoUrl,
+      visibility: users.visibility,
     })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId))
@@ -76,6 +84,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     name: row.name,
     headline: row.headline,
     photoUrl: row.photoUrl,
+    visibility: row.visibility as SessionUser["visibility"],
     onboarded: Boolean(row.name),
   };
 }
