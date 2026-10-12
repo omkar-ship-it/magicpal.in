@@ -28,6 +28,7 @@ export default function OpenMap({
   signedIn,
   onboarded,
   myVisibility,
+  me,
 }: {
   center: { lat: number; lng: number; label: string | null };
   /**
@@ -39,6 +40,8 @@ export default function OpenMap({
   signedIn: boolean;
   onboarded: boolean;
   myVisibility: "off" | "base" | "exact";
+  /** Your own face for the dock's last slot. Null when signed out. */
+  me: { name: string; photoUrl: string | null } | null;
 }) {
   const [people, setPeople] = useState<MapProfile[]>(initial.profiles);
   const [matches, setMatches] = useState<MatchRef[]>(initial.matches);
@@ -96,6 +99,7 @@ export default function OpenMap({
           // it only steers the opening frame, and a value that changed as
           // the sheet resized would re-centre the map under the viewer.
           bottomInset={360}
+          showZoom
           highlightIds={matches.map((m) => m.id)}
           onSelectPerson={(id) => {
             setSelected(id);
@@ -110,17 +114,29 @@ export default function OpenMap({
 
       {/* --------------------------------------------- floating chrome */}
       <header className="pointer-events-none absolute inset-x-0 top-0 z-20 p-3">
-        <div className="pointer-events-auto mx-auto flex max-w-2xl items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--card)]/95 px-3 py-2 backdrop-blur" style={{ boxShadow: "var(--shadow)" }}>
-          <Link href="/" className="flex flex-none items-center gap-2 font-semibold">
+        <div
+          className="pointer-events-auto mx-auto flex max-w-xl items-center gap-2.5 rounded-full border px-3 py-2 backdrop-blur"
+          style={{
+            background: "color-mix(in srgb, var(--chrome) 94%, transparent)",
+            borderColor: "var(--chrome-line)",
+            boxShadow: "var(--shadow-lift)",
+          }}
+        >
+          <Link href="/" className="flex flex-none items-center gap-2">
             <span
               className="grid h-7 w-7 place-items-center rounded-full text-[13px] text-white"
               style={{ background: "linear-gradient(135deg, var(--brand), var(--brand-deep))" }}
             >
               ✦
             </span>
+            {/* Named, not just badged. Once somebody is also a member of two
+                boards, "which map am I on" stops being obvious. */}
+            <span className="hidden text-[13px] font-semibold sm:inline" style={{ color: "var(--chrome-ink)" }}>
+              Open network
+            </span>
           </Link>
 
-          <span className="min-w-0 flex-1 truncate text-[12.5px] text-[var(--ink-soft)]">
+          <span className="min-w-0 flex-1 truncate text-[12.5px]" style={{ color: "var(--chrome-soft)" }}>
             {loading ? "Looking…" : `${people.length} ${people.length === 1 ? "person" : "people"} within ${radiusKm} km`}
           </span>
 
@@ -132,8 +148,14 @@ export default function OpenMap({
               void load(at.current.lat, at.current.lng, r);
             }}
             aria-label="Search radius"
-            className="input flex-none text-[12.5px]"
-            style={{ width: "auto", padding: "5px 8px" }}
+            className="flex-none rounded-full border text-[12.5px] font-semibold"
+            style={{
+              width: "auto",
+              padding: "5px 8px",
+              background: "color-mix(in srgb, var(--chrome-ink) 10%, transparent)",
+              borderColor: "var(--chrome-line)",
+              color: "var(--chrome-ink)",
+            }}
           >
             {RADIUS_OPTIONS_KM.map((r) => (
               <option key={r} value={r}>
@@ -202,6 +224,7 @@ export default function OpenMap({
         active={sheetOpen ? "people" : null}
         peopleCount={people.length}
         signedIn={signedIn}
+        me={me}
         onPeople={() => {
           // Closing from the dock also drops a selected person, so reopening
           // never resumes on a profile the viewer has mentally left.

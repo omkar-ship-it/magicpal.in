@@ -20,6 +20,14 @@
   --layer-event: #7c5cff;
   --layer-company: #0ea5b8;
   --layer-institution: #2a5db0;
+  /* Floating map chrome — the dock and the top pill.
+     Deliberately dark in *both* themes rather than following --card: on a
+     light Mapbox style a white dock dissolves into the map, and the one
+     piece of UI that must always be findable is the navigation. */
+  --chrome: #241a16;
+  --chrome-ink: #f7ede8;
+  --chrome-soft: #b9a79e;
+  --chrome-line: rgba(247, 237, 232, 0.14);
   --shadow: 0 16px 36px -22px rgba(90, 40, 20, 0.35);
   --shadow-lift: 0 24px 54px -26px rgba(90, 40, 20, 0.5);
 }
@@ -42,6 +50,11 @@
     --layer-event: #a996ff;
     --layer-company: #4fd4e6;
     --layer-institution: #7fa8f0;
+    /* Lifted off the near-black ground so it still reads as floating. */
+    --chrome: #31241e;
+    --chrome-ink: #f7ede8;
+    --chrome-soft: #c2aea4;
+    --chrome-line: rgba(247, 237, 232, 0.12);
     --shadow: 0 16px 36px -20px rgba(0, 0, 0, 0.7);
     --shadow-lift: 0 26px 60px -26px rgba(0, 0, 0, 0.85);
   }
@@ -63,6 +76,10 @@
   --layer-event: #a996ff;
   --layer-company: #4fd4e6;
   --layer-institution: #7fa8f0;
+  --chrome: #31241e;
+  --chrome-ink: #f7ede8;
+  --chrome-soft: #c2aea4;
+  --chrome-line: rgba(247, 237, 232, 0.12);
   --shadow: 0 16px 36px -20px rgba(0, 0, 0, 0.7);
   --shadow-lift: 0 26px 60px -26px rgba(0, 0, 0, 0.85);
 }
@@ -593,5 +610,14 @@ h1, h2, h3 {
   }
   .hover-card {
     opacity: 1;
+  }
+}
+
+/* Mapbox's zoom buttons are a desktop affordance — on a phone you pinch,
+   and the dock already occupies that corner. Hidden rather than moved: a
+   control that only half-clears the dock is worse than no control. */
+@media (max-width: 639px) {
+  .mapboxgl-ctrl-bottom-right {
+    display: none;
   }
 }

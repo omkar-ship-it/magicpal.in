@@ -42,6 +42,7 @@ export default async function Home() {
       signedIn={Boolean(user)}
       onboarded={Boolean(user?.onboarded)}
       myVisibility={user?.visibility ?? "off"}
+      me={user ? { name: user.name ?? user.email, photoUrl: user.photoUrl } : null}
     />
   );
 }

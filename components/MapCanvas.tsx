@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 // The default export of react-map-gl is named `Map`, which shadows the
 // global `Map` constructor used below for grouping. Aliased, not imported
 // bare — this exact collision has broken this file before.
-import MapGL, { Marker, type ViewStateChangeEvent } from "react-map-gl/mapbox";
+import MapGL, { Marker, NavigationControl, type ViewStateChangeEvent } from "react-map-gl/mapbox";
 import type { MapProfile } from "@/lib/profiles";
 import Avatar from "./Avatar";
 import { IconCalendar } from "./Icons";
@@ -40,6 +40,7 @@ export default function MapCanvas({
   initialZoom = 10,
   fitToPeople = false,
   bottomInset = 0,
+  showZoom = false,
   highlightIds = [],
   onSelectPerson,
   onSelectEvent,
@@ -65,6 +66,8 @@ export default function MapCanvas({
    * hidden but unclickable, the sheet having swallowed the pointer events.
    */
   bottomInset?: number;
+  /** Zoom buttons. Worth it on a pannable full-screen map, noise in a card. */
+  showZoom?: boolean;
   /** Recommended people — drawn with a ring so the list and map agree. */
   highlightIds?: string[];
   onSelectPerson?: (id: string) => void;
@@ -157,6 +160,8 @@ export default function MapCanvas({
         onMoveEnd?.({ lat: e.viewState.latitude, lng: e.viewState.longitude, zoom: e.viewState.zoom })
       }
     >
+      {showZoom && <NavigationControl position="bottom-right" showCompass={false} />}
+
       {events.map((ev) =>
         ev.lat != null && ev.lng != null ? (
           <Marker key={ev.slug} latitude={ev.lat} longitude={ev.lng} anchor="bottom">
