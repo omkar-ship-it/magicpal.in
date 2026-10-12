@@ -38,6 +38,7 @@ export default function MapCanvas({
   initialLat,
   initialLng,
   initialZoom = 10,
+  fitToPeople = false,
   highlightIds = [],
   onSelectPerson,
   onSelectEvent,
@@ -48,6 +49,13 @@ export default function MapCanvas({
   initialLat: number;
   initialLng: number;
   initialZoom?: number;
+  /**
+   * Frame everybody instead of centring on a fixed point. A board's venue
+   * is where the *event* is, which on a community board is nowhere and on
+   * an event board is one corner of where the members actually live — so
+   * centring on it reliably pushes half the faces off the edge.
+   */
+  fitToPeople?: boolean;
   /** Recommended people — drawn with a ring so the list and map agree. */
   highlightIds?: string[];
   onSelectPerson?: (id: string) => void;
@@ -55,6 +63,24 @@ export default function MapCanvas({
   onMoveEnd?: (c: { lat: number; lng: number; zoom: number }) => void;
 }) {
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+
+  /**
+   * Computed once, from the first render's people. Deliberately not
+   * reactive: this feeds `initialViewState`, and recomputing it as people
+   * load would yank the camera out from under somebody who has already
+   * started panning.
+   */
+  const [fitted] = useState(() => {
+    if (!fitToPeople || people.length === 0) return null;
+    const lats = people.map((p) => p.lat);
+    const lngs = people.map((p) => p.lng);
+    return {
+      bounds: [
+        [Math.min(...lngs), Math.min(...lats)],
+        [Math.max(...lngs), Math.max(...lats)],
+      ] as [[number, number], [number, number]],
+    };
+  });
   const [zoom, setZoom] = useState(initialZoom);
   const highlighted = useMemo(() => new Set(highlightIds), [highlightIds]);
 
@@ -99,7 +125,11 @@ export default function MapCanvas({
   return (
     <MapGL
       mapboxAccessToken={token}
-      initialViewState={{ latitude: initialLat, longitude: initialLng, zoom: initialZoom }}
+      initialViewState={
+        fitted
+          ? { bounds: fitted.bounds, fitBoundsOptions: { padding: 48, maxZoom: 13 } }
+          : { latitude: initialLat, longitude: initialLng, zoom: initialZoom }
+      }
       // Mercator, always. The globe projection reprojects markers during
       // flight and the face stacks visibly slide off their coordinates.
       projection="mercator"

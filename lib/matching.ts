@@ -110,7 +110,7 @@ export function matchesFor(
       other,
       score,
       overlaps: list,
-      reason: describeOverlap(list, firstName(other.name)),
+      reason: describeOverlap(list, firstName(other.name), other),
       twoWay: two,
     });
   }

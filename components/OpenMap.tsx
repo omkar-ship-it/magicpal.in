@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import Link from "next/link";
 import type { MapProfile } from "@/lib/profiles";
-import { DEFAULT_RADIUS_KM, RADIUS_OPTIONS_KM } from "@/lib/rules";
+import { RADIUS_OPTIONS_KM } from "@/lib/rules";
 import MapCanvas, { type MapEvent } from "./MapCanvas";
 import PersonCard from "./PersonCard";
 import { IconGlobe, IconHidden, IconSparkle, IconX } from "./Icons";
@@ -23,24 +23,34 @@ type MatchRef = { id: string; reason: string; twoWay: boolean };
  */
 export default function OpenMap({
   center,
+  initial,
   signedIn,
   onboarded,
   myVisibility,
 }: {
   center: { lat: number; lng: number; label: string | null };
+  /**
+   * Server-rendered first view. The map arrives with people already on it
+   * rather than popping them in a moment later — which also means this
+   * component has no mount effect, only handlers for movement.
+   */
+  initial: { profiles: MapProfile[]; matches: MatchRef[]; events: MapEvent[]; radiusKm: number };
   signedIn: boolean;
   onboarded: boolean;
   myVisibility: "off" | "base" | "exact";
 }) {
-  const [people, setPeople] = useState<MapProfile[]>([]);
-  const [matches, setMatches] = useState<MatchRef[]>([]);
-  const [events, setEvents] = useState<MapEvent[]>([]);
-  const [radiusKm, setRadiusKm] = useState<number>(DEFAULT_RADIUS_KM);
-  const [loading, setLoading] = useState(true);
+  const [people, setPeople] = useState<MapProfile[]>(initial.profiles);
+  const [matches, setMatches] = useState<MatchRef[]>(initial.matches);
+  const [events, setEvents] = useState<MapEvent[]>(initial.events);
+  const [radiusKm, setRadiusKm] = useState<number>(initial.radiusKm);
+  const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [tab, setTab] = useState<"forYou" | "everyone">("forYou");
 
-  const at = useRef(center);
+  // Where the map currently is, so a radius change refetches around the
+  // viewport the person is looking at rather than snapping back to where
+  // they started.
+  const at = useRef({ lat: center.lat, lng: center.lng });
   // Guards against a slow response for an old viewport landing after a fast
   // one for the new viewport — panning a map fires these in quick
   // succession and out-of-order arrival is the normal case, not the edge.
@@ -63,10 +73,6 @@ export default function OpenMap({
     }
   }, []);
 
-  useEffect(() => {
-    void load(center.lat, center.lng, radiusKm);
-  }, [load, center.lat, center.lng, radiusKm]);
-
   const byId = new Map(people.map((p) => [p.id, p]));
   const matched = matches.map((m) => ({ match: m, person: byId.get(m.id) })).filter((x) => x.person);
   const selectedPerson = selected ? byId.get(selected) : null;
@@ -82,7 +88,7 @@ export default function OpenMap({
           highlightIds={matches.map((m) => m.id)}
           onSelectPerson={(id) => setSelected(id)}
           onMoveEnd={(c) => {
-            at.current = { lat: c.lat, lng: c.lng, label: null };
+            at.current = { lat: c.lat, lng: c.lng };
             void load(c.lat, c.lng, radiusKm);
           }}
         />
@@ -106,7 +112,11 @@ export default function OpenMap({
 
           <select
             value={radiusKm}
-            onChange={(e) => setRadiusKm(Number(e.target.value))}
+            onChange={(e) => {
+              const r = Number(e.target.value);
+              setRadiusKm(r);
+              void load(at.current.lat, at.current.lng, r);
+            }}
             aria-label="Search radius"
             className="input flex-none text-[12.5px]"
             style={{ width: "auto", padding: "5px 8px" }}
@@ -131,7 +141,7 @@ export default function OpenMap({
       </header>
 
       {/* --------------------------------------------- the side panel */}
-      <aside className="floating-panel absolute bottom-0 left-0 right-0 z-20 max-h-[58dvh] md:bottom-3 md:left-3 md:right-auto md:top-[68px] md:max-h-none md:w-[360px]">
+      <aside className="floating-panel absolute overflow-hidden bottom-0 left-0 right-0 z-20 max-h-[58dvh] md:bottom-3 md:left-3 md:right-auto md:top-[68px] md:max-h-none md:w-[360px]">
         {selectedPerson ? (
           <div className="flex h-full flex-col">
             <div className="flex items-center justify-between gap-2 border-b border-[var(--line)] p-3">
@@ -140,7 +150,7 @@ export default function OpenMap({
                 <IconX size={13} />
               </button>
             </div>
-            <div className="floating-list p-3">
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
               <PersonCard
                 person={selectedPerson}
                 reason={matches.find((m) => m.id === selectedPerson.id)?.reason}
@@ -160,7 +170,7 @@ export default function OpenMap({
               </TabButton>
             </div>
 
-            <div className="floating-list flex flex-col gap-2.5 p-3">
+            <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-3">
               {tab === "forYou" ? (
                 <ForYou
                   matched={matched as Array<{ match: MatchRef; person: MapProfile }>}
@@ -279,11 +289,20 @@ function EmptyMap({ loading }: { loading: boolean }) {
   );
 }
 
+/**
+ * Children land in a div rather than a paragraph: every caller passes a
+ * trailing button or link, and a block-level control inside a <p> is
+ * invalid markup that the browser reflows into overlapping text.
+ */
 function Note({ title, children }: { title: string; children?: React.ReactNode }) {
   return (
-    <div className="card flex flex-col items-start p-4">
+    <div className="card p-4">
       <p className="text-[13.5px] font-semibold">{title}</p>
-      {children && <p className="mt-1 text-[12.5px] leading-[1.5] text-[var(--ink-soft)]">{children}</p>}
+      {children && (
+        <div className="mt-1 flex flex-col items-start text-[12.5px] leading-[1.5] text-[var(--ink-soft)]">
+          {children}
+        </div>
+      )}
     </div>
   );
 }

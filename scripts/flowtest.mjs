@@ -1,7 +1,13 @@
-// End-to-end coverage for the core MagicPal loop: sign in, build a profile,
-// show up on the map, connect, and message — run against a real server this
-// script spawns itself (on its own port, so it doesn't collide with a dev
-// server you already have open) and a real Postgres database.
+// End-to-end coverage for the promises MagicPal actually makes: sign in,
+// state your intents, join a board, get recommended somebody with a reason,
+// and — most of all — appear exactly where you agreed to appear and nowhere
+// else. Runs against a real server this script spawns itself (on its own
+// port, so it doesn't collide with a dev server you already have open) and a
+// real Postgres database.
+//
+// The privacy assertions are the point of this file. Most of what can go
+// wrong in this product is invisible in the UI and only shows up as a row
+// in a JSON response that should not have been there.
 //
 // OTP codes never touch the database in plaintext (they're scrypt-hashed),
 // so this reads them the same way a developer would with no email provider
@@ -107,7 +113,7 @@ async function main() {
         return reject(new Error("Another `next dev` is already running for this project — stop it first (Next.js only allows one per project dir)."));
       }
       if (/Ready in/.test(serverLog)) return resolve();
-      if (Date.now() - start > 20000) return reject(new Error("Server didn't start in time"));
+      if (Date.now() - start > 30000) return reject(new Error("Server didn't start in time"));
       setTimeout(tick, 150);
     };
     tick();
@@ -119,196 +125,191 @@ async function main() {
   const emailA = `flowtest.a.${stamp}@example.com`;
   const emailB = `flowtest.b.${stamp}@example.com`;
   const emailC = `flowtest.c.${stamp}@example.com`;
+  const emails = [emailA, emailB, emailC];
+  const slugs = [];
+
+  // Far enough from the seed data that its people can't accidentally satisfy
+  // an assertion — these tests must pass on an unseeded database too.
+  const HERE = { lat: 28.6139, lng: 77.209, label: "Connaught Place, Delhi" };
+  const CITY = { lat: 28.7041, lng: 77.1025, label: "Delhi" };
 
   try {
     console.log("\nAuth + onboarding");
     const a = await signUp(emailA);
     assert(a.onboarded === false, "new account starts un-onboarded");
 
+    const noIntent = await api("/api/profile", { method: "POST", jar: a.jar, body: { name: "X" } });
+    assert(noIntent.status === 400, "a profile without a headline is rejected");
+
     const profileA = await api("/api/profile", {
       method: "POST",
       jar: a.jar,
       body: {
         name: "Flow Alice",
-        headline: "Test PM",
-        locationLabel: "Koramangala, Bengaluru",
-        lat: 12.9352,
-        lng: 77.6245,
-        visibleOnMap: true,
+        headline: "Founder, test co",
+        workingOn: "Raising a seed round",
+        lookingFor: ["funding"],
+        canHelpWith: ["product"],
+        lat: HERE.lat, lng: HERE.lng, locationLabel: HERE.label,
+        baseLat: CITY.lat, baseLng: CITY.lng, baseLabel: CITY.label,
+        visibility: "exact",
       },
     });
-    assert(profileA.status === 200, "profile saves with a location");
+    assert(profileA.status === 200, "profile saves with intents and a location");
 
+    console.log("\nIntents are a closed vocabulary");
+    await api("/api/profile", {
+      method: "POST", jar: a.jar,
+      body: { name: "Flow Alice", headline: "Founder, test co", lookingFor: ["funding", "not-a-real-topic"], canHelpWith: ["product"],
+              lat: HERE.lat, lng: HERE.lng, locationLabel: HERE.label, visibility: "exact" },
+    });
+    const { rows: ir } = await pool.query("select looking_for from users where email = $1", [emailA]);
+    assert(ir[0].looking_for.length === 1 && ir[0].looking_for[0] === "funding", "an unknown topic id is dropped rather than stored");
+
+    console.log("\nVisibility is the product's actual promise");
     const b = await signUp(emailB);
-    const profileB = await api("/api/profile", {
-      method: "POST",
-      jar: b.jar,
+    const saveB = (visibility) => api("/api/profile", {
+      method: "POST", jar: b.jar,
       body: {
-        name: "Flow Bob",
-        headline: "Test Designer",
-        skills: ["design"],
-        locationLabel: "Indiranagar, Bengaluru",
-        lat: 12.9981,
-        lng: 77.6245,
-        visibleOnMap: true,
+        name: "Flow Bob", headline: "Angel investor",
+        lookingFor: ["product"], canHelpWith: ["funding"],
+        lat: HERE.lat + 0.004, lng: HERE.lng + 0.004, locationLabel: "Barakhamba, Delhi",
+        baseLat: CITY.lat, baseLng: CITY.lng, baseLabel: CITY.label,
+        visibility,
       },
     });
-    assert(profileB.status === 200, "second profile saves with a location");
 
-    console.log("\nNearby / map");
-    const nearWide = await api(`/api/nearby?lat=12.9352&lng=77.6245&radiusKm=10`, { jar: a.jar });
-    const bobEntry = nearWide.data.profiles.find((p) => p.name === "Flow Bob");
-    assert(Boolean(bobEntry), "bob (~7km away) shows up within 10km");
-    assert(bobEntry && (bobEntry.lat !== 12.9981 || bobEntry.lng !== 77.6245), "bob's displayed coordinates are jittered, not exact");
-    assert(bobEntry && bobEntry.active === false, "bob isn't 'active' before ever sending a heartbeat");
+    assert((await saveB("exact")).status === 200, "bob saves as exact");
+    let map = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}&radiusKm=25`, { jar: a.jar });
+    let bob = map.data.profiles.find((p) => p.name === "Flow Bob");
+    assert(Boolean(bob), "an `exact` profile appears on the open map");
+    assert(bob.lat === HERE.lat + 0.004 && bob.lng === HERE.lng + 0.004, "`exact` means exact — the pin is not jittered");
+    assert(bob.placed === "exact" && bob.locationLabel === "Barakhamba, Delhi", "the label describes the shown position");
 
-    // 5km and 10km are both valid RADIUS_OPTIONS_KM — an out-of-list value
-    // like 1km silently falls back to the default radius, which would make
-    // this assertion pass for the wrong reason.
-    const nearNarrow = await api(`/api/nearby?lat=12.9352&lng=77.6245&radiusKm=5`, { jar: a.jar });
-    assert(
-      !nearNarrow.data.profiles.find((p) => p.name === "Flow Bob") && nearWide.data.profiles.some((p) => p.name === "Flow Bob"),
-      "radius filter actually excludes people past the chosen distance"
+    assert((await saveB("base")).status === 200, "bob switches to city-only");
+    map = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}&radiusKm=25`, { jar: a.jar });
+    bob = map.data.profiles.find((p) => p.name === "Flow Bob");
+    assert(Boolean(bob), "a `base` profile still appears on the open map");
+    assert(bob.lat === CITY.lat && bob.lng === CITY.lng, "`base` returns the city centroid, never the street-level pin");
+    assert(bob.locationLabel === CITY.label, "`base` returns the city's name, never the neighbourhood's");
+    assert(bob.placed === "base", "the response says which precision it is");
+
+    assert((await saveB("off")).status === 200, "bob goes off the map");
+    map = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}&radiusKm=25`, { jar: a.jar });
+    assert(!map.data.profiles.some((p) => p.name === "Flow Bob"), "an `off` profile is absent from the open map entirely");
+
+    console.log("\nConsent is logged, not just toggled");
+    const { rows: cr } = await pool.query(
+      "select kind, granted from consents where user_id = (select id from users where email = $1) order by created_at",
+      [emailB]
     );
+    assert(cr.length >= 3, "each visibility change appends a consent row");
+    assert(cr[cr.length - 1].kind === "open_map_off" && cr[cr.length - 1].granted === false, "the final row records the withdrawal");
 
-    console.log("\nAnonymous browsing (map-first homepage, no login wall)");
-    const anonNear = await api(`/api/nearby?lat=12.9352&lng=77.6245&radiusKm=10`);
-    assert(anonNear.status === 200, "signed-out visitors can load the map without a 401");
-    assert(anonNear.data.profiles.some((p) => p.name === "Flow Bob"), "signed-out visitors see real nearby profiles");
-    const anonConnect = await api("/api/connections", { method: "POST", body: { toUserId: bobEntry.id } });
-    assert(anonConnect.status === 401, "signed-out visitors still can't send connection requests");
+    console.log("\nBoards");
+    const noBoard = await api("/api/boards", { method: "POST", body: { type: "event", name: "Nope", startsAt: new Date().toISOString() } });
+    assert(noBoard.status === 401, "a signed-out visitor can't create a board");
 
-    console.log("\nVisibility toggle");
-    await api("/api/profile", {
-      method: "POST",
-      jar: b.jar,
-      body: { name: "Flow Bob", headline: "Test Designer", skills: ["design"], visibleOnMap: false },
+    const undated = await api("/api/boards", { method: "POST", jar: a.jar, body: { type: "event", name: "No Date Event" } });
+    assert(undated.status === 400, "an event without a start time is rejected");
+
+    const made = await api("/api/boards", {
+      method: "POST", jar: a.jar,
+      body: { type: "event", name: "Flowtest Meetup", blurb: "A test", place: "Delhi",
+              lat: HERE.lat, lng: HERE.lng, startsAt: new Date(Date.now() - 3600_000).toISOString() },
     });
-    const nearAfterHide = await api(`/api/nearby?lat=12.9352&lng=77.6245&radiusKm=10`, { jar: a.jar });
-    assert(!nearAfterHide.data.profiles.find((p) => p.name === "Flow Bob"), "turning visibility off removes bob from everyone's map");
-    await api("/api/profile", {
-      method: "POST",
-      jar: b.jar,
-      body: { name: "Flow Bob", headline: "Test Designer", skills: ["design"], visibleOnMap: true },
-    });
+    assert(made.status === 200 && typeof made.data.slug === "string", "a signed-in member can create an event board");
+    const slug = made.data.slug;
+    slugs.push(slug);
+    assert(/-[a-z0-9]{4}$/.test(slug), "the slug carries a random salt so it can't be guessed by counting");
 
-    console.log("\nPresence pulse");
-    const heartbeat = await api("/api/presence/heartbeat", { method: "POST", jar: b.jar });
-    assert(heartbeat.status === 200, "heartbeat accepted");
-    const nearAfterHeartbeat = await api(`/api/nearby?lat=12.9352&lng=77.6245&radiusKm=10`, { jar: a.jar });
-    const bobActive = nearAfterHeartbeat.data.profiles.find((p) => p.name === "Flow Bob");
-    assert(bobActive?.active === true, "bob shows as active right after his own heartbeat");
-
-    console.log("\nTime-boxed drops");
-    await api("/api/profile", { method: "POST", jar: b.jar, body: { name: "Flow Bob", headline: "Test Designer", skills: ["design"], visibleOnMap: false } });
-    const dropWhileHidden = await api("/api/drops", { method: "POST", jar: b.jar, body: { label: "At the cafe", durationMinutes: 60 } });
-    assert(dropWhileHidden.status === 400, "can't drop a pin while hidden from the map");
-    await api("/api/profile", { method: "POST", jar: b.jar, body: { name: "Flow Bob", headline: "Test Designer", skills: ["design"], visibleOnMap: true } });
-
-    const dropCreate = await api("/api/drops", { method: "POST", jar: b.jar, body: { label: "At the cafe, say hi", durationMinutes: 60 } });
-    assert(dropCreate.status === 200 && dropCreate.data.drop?.label === "At the cafe, say hi", "drop creates with the given label");
-
-    const myDrop = await api("/api/drops", { jar: b.jar });
-    assert(myDrop.data.drop?.label === "At the cafe, say hi", "the owner can read back their own active drop");
-
-    const nearWithDrop = await api(`/api/nearby?lat=12.9352&lng=77.6245&radiusKm=10`, { jar: a.jar });
-    const bobWithDrop = nearWithDrop.data.profiles.find((p) => p.name === "Flow Bob");
-    assert(bobWithDrop?.drop?.label === "At the cafe, say hi", "someone else sees bob's live drop on the map");
-
-    const dropReplace = await api("/api/drops", { method: "POST", jar: b.jar, body: { label: "Actually at the park", durationMinutes: 30 } });
-    assert(dropReplace.data.drop?.label === "Actually at the park", "creating a new drop replaces the old one, not stacks");
-
-    await api("/api/drops", { method: "DELETE", jar: b.jar });
-    const nearAfterCancel = await api(`/api/nearby?lat=12.9352&lng=77.6245&radiusKm=10`, { jar: a.jar });
-    const bobAfterCancel = nearAfterCancel.data.profiles.find((p) => p.name === "Flow Bob");
-    assert(bobAfterCancel?.drop === null, "ending a drop removes it from everyone's map immediately");
-
-    console.log("\nConnections");
-    const req1 = await api("/api/connections", { method: "POST", jar: a.jar, body: { toUserId: bobEntry.id } });
-    assert(req1.status === 200 && req1.data.status === "pending", "connection request sent");
-    const req2 = await api("/api/connections", { method: "POST", jar: a.jar, body: { toUserId: bobEntry.id } });
-    assert(req2.status === 200 && req2.data.status === "pending", "asking twice doesn't error");
-
-    const { data: statusCheck } = await api(`/api/connections?with=${bobEntry.id}`, { jar: a.jar });
-    const connectionId = statusCheck.connectionId;
-    assert(Boolean(connectionId), "exactly one connection row exists for the pair");
-
-    const { rows: dupeCheck } = await pool.query(
-      `select count(*)::int as n from connections where (user_a_id, user_b_id) in (select user_a_id, user_b_id from connections where id = $1)`,
-      [connectionId]
+    const { rows: hostRow } = await pool.query(
+      "select role from memberships m join boards bd on bd.id = m.board_id where bd.slug = $1 and m.user_id = (select id from users where email = $2)",
+      [slug, emailA]
     );
-    assert(dupeCheck[0].n === 1, "the unique index allows exactly one row for this pair");
+    assert(hostRow[0]?.role === "host", "the creator is a host member of their own board");
 
-    console.log("\nWorldwide network view (/api/world)");
-    const worldPending = await api("/api/world", { jar: b.jar });
-    const bobSeesAlicePending = worldPending.data.profiles.find((p) => p.name === "Flow Alice");
-    assert(
-      bobSeesAlicePending?.connectionStatus === "pending" && bobSeesAlicePending?.mine === false,
-      "the recipient of a pending request sees it as incoming (mine: false)"
+    console.log("\nJoining");
+    const joined = await api(`/api/boards/${slug}/join`, { method: "POST", jar: b.jar });
+    assert(joined.status === 200, "a signed-in member can join from the link");
+    const again = await api(`/api/boards/${slug}/join`, { method: "POST", jar: b.jar });
+    assert(again.status === 200, "joining twice is idempotent, not an error");
+    const { rows: mc } = await pool.query(
+      "select count(*)::int n from memberships m join boards bd on bd.id = m.board_id where bd.slug = $1", [slug]
     );
-    const worldAnonBeforeAccept = await api("/api/world");
-    assert(worldAnonBeforeAccept.status === 200, "the world view is open to signed-out visitors too");
-    const strangerSeesAlice = worldAnonBeforeAccept.data.profiles.find((p) => p.name === "Flow Alice");
-    assert(strangerSeesAlice?.connectionStatus === "none", "a signed-out visitor sees everyone as connectionStatus: none");
+    assert(mc[0].n === 2, "a second join doesn't create a second membership row");
 
-    const selfAccept = await api(`/api/connections/${connectionId}/respond`, { method: "POST", jar: a.jar, body: { accept: true } });
-    assert(selfAccept.status === 404, "the requester can't accept their own request");
+    const anonJoin = await api(`/api/boards/${slug}/join`, { method: "POST" });
+    assert(anonJoin.status === 401, "a signed-out visitor can't join");
+    const ghost = await api(`/api/boards/does-not-exist-xxxx/join`, { method: "POST", jar: b.jar });
+    assert(ghost.status === 404, "joining a board that doesn't exist 404s");
 
-    const accept = await api(`/api/connections/${connectionId}/respond`, { method: "POST", jar: b.jar, body: { accept: true } });
-    assert(accept.status === 200 && accept.data.status === "accepted", "the recipient can accept");
+    console.log("\nThe asymmetry: off the open map, present on your board");
+    const boardPage = await fetch(`${BASE}/b/${slug}`, { headers: a.jar.headers() });
+    const html = await boardPage.text();
+    assert(boardPage.status === 200, "a member can load the board");
+    assert(html.includes("Flow Bob"), "a member set to `off` is still visible to their own board");
+    map = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}&radiusKm=25`, { jar: a.jar });
+    assert(!map.data.profiles.some((p) => p.name === "Flow Bob"), "…and still absent from the open map at the same moment");
 
-    const nearbyAfterAccept = await api(`/api/nearby?lat=12.9352&lng=77.6245&radiusKm=10`, { jar: a.jar });
-    const bobInNearby = nearbyAfterAccept.data.profiles.find((p) => p.name === "Flow Bob");
-    assert(bobInNearby?.connectionStatus === "connected", "Nearby mode shows connection status too, not just My Network");
-
-    const worldA = await api("/api/world", { jar: a.jar });
-    assert(worldA.status === 200, "world endpoint responds");
-    const bobInWorld = worldA.data.profiles.find((p) => p.name === "Flow Bob");
-    assert(bobInWorld?.connectionStatus === "connected" && typeof bobInWorld.connectionId === "string", "accepted connection shows connectionStatus: connected with its connection id");
-    assert(bobInWorld.lat !== 12.9981 || bobInWorld.lng !== 77.6245, "world view also jitters coordinates");
-
-    await api("/api/profile", { method: "POST", jar: b.jar, body: { name: "Flow Bob", headline: "Test Designer", skills: ["design"], visibleOnMap: false } });
-    const worldAfterHide = await api("/api/world", { jar: a.jar });
-    assert(!worldAfterHide.data.profiles.find((p) => p.name === "Flow Bob"), "hiding visibility removes a connection from the world view too");
-    await api("/api/profile", { method: "POST", jar: b.jar, body: { name: "Flow Bob", headline: "Test Designer", skills: ["design"], visibleOnMap: true } });
-
-    console.log("\nMessaging");
-    const send = await api("/api/messages", { method: "POST", jar: b.jar, body: { connectionId, body: "hello from bob" } });
-    assert(send.status === 200, "message sends once accepted");
-
-    const read = await api(`/api/messages?connectionId=${connectionId}`, { jar: a.jar });
-    assert(read.data.messages?.length === 1 && read.data.messages[0].readAt, "recipient reading the thread marks it read");
-
+    console.log("\nA non-member can't see who's on a board");
     const c = await signUp(emailC);
+    await api("/api/profile", { method: "POST", jar: c.jar,
+      body: { name: "Flow Carol", headline: "Curious stranger", lookingFor: ["peers"], canHelpWith: ["peers"], visibility: "off" } });
+    const peek = await fetch(`${BASE}/b/${slug}`, { headers: c.jar.headers() });
+    const peekHtml = await peek.text();
+    assert(peek.status === 200, "a non-member sees the board's landing page");
+    assert(!peekHtml.includes("Flow Bob"), "a non-member cannot see the member list");
+    assert(peekHtml.includes("on this board"), "…but is told how many people are on it");
 
-    console.log("\nConnection request notes");
-    const nearAliceFromC = await api(`/api/nearby?lat=12.9352&lng=77.6245&radiusKm=5`, { jar: c.jar });
-    const aliceFromC = nearAliceFromC.data.profiles.find((p) => p.name === "Flow Alice");
-    const noteReq = await api("/api/connections", {
-      method: "POST",
-      jar: c.jar,
-      body: { toUserId: aliceFromC.id, note: "Loved your profile, would love to connect!" },
-    });
-    assert(noteReq.status === 200, "a connection request with a note sends fine");
-
-    const { data: noteConnStatus } = await api(`/api/connections?with=${aliceFromC.id}`, { jar: c.jar });
-    const noteAccept = await api(`/api/connections/${noteConnStatus.connectionId}/respond`, { method: "POST", jar: a.jar, body: { accept: true } });
-    assert(noteAccept.status === 200, "accepting a noted request works like any other");
-
-    const noteThread = await api(`/api/messages?connectionId=${noteConnStatus.connectionId}`, { jar: a.jar });
-    assert(
-      noteThread.data.messages?.length === 1 && noteThread.data.messages[0].body === "Loved your profile, would love to connect!",
-      "the note is auto-delivered as the thread's first message once accepted"
+    console.log("\nCheck-in");
+    const anonHere = await api(`/api/boards/${slug}/checkin`, { method: "POST", body: { here: true } });
+    assert(anonHere.status === 401, "a signed-out visitor can't check in");
+    const strangerHere = await api(`/api/boards/${slug}/checkin`, { method: "POST", jar: c.jar, body: { here: true } });
+    assert(strangerHere.status === 403, "a non-member can't check in to a board they haven't joined");
+    const here = await api(`/api/boards/${slug}/checkin`, { method: "POST", jar: b.jar, body: { here: true } });
+    assert(here.status === 200, "a member can say they're here");
+    const { rows: ci } = await pool.query(
+      "select checked_in_at from memberships m join boards bd on bd.id = m.board_id where bd.slug = $1 and m.user_id = (select id from users where email = $2)",
+      [slug, emailB]
     );
+    assert(ci[0].checked_in_at !== null, "check-in is stored as a timestamp that can expire on its own");
 
-    const snoopRead = await api(`/api/messages?connectionId=${connectionId}`, { jar: c.jar });
-    assert(snoopRead.status === 404, "a stranger can't read someone else's thread");
-    const snoopSend = await api("/api/messages", { method: "POST", jar: c.jar, body: { connectionId, body: "hi" } });
-    assert(snoopSend.status === 403, "a stranger can't post into someone else's thread");
+    console.log("\nRecommendations");
+    // Alice is raising; Bob invests. That is the whole mechanism.
+    const boardHtml = await (await fetch(`${BASE}/b/${slug}`, { headers: a.jar.headers() })).text();
+    assert(/You&#x27;re raising|You're raising/.test(boardHtml), "the board explains the match in words, not a score");
+    assert(!/\b\d{1,3}% match\b/.test(boardHtml), "no score is ever rendered");
+
+    console.log("\nA community board's events stay private to it");
+    const comm = await api("/api/boards", { method: "POST", jar: a.jar, body: { type: "community", name: "Flowtest Community", place: "Everywhere" } });
+    assert(comm.status === 200, "a community board can be created");
+    slugs.push(comm.data.slug);
+    const childEvent = await api("/api/boards", {
+      method: "POST", jar: a.jar,
+      body: { type: "event", name: "Members Only Evening", startsAt: new Date(Date.now() + 86400_000).toISOString(), parentSlug: comm.data.slug },
+    });
+    assert(childEvent.status === 200, "a member can create an event inside a community");
+    slugs.push(childEvent.data.slug);
+    const outsider = await api("/api/boards", {
+      method: "POST", jar: c.jar,
+      body: { type: "event", name: "Gatecrash", startsAt: new Date(Date.now() + 86400_000).toISOString(), parentSlug: comm.data.slug },
+    });
+    assert(outsider.status === 403, "a non-member can't hang an event off someone else's community");
+
+    const anonMap = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}&radiusKm=25`);
+    assert(anonMap.status === 200, "signed-out visitors can load the open map without a 401");
+    assert(anonMap.data.matches.length === 0, "…but get no recommendations, having stated no intent");
+    assert(
+      !anonMap.data.events.some((e) => e.name === "Members Only Evening"),
+      "an event inside a community never appears on the public events list"
+    );
+    assert(anonMap.data.events.some((e) => e.name === "Flowtest Meetup"), "a parentless event does appear publicly");
 
     console.log(`\n${pass} passed, ${fail} failed`);
   } finally {
-    await pool.query("delete from users where email = any($1)", [[emailA, emailB, emailC]]);
+    await pool.query("delete from boards where slug = any($1)", [slugs]);
+    await pool.query("delete from users where email = any($1)", [emails]);
     await pool.end();
     server.kill();
   }

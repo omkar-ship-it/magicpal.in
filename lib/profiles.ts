@@ -69,6 +69,7 @@ const PROFILE_COLUMNS = {
   lng: users.lng,
   baseLat: users.baseLat,
   baseLng: users.baseLng,
+  baseLabel: users.baseLabel,
   visibility: users.visibility,
   lastActiveAt: users.lastActiveAt,
 } as const;
@@ -86,23 +87,60 @@ function place(r: {
   visibility: string;
   lat: number | null;
   lng: number | null;
+  locationLabel: string | null;
   baseLat: number | null;
   baseLng: number | null;
-}): { lat: number; lng: number; placed: "exact" | "base" } | null {
+  baseLabel: string | null;
+}): { lat: number; lng: number; placed: "exact" | "base"; label: string | null } | null {
   if (r.visibility === "exact" && r.lat != null && r.lng != null) {
     // No jitter. Someone who picked "exact" is asking to be findable at the
     // venue they're standing in; blurring it would quietly break that deal.
-    return { lat: r.lat, lng: r.lng, placed: "exact" };
+    return { lat: r.lat, lng: r.lng, placed: "exact", label: r.locationLabel };
   }
   if (r.visibility === "base" && r.baseLat != null && r.baseLng != null) {
-    return { lat: r.baseLat, lng: r.baseLng, placed: "base" };
+    // The city's label, not the street-level one — the whole point is that
+    // the precise location does not leave this function, and that includes
+    // its name. "Hyderabad", never "Banjara Hills, Hyderabad".
+    return { lat: r.baseLat, lng: r.baseLng, placed: "base", label: r.baseLabel };
   }
   return null;
 }
 
-function toMapProfile(r: Record<string, any>, centre?: { lat: number; lng: number }): MapProfile | null {
-  const placed = place(r as any);
-  if (!placed) return null;
+/**
+ * Exactly what PROFILE_COLUMNS selects.
+ *
+ * Written out rather than inferred from the Drizzle select, because every
+ * consumer below reads these fields by name and an inferred type would
+ * make a column rename a silent `undefined` at runtime instead of a
+ * compile error.
+ */
+type ProfileRow = {
+  id: string;
+  name: string | null;
+  headline: string | null;
+  company: string | null;
+  bio: string | null;
+  skills: string[] | null;
+  photoUrl: string | null;
+  locationLabel: string | null;
+  linkedinUrl: string | null;
+  instagramUrl: string | null;
+  websiteUrl: string | null;
+  lookingFor: string[] | null;
+  canHelpWith: string[] | null;
+  workingOn: string | null;
+  lat: number | null;
+  lng: number | null;
+  baseLat: number | null;
+  baseLng: number | null;
+  baseLabel: string | null;
+  visibility: string;
+  lastActiveAt: Date | null;
+};
+
+function toMapProfile(r: ProfileRow, centre?: { lat: number; lng: number }): MapProfile | null {
+  const placed = place(r);
+  if (!placed || r.name == null) return null;
   const activeSince = new Date(Date.now() - ACTIVE_WINDOW_MINUTES * 60_000);
   return {
     id: r.id,
@@ -112,7 +150,7 @@ function toMapProfile(r: Record<string, any>, centre?: { lat: number; lng: numbe
     bio: r.bio,
     skills: r.skills ?? [],
     photoUrl: r.photoUrl,
-    locationLabel: r.locationLabel,
+    locationLabel: placed.label,
     linkedinUrl: r.linkedinUrl,
     instagramUrl: r.instagramUrl,
     websiteUrl: r.websiteUrl,
@@ -224,22 +262,24 @@ export async function getBoardMembers(
     if (mapped) return { ...mapped, hereNow, role: r.role, unplaced: false };
     // Set to `off`, or no coordinates yet. They are a real member and must
     // still be listed and matchable — they simply have no pin. The board UI
-    // shows them in the list with no marker rather than dropping them.
+    // shows them in the list with no marker rather than dropping them, and
+    // `unplaced` is what stops MapCanvas drawing them at (0, 0) in the
+    // Atlantic.
     return {
-      id: r.id as string,
-      name: r.name as string,
-      headline: r.headline as string | null,
-      company: r.company as string | null,
-      bio: r.bio as string | null,
-      skills: (r.skills as string[]) ?? [],
-      photoUrl: r.photoUrl as string | null,
-      locationLabel: r.locationLabel as string | null,
-      linkedinUrl: r.linkedinUrl as string | null,
-      instagramUrl: r.instagramUrl as string | null,
-      websiteUrl: r.websiteUrl as string | null,
-      lookingFor: (r.lookingFor as string[]) ?? [],
-      canHelpWith: (r.canHelpWith as string[]) ?? [],
-      workingOn: r.workingOn as string | null,
+      id: r.id,
+      name: r.name!,
+      headline: r.headline,
+      company: r.company,
+      bio: r.bio,
+      skills: r.skills ?? [],
+      photoUrl: r.photoUrl,
+      locationLabel: null,
+      linkedinUrl: r.linkedinUrl,
+      instagramUrl: r.instagramUrl,
+      websiteUrl: r.websiteUrl,
+      lookingFor: r.lookingFor ?? [],
+      canHelpWith: r.canHelpWith ?? [],
+      workingOn: r.workingOn,
       lat: 0,
       lng: 0,
       placed: "base" as const,

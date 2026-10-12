@@ -1,23 +1,17 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";
-import { getOpenMapProfiles, getProfileById, touchActivity } from "@/lib/profiles";
-import { matchesFor } from "@/lib/matching";
-import { attachConnectionStatus } from "@/lib/connections";
-import { DEFAULT_RADIUS_KM, MATCHES_SHOWN, RADIUS_OPTIONS_KM } from "@/lib/rules";
-import { publicEvents } from "@/lib/boards";
+import { openMapPayload } from "@/lib/openMap";
+import { DEFAULT_RADIUS_KM, RADIUS_OPTIONS_KM } from "@/lib/rules";
 
 /**
- * The open map: pins, public events, and the viewer's recommendations, in
- * one response.
+ * The open map, for every pan and radius change after the first paint.
  *
- * One request rather than three because they are one screen and they must
- * agree. Fetching matches separately guarantees the moment where the map
- * recommends somebody who isn't on it — different radius, different
- * snapshot — and that single inconsistency costs more trust than the extra
- * round trip ever saved.
+ * The first view is server-rendered by `app/page.tsx` from the same
+ * `openMapPayload`, so this route exists purely to answer movement — which
+ * is why it has no loading state to coordinate and no cache to invalidate.
  *
  * Deliberately open to signed-out visitors: the pitch is seeing that real
- * people are already here before committing to a signup, so this cannot sit
+ * people are already here before committing to a signup, so it cannot sit
  * behind a login wall. They get pins and events; recommendations need a
  * profile to match against, so those come back empty.
  */
@@ -36,36 +30,5 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "A map centre is required." }, { status: 400 });
   }
 
-  const profiles = await getOpenMapProfiles({
-    excludeUserId: user?.id,
-    centerLat: lat,
-    centerLng: lng,
-    radiusKm,
-  });
-
-  const me = user ? await getProfileById(user.id) : null;
-  if (user) await touchActivity(user.id);
-
-  // Matched against the same `profiles` array the map is drawing, so a
-  // recommendation is always a pin the viewer can actually see and click.
-  const matches =
-    me && me.name
-      ? matchesFor(
-          { id: me.id, lookingFor: me.lookingFor, canHelpWith: me.canHelpWith },
-          profiles,
-          { surface: "open", limit: MATCHES_SHOWN }
-        ).map((m) => ({ id: m.other.id, reason: m.reason, twoWay: m.twoWay }))
-      : [];
-
-  const withStatus = await attachConnectionStatus(profiles, user?.id);
-  const events = (await publicEvents()).map((b) => ({
-    slug: b.slug,
-    name: b.name,
-    place: b.place,
-    lat: b.lat,
-    lng: b.lng,
-    startsAt: b.startsAt?.toISOString() ?? null,
-  }));
-
-  return NextResponse.json({ profiles: withStatus, matches, events, radiusKm });
+  return NextResponse.json(await openMapPayload({ userId: user?.id, lat, lng, radiusKm }));
 }

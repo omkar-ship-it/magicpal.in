@@ -45,9 +45,19 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "That code didn't work.");
-      // Both land on the map. A new account opens the You page over it, so
-      // setting up a profile never takes you out of the world.
-      router.push(data.onboarded ? "/" : "/#/you");
+      // Someone who got here from a QR code is mid-journey: they scanned a
+      // poster to see a room, and dropping them on the generic map instead
+      // would make them find the board again by hand. A new account still
+      // goes to the profile first — there is nothing to match them on until
+      // they've answered the two questions — and `next` is carried through
+      // so they land where they were headed once it's filled in.
+      const next = new URLSearchParams(window.location.search).get("next");
+      const safe = next && next.startsWith("/") && !next.startsWith("//") ? next : null;
+      if (!data.onboarded) {
+        router.push(safe ? `/you?next=${encodeURIComponent(safe)}` : "/you");
+      } else {
+        router.push(safe ?? "/");
+      }
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");

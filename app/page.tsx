@@ -1,6 +1,8 @@
 import { getSessionUser } from "@/lib/session";
 import { getProfileById } from "@/lib/profiles";
 import OpenMap from "@/components/OpenMapLoader";
+import { openMapPayload } from "@/lib/openMap";
+import { DEFAULT_RADIUS_KM } from "@/lib/rules";
 
 /**
  * The app opens on the map — no landing page.
@@ -23,9 +25,20 @@ export default async function Home() {
         ? { lat: row.baseLat, lng: row.baseLng, label: row.baseLabel }
         : { lat: 17.4065, lng: 78.4772, label: "Hyderabad" };
 
+  // Fetched here rather than in the client: the first thing a visitor has
+  // to believe is that real people are already on this map, and that is a
+  // much easier case to make if they are there in the first paint.
+  const initial = await openMapPayload({
+    userId: user?.id,
+    lat: center.lat,
+    lng: center.lng,
+    radiusKm: DEFAULT_RADIUS_KM,
+  });
+
   return (
     <OpenMap
       center={center}
+      initial={initial}
       signedIn={Boolean(user)}
       onboarded={Boolean(user?.onboarded)}
       myVisibility={user?.visibility ?? "off"}

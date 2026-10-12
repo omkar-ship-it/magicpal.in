@@ -199,8 +199,26 @@ export function isTwoWay(list: Overlap[]): boolean {
  * `firstName` rather than the full name: at the point this is read, the
  * person's name and face are already on the card above it.
  */
-export function describeOverlap(list: Overlap[], firstName: string): string {
-  if (list.length === 0) return `Also here. No stated overlap yet.`;
+export function describeOverlap(
+  list: Overlap[],
+  firstName: string,
+  /**
+   * Only read when there is no overlap at all. An event board still
+   * surfaces people who are simply in the room, and "no stated overlap
+   * yet" is a true sentence that gives the reader nothing to act on —
+   * so the fallback reaches for the most concrete thing on their profile
+   * instead, in descending order of how specific it is.
+   */
+  other?: { canHelpWith: readonly string[]; workingOn?: string | null }
+): string {
+  if (list.length === 0) {
+    // Never restates `workingOn`: the card renders that line directly
+    // underneath, and a reason that repeats the sentence below it reads as
+    // padding and makes the whole panel look automated.
+    const offer = validTopics(other?.canHelpWith)[0];
+    if (offer) return `No overlap with what you asked for, but they offer ${TOPIC_BY_ID.get(offer)!.offer.toLowerCase()}.`;
+    return `In the room. ${firstName} hasn't said what they're after yet.`;
+  }
 
   const two = isTwoWay(list);
   const mine = list.find((o) => o.direction === "mine-wants-theirs");
@@ -217,5 +235,6 @@ export function describeOverlap(list: Overlap[], firstName: string): string {
 
   const mutual = list.find((o) => o.direction === "mutual");
   if (mutual) return `You're both ${mutual.topic.needGerund}.`;
-  return `Also here.`;
+  return `In the room.`;
 }
+

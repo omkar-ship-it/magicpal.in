@@ -90,7 +90,7 @@ export default function AvatarPicker({
             )}
           </div>
           <p className="mt-1.5 text-[11px] leading-4 text-[var(--ink-soft)]">
-            Photos stay in this browser and are shrunk before they&rsquo;re stored — the location tag your camera writes never comes with them.
+            Shrunk and stripped in your browser before upload — the location tag your camera writes never leaves your phone.
           </p>
         </div>
       </div>
