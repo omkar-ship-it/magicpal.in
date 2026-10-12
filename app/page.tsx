@@ -1,43 +1,32 @@
 import { getSessionUser } from "@/lib/session";
-import { getProfileById } from "@/lib/profiles";
-import OpenMap from "@/components/OpenMapLoader";
-import { openMapPayload } from "@/lib/openMap";
+import { parseScope, shellPayload } from "@/lib/shell";
 import { DEFAULT_RADIUS_KM } from "@/lib/rules";
+import MapShell from "@/components/MapShellLoader";
 
 /**
  * The app opens on the map — no landing page.
  *
  * A marketing page in front of a map costs the one thing this product has
  * to prove in the first three seconds: that real people are already on it.
+ *
+ * `?net=<slug>` picks the network, so a board is a shareable address of
+ * this same screen rather than a different one.
  */
-export default async function Home() {
+export default async function Home({ searchParams }: { searchParams: Promise<{ net?: string }> }) {
+  const { net } = await searchParams;
   const user = await getSessionUser();
-  const row = user ? await getProfileById(user.id) : null;
-
-  // Centre on whatever the viewer has actually told us, in descending order
-  // of how much they meant it: their exact pin, then their base city, then
-  // Hyderabad — where the first boards are, so a cold visitor lands
-  // somewhere with people on it rather than in the middle of the ocean.
-  const center =
-    row?.lat != null && row?.lng != null
-      ? { lat: row.lat, lng: row.lng, label: row.locationLabel }
-      : row?.baseLat != null && row?.baseLng != null
-        ? { lat: row.baseLat, lng: row.baseLng, label: row.baseLabel }
-        : { lat: 17.4065, lng: 78.4772, label: "Hyderabad" };
 
   // Fetched here rather than in the client: the first thing a visitor has
   // to believe is that real people are already on this map, and that is a
   // much easier case to make if they are there in the first paint.
-  const initial = await openMapPayload({
+  const initial = await shellPayload({
     userId: user?.id,
-    lat: center.lat,
-    lng: center.lng,
+    scope: parseScope(net),
     radiusKm: DEFAULT_RADIUS_KM,
   });
 
   return (
-    <OpenMap
-      center={center}
+    <MapShell
       initial={initial}
       signedIn={Boolean(user)}
       onboarded={Boolean(user?.onboarded)}

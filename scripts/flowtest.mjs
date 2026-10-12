@@ -181,14 +181,14 @@ async function main() {
 
     assert((await saveB("exact")).status === 200, "bob saves as exact");
     let map = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}&radiusKm=25`, { jar: a.jar });
-    let bob = map.data.profiles.find((p) => p.name === "Flow Bob");
+    let bob = map.data.people.find((p) => p.name === "Flow Bob");
     assert(Boolean(bob), "an `exact` profile appears on the open map");
     assert(bob.lat === HERE.lat + 0.004 && bob.lng === HERE.lng + 0.004, "`exact` means exact — the pin is not jittered");
     assert(bob.placed === "exact" && bob.locationLabel === "Barakhamba, Delhi", "the label describes the shown position");
 
     assert((await saveB("base")).status === 200, "bob switches to city-only");
     map = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}&radiusKm=25`, { jar: a.jar });
-    bob = map.data.profiles.find((p) => p.name === "Flow Bob");
+    bob = map.data.people.find((p) => p.name === "Flow Bob");
     assert(Boolean(bob), "a `base` profile still appears on the open map");
     assert(bob.lat === CITY.lat && bob.lng === CITY.lng, "`base` returns the city centroid, never the street-level pin");
     assert(bob.locationLabel === CITY.label, "`base` returns the city's name, never the neighbourhood's");
@@ -196,7 +196,7 @@ async function main() {
 
     assert((await saveB("off")).status === 200, "bob goes off the map");
     map = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}&radiusKm=25`, { jar: a.jar });
-    assert(!map.data.profiles.some((p) => p.name === "Flow Bob"), "an `off` profile is absent from the open map entirely");
+    assert(!map.data.people.some((p) => p.name === "Flow Bob"), "an `off` profile is absent from the open map entirely");
 
     console.log("\nConsent is logged, not just toggled");
     const { rows: cr } = await pool.query(
@@ -250,7 +250,7 @@ async function main() {
     assert(boardPage.status === 200, "a member can load the board");
     assert(html.includes("Flow Bob"), "a member set to `off` is still visible to their own board");
     map = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}&radiusKm=25`, { jar: a.jar });
-    assert(!map.data.profiles.some((p) => p.name === "Flow Bob"), "…and still absent from the open map at the same moment");
+    assert(!map.data.people.some((p) => p.name === "Flow Bob"), "…and still absent from the open map at the same moment");
 
     console.log("\nA non-member can't see who's on a board");
     const c = await signUp(emailC);
@@ -305,6 +305,55 @@ async function main() {
       "an event inside a community never appears on the public events list"
     );
     assert(anonMap.data.events.some((e) => e.name === "Flowtest Meetup"), "a parentless event does appear publicly");
+
+    console.log("\nFeed is scoped and private");
+    const openFeed = await api("/api/feed", { jar: a.jar });
+    assert(openFeed.status === 200, "the open network's feed loads");
+    assert(
+      openFeed.data.items.every((i) => i.person?.name !== "Flow Alice"),
+      "your own actions are not in your own feed"
+    );
+    const privateFeed = await api(`/api/feed?net=${comm.data.slug}`, { jar: c.jar });
+    assert(privateFeed.status === 403, "a non-member can't read a community's feed");
+    const memberFeed = await api(`/api/feed?net=${comm.data.slug}`, { jar: a.jar });
+    assert(memberFeed.status === 200, "a member can");
+
+    console.log("\nMessaging needs an accepted connection");
+    const noThreads = await api("/api/threads");
+    assert(noThreads.status === 401, "threads need a session");
+
+    const req = await api("/api/connections", { method: "POST", jar: a.jar, body: { toUserId: null } });
+    assert(req.status >= 400, "a connection request needs a real recipient");
+
+    // Alice asks Bob; the thread must stay shut until he accepts.
+    const bobId = (await pool.query("select id from users where email = $1", [emailB])).rows[0].id;
+    const ask = await api("/api/connections", {
+      method: "POST", jar: a.jar, body: { toUserId: bobId, note: "Flowtest hello" },
+    });
+    assert(ask.status === 200, "a connection request sends");
+    const connId = (await pool.query(
+      "select id from connections where requester_id = (select id from users where email = $1)", [emailA]
+    )).rows[0].id;
+
+    const early = await api("/api/messages", { method: "POST", jar: a.jar, body: { connectionId: connId, body: "hi" } });
+    assert(early.status === 403, "you can't message before they accept");
+
+    const snoop = await api(`/api/messages?connectionId=${connId}`, { jar: c.jar });
+    assert(snoop.status === 404, "a stranger can't read someone else's thread");
+
+    await api(`/api/connections/${connId}/respond`, { method: "POST", jar: b.jar, body: { accept: true } });
+    const nowOk = await api("/api/messages", { method: "POST", jar: a.jar, body: { connectionId: connId, body: "hi" } });
+    assert(nowOk.status === 200, "…and can once they have");
+
+    const thread = await api(`/api/messages?connectionId=${connId}`, { jar: b.jar });
+    assert(
+      thread.data.messages.some((m) => m.body === "Flowtest hello"),
+      "the request note is delivered as the thread's first message"
+    );
+    const snoopAfter = await api("/api/messages", {
+      method: "POST", jar: c.jar, body: { connectionId: connId, body: "butting in" },
+    });
+    assert(snoopAfter.status === 404, "a stranger still can't post into it");
 
     console.log(`\n${pass} passed, ${fail} failed`);
   } finally {

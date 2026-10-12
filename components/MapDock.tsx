@@ -2,45 +2,48 @@
 
 import Link from "next/link";
 import Avatar from "./Avatar";
-import { IconCalendar, IconPeople, IconUser } from "./Icons";
+import { IconCalendar, IconChat, IconFeed, IconPeople, IconSparkle, IconUser } from "./Icons";
 
-export type DockTab = "people" | null;
+export type DockTab = "forYou" | "feed" | "people" | "events" | "chats" | null;
+
+const SLOTS: Array<{ id: Exclude<DockTab, null>; label: string; icon: React.ReactNode }> = [
+  { id: "forYou", label: "For you", icon: <IconSparkle size={17} /> },
+  { id: "feed", label: "Feed", icon: <IconFeed size={17} /> },
+  { id: "people", label: "People", icon: <IconPeople size={17} /> },
+  { id: "events", label: "Events", icon: <IconCalendar size={17} /> },
+  { id: "chats", label: "Chats", icon: <IconChat size={17} /> },
+];
 
 /**
  * The only chrome parked on the map.
  *
  * Dark in both themes (see --chrome): a white dock on a light Mapbox style
- * dissolves into the map, and navigation is the one thing that must always
- * be findable.
+ * dissolves into the map, and navigation is the one piece of UI that must
+ * stay findable.
  *
- * Three destinations, always visible rather than collapsed behind a single
- * icon. The prototype hid five sections behind one ✦, which made sense when
- * there were five; with three it would cost a tap just to discover what the
- * app contains — and "where are my boards" is a question the map could not
- * answer at all.
- *
- * People raises a sheet over the map instead of navigating, so the map never
- * goes away underneath it. Boards and You are real routes.
+ * Each slot raises a panel over the map rather than navigating, so the map
+ * never goes away underneath you — switching from the people list to the
+ * feed should not feel like leaving. Tapping the open slot again lowers it,
+ * which is the only way back to a clean map.
  */
 export default function MapDock({
   active,
-  peopleCount,
+  counts,
   signedIn,
   me,
-  onPeople,
+  onSelect,
 }: {
   active: DockTab;
-  /** Shown inline in the label, so the dock says whether opening it is worth it. */
-  peopleCount: number;
+  /** Shown inline in the label. Absent or zero renders nothing. */
+  counts: Partial<Record<Exclude<DockTab, null>, number>>;
   signedIn: boolean;
-  /** Your own face, so the last slot is you rather than a generic silhouette. */
   me: { name: string; photoUrl: string | null } | null;
-  onPeople: () => void;
+  onSelect: (tab: Exclude<DockTab, null>) => void;
 }) {
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-3 pb-[max(12px,env(safe-area-inset-bottom))]">
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-2 pb-[max(10px,env(safe-area-inset-bottom))]">
       <div
-        className="pointer-events-auto flex items-center gap-1 rounded-[24px] border p-1.5"
+        className="pointer-events-auto flex max-w-full items-center gap-0.5 overflow-x-auto rounded-[24px] border p-1.5"
         style={{
           background: "color-mix(in srgb, var(--chrome) 94%, transparent)",
           borderColor: "var(--chrome-line)",
@@ -48,34 +51,44 @@ export default function MapDock({
           boxShadow: "var(--shadow-lift)",
         }}
       >
-        <DockButton on={active === "people"} onClick={onPeople} label="People" count={peopleCount}>
-          <IconPeople size={18} />
-        </DockButton>
-
-        <DockLink href="/boards" label="Boards">
-          <IconCalendar size={18} />
-        </DockLink>
+        {SLOTS.map((s) => (
+          <DockButton
+            key={s.id}
+            on={active === s.id}
+            onClick={() => onSelect(s.id)}
+            label={s.label}
+            count={counts[s.id]}
+            /* Chats is the one count that means somebody is waiting on you
+               rather than simply how much there is to look at. */
+            urgent={s.id === "chats"}
+          >
+            {s.icon}
+          </DockButton>
+        ))}
 
         {signedIn && me ? (
-          // Your own face, highlighted — the one slot that should feel like
-          // it belongs to somebody rather than to the app.
           <Link
             href="/you"
-            className="ml-0.5 flex w-[72px] flex-none flex-col items-center justify-center gap-1 rounded-2xl py-2 tap"
+            className="ml-0.5 flex w-[54px] sm:w-[66px] flex-none flex-col items-center justify-center gap-1 rounded-2xl py-2 tap"
             style={{ background: "color-mix(in srgb, var(--chrome-ink) 10%, transparent)" }}
           >
-            <Avatar name={me.name} photoUrl={me.photoUrl} size={22} />
-            <span className="text-[11px] font-semibold" style={{ color: "var(--chrome-ink)" }}>
+            <Avatar name={me.name} photoUrl={me.photoUrl} size={21} />
+            <span className="text-[9.5px] sm:text-[10.5px] font-semibold" style={{ color: "var(--chrome-ink)" }}>
               You
             </span>
           </Link>
         ) : (
-          // Quiet, not filled. The sheet above already carries the one
-          // primary Sign in, and two filled buttons sixty pixels apart read
-          // as a mistake rather than emphasis.
-          <DockLink href="/login" label="Sign in">
-            <IconUser size={18} />
-          </DockLink>
+          // Quiet, not filled: the panel above already carries the one
+          // primary Sign in, and two filled buttons a thumb apart read as a
+          // mistake rather than emphasis.
+          <Link href="/login" className={SLOT}>
+            <span style={{ color: "var(--chrome-soft)" }}>
+              <IconUser size={17} />
+            </span>
+            <span className="text-[9.5px] sm:text-[10.5px] font-semibold" style={{ color: "var(--chrome-ink)" }}>
+              Sign in
+            </span>
+          </Link>
         )}
       </div>
     </div>
@@ -83,19 +96,21 @@ export default function MapDock({
 }
 
 const SLOT =
-  "flex w-[72px] flex-none flex-col items-center justify-center gap-1 rounded-2xl py-2 transition-colors tap";
+  "flex w-[54px] sm:w-[66px] flex-none flex-col items-center justify-center gap-1 rounded-2xl py-2 transition-colors tap";
 
 function DockButton({
   on,
   onClick,
   label,
   count,
+  urgent,
   children,
 }: {
   on: boolean;
   onClick: () => void;
   label: string;
   count?: number;
+  urgent?: boolean;
   children: React.ReactNode;
 }) {
   const tint = on ? "var(--brand)" : "var(--chrome-soft)";
@@ -107,24 +122,25 @@ function DockButton({
       className={SLOT}
       style={on ? { background: "color-mix(in srgb, var(--brand) 20%, transparent)" } : undefined}
     >
-      <span style={{ color: tint }}>{children}</span>
-      <span className="text-[11px] font-semibold" style={{ color: on ? "var(--brand)" : "var(--chrome-ink)" }}>
-        {/* Inline rather than a floating badge: at these sizes a badge
-            crowds the icon, and the count reads as part of the name. */}
+      <span className="relative" style={{ color: tint }}>
+        {children}
+        {/* Urgent counts get a dot on the icon as well as the number: a
+            person scanning the dock for "is anything waiting on me" should
+            not have to read. */}
+        {urgent && count != null && count > 0 && (
+          <span
+            className="absolute -right-1.5 -top-1 h-2 w-2 rounded-full"
+            style={{ background: "var(--brand)", boxShadow: "0 0 0 2px var(--chrome)" }}
+          />
+        )}
+      </span>
+      <span
+        className="whitespace-nowrap text-[9.5px] sm:text-[10.5px] font-semibold"
+        style={{ color: on ? "var(--brand)" : "var(--chrome-ink)" }}
+      >
         {label}
         {count != null && count > 0 && <span style={{ color: tint }}> {count}</span>}
       </span>
     </button>
-  );
-}
-
-function DockLink({ href, label, children }: { href: string; label: string; children: React.ReactNode }) {
-  return (
-    <Link href={href} className={SLOT}>
-      <span style={{ color: "var(--chrome-soft)" }}>{children}</span>
-      <span className="text-[11px] font-semibold" style={{ color: "var(--chrome-ink)" }}>
-        {label}
-      </span>
-    </Link>
   );
 }
