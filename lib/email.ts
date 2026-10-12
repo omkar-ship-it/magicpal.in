@@ -26,7 +26,18 @@ async function sendMsg91TemplateEmail(opts: {
   const fromEmail = process.env.MSG91_FROM_EMAIL;
 
   if (!authKey || !opts.templateId || !domain || !fromEmail) {
+    // Logged either way: on a real deployment this is the operator's own
+    // log and it's the only way to sign in and create the first board
+    // before the credentials land.
     console.log(`[${opts.logLabel}] ${opts.devFallbackMessage}`);
+
+    // But never tell a *user* their code is on its way when no email was
+    // sent. Locally that silence is the documented workflow; on a live
+    // deployment it is a black hole — the person waits for an email that
+    // cannot arrive, and the UI said it was coming. Fail loudly instead.
+    if (process.env.VERCEL_ENV === "production") {
+      return { ok: false, error: "Email isn't set up on this deployment yet — nobody can receive a code." };
+    }
     return { ok: true };
   }
 
