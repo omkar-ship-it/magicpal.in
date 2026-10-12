@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 // The default export of react-map-gl is named `Map`, which shadows the
 // global `Map` constructor used below for grouping. Aliased, not imported
 // bare — this exact collision has broken this file before.
@@ -8,6 +8,23 @@ import MapGL, { Marker, NavigationControl, type ViewStateChangeEvent } from "rea
 import type { MapProfile } from "@/lib/profiles";
 import Avatar from "./Avatar";
 import { IconCalendar } from "./Icons";
+
+/**
+ * Which Mapbox style to draw, following the viewer's theme.
+ *
+ * Three states, same as the CSS: an explicit `data-theme` stamp wins in
+ * either direction, and the common un-stamped case falls back to the OS
+ * preference. Read from the DOM rather than passed as a prop because the
+ * stamp can change after mount, and a bright map behind dark chrome is the
+ * one combination that looks broken rather than merely unstyled.
+ */
+function prefersDark(): boolean {
+  if (typeof document === "undefined") return false;
+  const stamped = document.documentElement.getAttribute("data-theme");
+  if (stamped === "dark") return true;
+  if (stamped === "light") return false;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
 
 export type MapEvent = {
   slug: string;
@@ -75,6 +92,24 @@ export default function MapCanvas({
   onMoveEnd?: (c: { lat: number; lng: number; zoom: number }) => void;
 }) {
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+
+  // Lazy initialiser rather than a setState in the effect below: this
+  // component only ever renders client-side (every caller wraps it in an
+  // ssr:false loader), so the DOM is already there on the first render.
+  const [dark, setDark] = useState(prefersDark);
+  useEffect(() => {
+    const sync = () => setDark(prefersDark());
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    mq.addEventListener("change", sync);
+    // Also watch the stamp, so a theme toggle repaints the map and not just
+    // the chrome around it.
+    const observer = new MutationObserver(sync);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => {
+      mq.removeEventListener("change", sync);
+      observer.disconnect();
+    };
+  }, []);
 
   /**
    * Computed once, from the first render's people. Deliberately not
@@ -153,7 +188,7 @@ export default function MapCanvas({
       // Mercator, always. The globe projection reprojects markers during
       // flight and the face stacks visibly slide off their coordinates.
       projection="mercator"
-      mapStyle="mapbox://styles/mapbox/light-v11"
+      mapStyle={dark ? "mapbox://styles/mapbox/dark-v11" : "mapbox://styles/mapbox/light-v11"}
       style={{ width: "100%", height: "100%" }}
       onMove={(e: ViewStateChangeEvent) => setZoom(e.viewState.zoom)}
       onMoveEnd={(e: ViewStateChangeEvent) =>

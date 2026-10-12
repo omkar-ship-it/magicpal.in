@@ -621,3 +621,24 @@ h1, h2, h3 {
     display: none;
   }
 }
+
+/* Mapbox ships its controls light-only, which is a bright white block on a
+   dark map. Restyled through the same chrome tokens as the dock so the two
+   pieces of floating UI match, in all three theme states. */
+.mapboxgl-ctrl-group {
+  background: color-mix(in srgb, var(--chrome) 94%, transparent) !important;
+  border: 1px solid var(--chrome-line) !important;
+  box-shadow: var(--shadow) !important;
+  overflow: hidden;
+}
+.mapboxgl-ctrl-group button + button {
+  border-top: 1px solid var(--chrome-line) !important;
+}
+.mapboxgl-ctrl-group button .mapboxgl-ctrl-icon {
+  /* The icons are background SVGs in a fixed dark ink; inverting is the
+     only way to recolour them without shipping replacements. */
+  filter: invert(1) brightness(1.6);
+}
+.mapboxgl-ctrl-group button:hover {
+  background: color-mix(in srgb, var(--chrome-ink) 12%, transparent) !important;
+}
