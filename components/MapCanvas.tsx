@@ -39,6 +39,7 @@ export default function MapCanvas({
   initialLng,
   initialZoom = 10,
   fitToPeople = false,
+  bottomInset = 0,
   highlightIds = [],
   onSelectPerson,
   onSelectEvent,
@@ -56,6 +57,14 @@ export default function MapCanvas({
    * centring on it reliably pushes half the faces off the edge.
    */
   fitToPeople?: boolean;
+  /**
+   * Height of chrome covering the bottom of the map (a sheet, a dock).
+   * Handed to Mapbox as viewport padding so its idea of "centre" is the
+   * centre of what the viewer can actually see — otherwise the initial
+   * framing drops people underneath the sheet, where they are not merely
+   * hidden but unclickable, the sheet having swallowed the pointer events.
+   */
+  bottomInset?: number;
   /** Recommended people — drawn with a ring so the list and map agree. */
   highlightIds?: string[];
   onSelectPerson?: (id: string) => void;
@@ -127,8 +136,16 @@ export default function MapCanvas({
       mapboxAccessToken={token}
       initialViewState={
         fitted
-          ? { bounds: fitted.bounds, fitBoundsOptions: { padding: 48, maxZoom: 13 } }
-          : { latitude: initialLat, longitude: initialLng, zoom: initialZoom }
+          ? {
+              bounds: fitted.bounds,
+              fitBoundsOptions: { padding: { top: 48, left: 48, right: 48, bottom: 48 + bottomInset }, maxZoom: 13 },
+            }
+          : {
+              latitude: initialLat,
+              longitude: initialLng,
+              zoom: initialZoom,
+              padding: { top: 0, left: 0, right: 0, bottom: bottomInset },
+            }
       }
       // Mercator, always. The globe projection reprojects markers during
       // flight and the face stacks visibly slide off their coordinates.

@@ -6,6 +6,7 @@ import type { MapProfile } from "@/lib/profiles";
 import { RADIUS_OPTIONS_KM } from "@/lib/rules";
 import MapCanvas, { type MapEvent } from "./MapCanvas";
 import PersonCard from "./PersonCard";
+import MapDock from "./MapDock";
 import { IconGlobe, IconHidden, IconSparkle, IconX } from "./Icons";
 
 type MatchRef = { id: string; reason: string; twoWay: boolean };
@@ -46,6 +47,12 @@ export default function OpenMap({
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [tab, setTab] = useState<"forYou" | "everyone">("forYou");
+  /**
+   * Open on arrival. The map alone can't say what this app is for — the
+   * recommendations are the product — and the sheet now sizes to its
+   * content, so an empty one is a small card rather than a parked column.
+   */
+  const [sheetOpen, setSheetOpen] = useState(true);
 
   // Where the map currently is, so a radius change refetches around the
   // viewport the person is looking at rather than snapping back to where
@@ -85,8 +92,15 @@ export default function OpenMap({
           events={events}
           initialLat={center.lat}
           initialLng={center.lng}
+          // Roughly the sheet plus the dock. Static rather than measured:
+          // it only steers the opening frame, and a value that changed as
+          // the sheet resized would re-centre the map under the viewer.
+          bottomInset={360}
           highlightIds={matches.map((m) => m.id)}
-          onSelectPerson={(id) => setSelected(id)}
+          onSelectPerson={(id) => {
+            setSelected(id);
+            setSheetOpen(true);
+          }}
           onMoveEnd={(c) => {
             at.current = { lat: c.lat, lng: c.lng };
             void load(c.lat, c.lng, radiusKm);
@@ -127,23 +141,17 @@ export default function OpenMap({
               </option>
             ))}
           </select>
-
-          {signedIn ? (
-            <Link href="/you" className="btn btn-ghost btn-sm flex-none">
-              You
-            </Link>
-          ) : (
-            <Link href="/login" className="btn btn-primary btn-sm flex-none">
-              Sign in
-            </Link>
-          )}
         </div>
       </header>
 
-      {/* --------------------------------------------- the side panel */}
-      <aside className="floating-panel absolute overflow-hidden bottom-0 left-0 right-0 z-20 max-h-[58dvh] md:bottom-3 md:left-3 md:right-auto md:top-[68px] md:max-h-none md:w-[360px]">
+      {/* ------------------------------------- the sheet, raised on demand */}
+      {sheetOpen && (
+        <aside
+          className="floating-panel panel-enter absolute inset-x-2 bottom-[84px] z-30 flex max-h-[min(50dvh,440px)] flex-col overflow-hidden sm:left-1/2 sm:right-auto sm:w-[420px] sm:-translate-x-1/2"
+          aria-label="People on this map"
+        >
         {selectedPerson ? (
-          <div className="flex h-full flex-col">
+          <div className="flex min-h-0 flex-1 flex-col">
             <div className="flex items-center justify-between gap-2 border-b border-[var(--line)] p-3">
               <p className="label label-icon m-0">Profile</p>
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSelected(null)} aria-label="Close profile">
@@ -160,7 +168,7 @@ export default function OpenMap({
             </div>
           </div>
         ) : (
-          <div className="flex h-full flex-col">
+          <div className="flex min-h-0 flex-1 flex-col">
             <div className="flex gap-1 border-b border-[var(--line)] p-2">
               <TabButton on={tab === "forYou"} onClick={() => setTab("forYou")}>
                 <IconSparkle size={12} /> For you
@@ -187,7 +195,20 @@ export default function OpenMap({
             </div>
           </div>
         )}
-      </aside>
+        </aside>
+      )}
+
+      <MapDock
+        active={sheetOpen ? "people" : null}
+        peopleCount={people.length}
+        signedIn={signedIn}
+        onPeople={() => {
+          // Closing from the dock also drops a selected person, so reopening
+          // never resumes on a profile the viewer has mentally left.
+          if (sheetOpen) setSelected(null);
+          setSheetOpen((v) => !v);
+        }}
+      />
 
       {signedIn && onboarded && myVisibility === "off" && <OffMapNudge />}
     </div>
