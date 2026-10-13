@@ -8,6 +8,8 @@ import type { EventRef, ShellPayload } from "@/lib/shell";
 import { applyFacets, facetsActive, NO_FACETS, type Facets } from "@/lib/search";
 import MapCanvas from "./MapCanvas";
 import MapDock, { type DockTab } from "./MapDock";
+import FloatWindow, { DEFAULT_WINDOW, type WindowState } from "./FloatWindow";
+import LiveLocation from "./LiveLocation";
 import MapTopBar from "./MapTopBar";
 import PersonCard from "./PersonCard";
 import PanelNote from "./PanelNote";
@@ -17,7 +19,7 @@ import ChatsPanel from "./ChatsPanel";
 import SignInPanel from "./SignInPanel";
 import ProfilePanel from "./ProfilePanel";
 import PublicOptIn from "./PublicOptIn";
-import { IconHidden, IconX } from "./Icons";
+import { IconHidden, IconSparkle } from "./Icons";
 
 export type Overlay = "signin" | "profile" | null;
 
@@ -54,13 +56,29 @@ export default function MapShell({
   pendingJoin?: string | null;
   signedIn: boolean;
   onboarded: boolean;
-  myVisibility: "off" | "base" | "exact";
+  myVisibility: "off" | "base" | "exact" | "live";
   me: { name: string; photoUrl: string | null } | null;
 }) {
   const [data, setData] = useState<ShellPayload>(initial);
   const [radiusKm, setRadiusKm] = useState(initial.radiusKm);
   const [facets, setFacets] = useState<Facets>(NO_FACETS);
-  const [tab, setTab] = useState<DockTab>("forYou");
+  /**
+   * One window per panel, all independent. The dock opens them; it doesn't
+   * own them, so several can be up at once and each remembers where it was
+   * dragged to.
+   */
+  const [wins, setWins] = useState<Record<string, WindowState>>(() => ({
+    // `?panel=` from /you or /login decides what's already up on arrival.
+    forYou: { ...DEFAULT_WINDOW, open: initialOverlay === null, x: 16, y: 72, z: 2 },
+    feed: { ...DEFAULT_WINDOW, x: 56, y: 112 },
+    people: { ...DEFAULT_WINDOW, x: 96, y: 152 },
+    events: { ...DEFAULT_WINDOW, x: 136, y: 192 },
+    chats: { ...DEFAULT_WINDOW, x: 176, y: 232 },
+    person: { ...DEFAULT_WINDOW, x: 60, y: 120 },
+    profile: { ...DEFAULT_WINDOW, open: initialOverlay === "profile", x: 216, y: 92, z: 3 },
+    signin: { ...DEFAULT_WINDOW, open: initialOverlay === "signin", x: 240, y: 120, z: 3 },
+  }));
+  const topZ = useRef(3);
   const [selected, setSelected] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   /**
@@ -69,7 +87,19 @@ export default function MapShell({
    * else — the map is the app's background, not a component inside it, so
    * nothing in this product is ever shown without it.
    */
-  const [overlay, setOverlay] = useState<Overlay>(initialOverlay);
+  const win = useCallback(
+    (id: string, next: Partial<WindowState>) => setWins((w) => ({ ...w, [id]: { ...w[id], ...next } })),
+    []
+  );
+  const focus = useCallback(
+    (id: string) => setWins((w) => ({ ...w, [id]: { ...w[id], z: ++topZ.current } })),
+    []
+  );
+  const openWin = useCallback(
+    (id: string) =>
+      setWins((w) => ({ ...w, [id]: { ...w[id], open: true, min: false, z: ++topZ.current } })),
+    []
+  );
 
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [feedLoading, setFeedLoading] = useState(false);
@@ -117,14 +147,15 @@ export default function MapShell({
   }, []);
 
   function openTab(next: Exclude<DockTab, null>) {
-    // Tapping the open slot lowers the panel — the only way back to a clean
-    // map, and the gesture people try first.
-    if (tab === next) {
-      setTab(null);
+    const current = wins[next];
+    // Tapping an already-focused window closes it; tapping a buried or
+    // minimised one raises it instead of hiding it, which is what people
+    // actually mean when they press a taskbar button.
+    if (current.open && !current.min) {
+      win(next, { open: false });
       return;
     }
-    setSelected(null);
-    setTab(next);
+    openWin(next);
     if (next === "feed") void loadFeed(data.scope.slug);
   }
 
@@ -132,7 +163,7 @@ export default function MapShell({
     setFacets(NO_FACETS);
     setSelected(null);
     void load({ net: slug });
-    if (tab === "feed") void loadFeed(slug);
+    if (wins.feed.open) void loadFeed(slug);
   }
 
   const shown = useMemo(() => applyFacets(data.people, facets), [data.people, facets]);
@@ -162,14 +193,17 @@ export default function MapShell({
           initialLng={data.centre?.lng ?? initial.centre?.lng ?? 78.4772}
           initialZoom={isOpenNet ? 10 : data.scope.kind === "event" ? 12 : 3}
           fitToPeople={!isOpenNet && data.scope.kind === "community"}
-          bottomInset={tab ? 360 : 120}
+          // Just the dock: windows float and are moved out of the way by
+          // hand, so reserving room for one would push the map around every
+          // time somebody opened a panel.
+          bottomInset={110}
           showZoom
           highlightIds={data.matches.map((m) => m.id)}
           onSelectPerson={(id) => {
             setSelected(id);
-            setTab("people");
+            openWin("person");
           }}
-          onSelectEvent={() => setTab("events")}
+          onSelectEvent={() => openWin("events")}
           onMoveEnd={(c) => {
             at.current = { lat: c.lat, lng: c.lng };
             // Only the open network is a radius query; a board's membership
@@ -193,92 +227,192 @@ export default function MapShell({
         onNetwork={switchNetwork}
       />
 
-      {tab && (
-        <aside
-          className="floating-panel panel-enter absolute inset-x-2 bottom-[82px] z-30 flex max-h-[min(52dvh,460px)] flex-col overflow-hidden sm:left-1/2 sm:right-auto sm:w-[420px] sm:-translate-x-1/2"
-          aria-label={tab}
+      {myVisibility === "live" && <LiveLocation onChanged={() => void load({})} />}
+
+      {/* ------------------------------------------------ the windows */}
+      <FloatWindow
+        title={<><IconSparkle size={12} className="mr-1 inline" />For you</>}
+        state={wins.forYou}
+        onChange={(n) => win("forYou", n)}
+        onClose={() => win("forYou", { open: false })}
+        onFocus={() => focus("forYou")}
+      >
+        <ForYou
+          matched={matched}
+          loading={loading}
+          signedIn={signedIn}
+          onboarded={onboarded}
+          hasSignals={data.hasSignals}
+          filtering={filtering}
+          scopeName={data.scope.name}
+          onOpen={(id) => {
+            setSelected(id);
+            openWin("person");
+          }}
+          onSignIn={() => openWin("signin")}
+          onProfile={() => openWin("profile")}
+        />
+      </FloatWindow>
+
+      <FloatWindow
+        title="Feed"
+        state={wins.feed}
+        onChange={(n) => win("feed", n)}
+        onClose={() => win("feed", { open: false })}
+        onFocus={() => focus("feed")}
+      >
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <FeedPanel
+            items={feed}
+            loading={feedLoading}
+            signedIn={signedIn}
+            scopeName={data.scope.name}
+            onOpenPerson={(id) => {
+              if (byId.has(id)) {
+                setSelected(id);
+                openWin("person");
+              }
+            }}
+          />
+        </div>
+      </FloatWindow>
+
+      <FloatWindow
+        title={`People · ${shown.length}`}
+        state={wins.people}
+        onChange={(n) => win("people", n)}
+        onClose={() => win("people", { open: false })}
+        onFocus={() => focus("people")}
+      >
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {shown.length === 0 ? (
+            <PanelNote title={filtering ? "Nothing matches that" : `Nobody on ${data.scope.name} yet`}>
+              {filtering
+                ? "Try fewer filters, or a wider radius."
+                : isOpenNet
+                  ? "Most people arrive through a board first and opt into the public map afterwards."
+                  : "Share the board's QR code and it fills as people scan it."}
+            </PanelNote>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {shown.map((p) => (
+                <PersonCard
+                  key={p.id}
+                  person={p}
+                  compact
+                  onOpen={() => {
+                    setSelected(p.id);
+                    openWin("person");
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </FloatWindow>
+
+      <FloatWindow
+        title={`Events · ${data.events.length}`}
+        state={wins.events}
+        onChange={(n) => win("events", n)}
+        onClose={() => win("events", { open: false })}
+        onFocus={() => focus("events")}
+        width={400}
+      >
+        <EventsPanel
+          events={data.events}
+          scopeName={data.scope.name}
+          scopeSlug={data.scope.slug}
+          canCreate={signedIn && onboarded}
+          onChanged={() => void load({})}
+          onShow={(e: EventRef) => {
+            if (e.lat != null && e.lng != null) {
+              at.current = { lat: e.lat, lng: e.lng };
+              void load({ lat: e.lat, lng: e.lng });
+            }
+          }}
+        />
+      </FloatWindow>
+
+      <FloatWindow
+        title={data.waiting > 0 ? `Chats · ${data.waiting} waiting` : "Chats"}
+        state={wins.chats}
+        onChange={(n) => win("chats", n)}
+        onClose={() => win("chats", { open: false })}
+        onFocus={() => focus("chats")}
+      >
+        <ChatsPanel signedIn={signedIn} onChanged={() => void load({})} />
+      </FloatWindow>
+
+      {selectedPerson && (
+        <FloatWindow
+          title={selectedPerson.name}
+          state={wins.person}
+          onChange={(n) => win("person", n)}
+          onClose={() => {
+            win("person", { open: false });
+            setSelected(null);
+          }}
+          onFocus={() => focus("person")}
         >
-          <div className="flex min-h-0 flex-1 flex-col p-3">
-            {selectedPerson ? (
-              <Profile
-                person={selectedPerson}
-                reason={data.matches.find((m) => m.id === selectedPerson.id)?.reason}
-                twoWay={data.matches.find((m) => m.id === selectedPerson.id)?.twoWay}
-                signedIn={signedIn}
-                onSignIn={() => setOverlay("signin")}
-                onClose={() => setSelected(null)}
-              />
-            ) : tab === "forYou" ? (
-              <ForYou
-                matched={matched}
-                loading={loading}
-                signedIn={signedIn}
-                onboarded={onboarded}
-                hasSignals={data.hasSignals}
-                filtering={filtering}
-                scopeName={data.scope.name}
-                onOpen={setSelected}
-                onSignIn={() => setOverlay("signin")}
-                onProfile={() => setOverlay("profile")}
-              />
-            ) : tab === "feed" ? (
-              <div className="min-h-0 flex-1 overflow-y-auto">
-                <FeedPanel
-                  items={feed}
-                  loading={feedLoading}
-                  signedIn={signedIn}
-                  scopeName={data.scope.name}
-                  onOpenPerson={(id) => {
-                    if (byId.has(id)) {
-                      setSelected(id);
-                      setTab("people");
-                    }
-                  }}
-                />
-              </div>
-            ) : tab === "people" ? (
-              <div className="min-h-0 flex-1 overflow-y-auto">
-                {shown.length === 0 ? (
-                  <PanelNote title={filtering ? "Nothing matches that" : `Nobody on ${data.scope.name} yet`}>
-                    {filtering
-                      ? "Try fewer filters, or a wider radius."
-                      : isOpenNet
-                        ? "Most people arrive through a board first and opt into the public map afterwards."
-                        : "Share the board's QR code and it fills as people scan it."}
-                  </PanelNote>
-                ) : (
-                  <div className="flex flex-col gap-2.5">
-                    {shown.map((p) => (
-                      <PersonCard key={p.id} person={p} compact onOpen={() => setSelected(p.id)} />
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : tab === "events" ? (
-              <div className="min-h-0 flex-1 overflow-y-auto">
-                <EventsPanel
-                  events={data.events}
-                  scopeName={data.scope.name}
-                  scopeSlug={data.scope.slug}
-                  canCreate={signedIn && onboarded}
-                  onShow={(e: EventRef) => {
-                    if (e.lat != null && e.lng != null) {
-                      at.current = { lat: e.lat, lng: e.lng };
-                      void load({ lat: e.lat, lng: e.lng });
-                      setTab(null);
-                    }
-                  }}
-                />
-              </div>
-            ) : (
-              <ChatsPanel signedIn={signedIn} onChanged={() => void load({})} />
-            )}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <PersonCard
+              person={selectedPerson}
+              reason={data.matches.find((m) => m.id === selectedPerson.id)?.reason}
+              twoWay={data.matches.find((m) => m.id === selectedPerson.id)?.twoWay}
+            />
+            <ReachOut person={selectedPerson} signedIn={signedIn} onSignIn={() => openWin("signin")} />
           </div>
-        </aside>
+        </FloatWindow>
       )}
 
+      <FloatWindow
+        title="Your profile"
+        state={wins.profile}
+        onChange={(n) => win("profile", n)}
+        onClose={() => win("profile", { open: false })}
+        onFocus={() => focus("profile")}
+        width={440}
+      >
+        <ProfilePanel
+          networks={data.networks}
+          connections={data.connections}
+          onSaved={() => void load({})}
+          onOpenNetwork={(slug) => {
+            win("profile", { open: false });
+            switchNetwork(slug);
+          }}
+        />
+      </FloatWindow>
+
+      <FloatWindow
+        title="Sign in"
+        state={wins.signin}
+        onChange={(n) => win("signin", n)}
+        onClose={() => win("signin", { open: false })}
+        onFocus={() => focus("signin")}
+        width={340}
+      >
+        <SignInPanel
+          onDone={async (wasOnboarded) => {
+            if (pendingJoin) {
+              // Best-effort: a failed join still leaves them signed in on
+              // the map rather than stuck.
+              await fetch(`/api/boards/${pendingJoin}/join`, { method: "POST" }).catch(() => {});
+            }
+            win("signin", { open: false });
+            // Straight into the profile when there's nothing to match on
+            // yet — the whole point of signing in.
+            if (!wasOnboarded) openWin("profile");
+            void load(pendingJoin ? { net: pendingJoin } : {});
+          }}
+        />
+      </FloatWindow>
+
       <MapDock
-        active={tab}
+        active={(["forYou", "feed", "people", "events", "chats"] as const).find(
+          (k) => wins[k].open && !wins[k].min
+        ) ?? null}
         counts={{
           forYou: matched.length,
           people: shown.length,
@@ -288,65 +422,8 @@ export default function MapShell({
         signedIn={signedIn}
         me={me}
         onSelect={openTab}
-        onProfile={() => setOverlay(signedIn ? "profile" : "signin")}
+        onProfile={() => openWin(signedIn ? "profile" : "signin")}
       />
-
-      {overlay && (
-        <>
-          <button
-            type="button"
-            className="absolute inset-0 z-40 cursor-default"
-            style={{ background: "color-mix(in srgb, var(--ink) 38%, transparent)", backdropFilter: "blur(2px)" }}
-            onClick={() => setOverlay(null)}
-            aria-label="Close"
-          />
-          <div className="pointer-events-none absolute inset-0 z-50 flex items-start justify-center p-3 sm:p-6">
-            <div
-              className="floating-panel panel-enter pointer-events-auto flex max-h-[min(84dvh,720px)] w-full max-w-lg flex-col overflow-hidden"
-              role="dialog"
-              aria-modal="true"
-            >
-              <div className="flex flex-none items-center justify-between gap-2 border-b border-[var(--line)] p-3">
-                <p className="label m-0">{overlay === "signin" ? "Sign in" : "Your profile"}</p>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => setOverlay(null)}
-                  aria-label="Close"
-                >
-                  <IconX size={13} />
-                </button>
-              </div>
-              <div className="flex min-h-0 flex-1 flex-col p-3">
-                {overlay === "signin" ? (
-                  <SignInPanel
-                    onDone={async (wasOnboarded) => {
-                      if (pendingJoin) {
-                        // Best-effort: a failed join still leaves them
-                        // signed in on the map rather than stuck.
-                        await fetch(`/api/boards/${pendingJoin}/join`, { method: "POST" }).catch(() => {});
-                      }
-                      // Straight into the profile when there's nothing to
-                      // match on yet — the whole point of signing in.
-                      setOverlay(wasOnboarded ? null : "profile");
-                      void load(pendingJoin ? { net: pendingJoin } : {});
-                    }}
-                  />
-                ) : (
-                  <ProfilePanel
-                    networks={data.networks}
-                    onSaved={() => void load({})}
-                    onOpenNetwork={(slug) => {
-                      setOverlay(null);
-                      switchNetwork(slug);
-                    }}
-                  />
-                )}
-              </div>
-            </div>
-          </div>
-        </>
-      )}
 
       {/* Members of a board who aren't on the public map get the one-tap
           way in, where the decision actually comes up. */}
@@ -444,36 +521,6 @@ function ForYou({
   );
 }
 
-function Profile({
-  person,
-  reason,
-  twoWay,
-  signedIn,
-  onSignIn,
-  onClose,
-}: {
-  person: MapProfile & { connectionStatus?: string | null; connectionId?: string | null };
-  reason?: string;
-  twoWay?: boolean;
-  signedIn: boolean;
-  onSignIn: () => void;
-  onClose: () => void;
-}) {
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="mb-2 flex flex-none items-center justify-between gap-2">
-        <p className="label m-0">Profile</p>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} aria-label="Close profile">
-          <IconX size={12} />
-        </button>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <PersonCard person={person} reason={reason} twoWay={twoWay} />
-        <ReachOut person={person} signedIn={signedIn} onSignIn={onSignIn} />
-      </div>
-    </div>
-  );
-}
 
 /**
  * The one way to reach a stranger.

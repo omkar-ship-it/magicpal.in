@@ -1,8 +1,9 @@
-import { boardBySlug, boardsForUser, childEvents, isLive, membershipOf, publicEvents } from "./boards";
+import { boardBySlug, boardsForUser, childEvents, isLive, membershipOf, publicEvents, rsvpSummary, type Board } from "./boards";
 import { getBoardMembers, getOpenMapProfiles, getProfileById, touchActivity, type MapProfile } from "./profiles";
 import { matchesFor, type Surface } from "./matching";
 import { attachConnectionStatus } from "./connections";
 import { waitingCount } from "./messages";
+import { listAcceptedConnections } from "./connections";
 import { DEFAULT_RADIUS_KM, MATCHES_SHOWN } from "./rules";
 
 /**
@@ -31,12 +32,20 @@ export type NetworkOption = {
 export type EventRef = {
   slug: string;
   name: string;
+  blurb: string | null;
+  details: string | null;
   place: string | null;
+  address: string | null;
+  url: string | null;
+  capacity: number | null;
   lat: number | null;
   lng: number | null;
   startsAt: string | null;
+  endsAt: string | null;
   live: boolean;
   memberCount: number;
+  going: number;
+  myRsvp: string | null;
 };
 
 /**
@@ -56,7 +65,7 @@ export type SelfMarker = {
   lng: number;
   placed: "exact" | "base";
   /** `off` still draws, muted: it's your own screen, and it answers the question. */
-  visibility: "off" | "base" | "exact";
+  visibility: "off" | "base" | "exact" | "live";
 };
 
 export type ShellPayload = {
@@ -71,6 +80,8 @@ export type ShellPayload = {
   you: SelfMarker | null;
   /** Whether the viewer has given the matcher anything to work with. */
   hasSignals: boolean;
+  /** Accepted connections — the product's one real conversion metric. */
+  connections: number;
 };
 
 export const OPEN_NETWORK: NetworkOption = {
@@ -108,6 +119,7 @@ export async function shellPayload(opts: {
   ];
 
   const waiting = opts.userId ? await waitingCount(opts.userId) : 0;
+  const connections = opts.userId ? (await listAcceptedConnections(opts.userId)).length : 0;
 
   // Drawn from the row directly rather than through place(), which exists to
   // decide what *other* people may see. You always get your real position,
@@ -160,22 +172,14 @@ export async function shellPayload(opts: {
         },
         people: members,
         matches,
-        events: children.map((e) => ({
-          slug: e.slug,
-          name: e.name,
-          place: e.place,
-          lat: e.lat,
-          lng: e.lng,
-          startsAt: e.startsAt?.toISOString() ?? null,
-          live: isLive(e),
-          memberCount: 0,
-        })),
+        events: await toEventRefs(children, opts.userId),
         networks,
         waiting,
         radiusKm,
         centre: board.lat != null && board.lng != null ? { lat: board.lat, lng: board.lng } : null,
         you,
         hasSignals,
+        connections,
       };
     }
   }
@@ -211,23 +215,48 @@ export async function shellPayload(opts: {
     scope: { kind: "open", slug: null, name: "Open network", blurb: null },
     people: withStatus,
     matches,
-    events: events.map((e) => ({
-      slug: e.slug,
-      name: e.name,
-      place: e.place,
-      lat: e.lat,
-      lng: e.lng,
-      startsAt: e.startsAt?.toISOString() ?? null,
-      live: isLive(e),
-      memberCount: 0,
-    })),
+    events: await toEventRefs(events, opts.userId),
     networks,
     waiting,
     radiusKm,
     centre,
     you,
     hasSignals,
+    connections,
   };
+}
+
+/**
+ * Board rows → what the Events window needs, RSVP tallies included.
+ *
+ * Counted per event rather than in one grouped query: an event list is a
+ * handful of rows, and a correct join here would be harder to read than the
+ * loop it replaces. Worth revisiting if a community ever has hundreds.
+ */
+async function toEventRefs(rows: Board[], viewerId?: string): Promise<EventRef[]> {
+  return Promise.all(
+    rows.map(async (e) => {
+      const rsvp = await rsvpSummary(e.id, viewerId);
+      return {
+        slug: e.slug,
+        name: e.name,
+        blurb: e.blurb,
+        details: e.details,
+        place: e.place,
+        address: e.address,
+        url: e.url,
+        capacity: e.capacity,
+        lat: e.lat,
+        lng: e.lng,
+        startsAt: e.startsAt?.toISOString() ?? null,
+        endsAt: e.endsAt?.toISOString() ?? null,
+        live: isLive(e),
+        memberCount: 0,
+        going: rsvp.going,
+        myRsvp: rsvp.mine,
+      };
+    })
+  );
 }
 
 export function parseScope(net: string | null | undefined): ScopeRef {

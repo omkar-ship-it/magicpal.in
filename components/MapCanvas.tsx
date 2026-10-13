@@ -8,7 +8,8 @@ import MapGL, { Marker, NavigationControl, type ViewStateChangeEvent } from "rea
 import type { MapProfile } from "@/lib/profiles";
 import type { SelfMarker } from "@/lib/shell";
 import Avatar from "./Avatar";
-import { IconCalendar } from "./Icons";
+import { topicById } from "@/lib/intents";
+import { IconCalendar, IconCity, IconPin } from "./Icons";
 
 /**
  * Which Mapbox style to draw, following the viewer's theme.
@@ -270,6 +271,53 @@ export default function MapCanvas({
   );
 }
 
+/**
+ * The hover preview.
+ *
+ * Enough to decide whether to click and no more: face, name, what they do,
+ * and the one or two things they're after. Rendered inside the marker and
+ * revealed by CSS (.hover-host) rather than by React state, so moving the
+ * pointer across a crowded stack doesn't re-render the whole map.
+ */
+function PinCard({ person }: { person: MapProfile & { hereNow?: boolean } }) {
+  const wants = person.lookingFor.map(topicById).filter(Boolean).slice(0, 2);
+  return (
+    <span
+      className="hover-card pointer-events-none absolute z-50 block w-[220px] rounded-2xl border border-[var(--line)] p-2.5 text-left"
+      style={{ background: "var(--card)", boxShadow: "var(--shadow-lift)" }}
+      aria-hidden="true"
+    >
+      <span className="block truncate text-[12.5px] font-semibold">{person.name}</span>
+      {person.headline && (
+        <span className="block truncate text-[11.5px] text-[var(--ink-soft)]">
+          {person.headline}
+          {person.company ? ` · ${person.company}` : ""}
+        </span>
+      )}
+      <span className="mt-0.5 flex items-center gap-1 text-[11px] text-[var(--ink-soft)]">
+        {person.placed === "base" ? <IconCity size={10} /> : <IconPin size={10} />}
+        <span className="truncate">
+          {person.locationLabel || "Somewhere"}
+          {person.placed === "base" ? " · city only" : person.placed === "live" ? " · live" : ""}
+        </span>
+      </span>
+      {wants.length > 0 && (
+        <span className="mt-1.5 flex flex-wrap gap-1">
+          {wants.map((t) => (
+            <span
+              key={t!.id}
+              className="pill"
+              style={{ background: "color-mix(in srgb, var(--brand) 12%, transparent)", color: "var(--brand)", fontSize: 10 }}
+            >
+              {t!.need}
+            </span>
+          ))}
+        </span>
+      )}
+    </span>
+  );
+}
+
 function FaceStack({
   group,
   highlighted,
@@ -292,21 +340,29 @@ function FaceStack({
   return (
     <span className="flex items-center -space-x-2.5">
       {faces.map((p) => (
-        <button
-          key={p.id}
-          type="button"
-          className="map-pin"
-          onClick={() => onSelect?.(p.id)}
-          title={p.name}
-          aria-label={p.name}
-          style={
-            highlighted.has(p.id)
-              ? { boxShadow: "0 0 0 2.5px var(--brand), var(--shadow)", borderRadius: 999 }
-              : undefined
-          }
-        >
-          <Avatar name={p.name} photoUrl={p.photoUrl} size={30} ring={2} />
-        </button>
+        <span key={p.id} className="hover-host relative">
+          <button
+            type="button"
+            className="map-pin"
+            onClick={() => onSelect?.(p.id)}
+            aria-label={p.name}
+            style={
+              highlighted.has(p.id)
+                ? { boxShadow: "0 0 0 2.5px var(--brand), var(--shadow)", borderRadius: 999 }
+                : undefined
+            }
+          >
+            <Avatar name={p.name} photoUrl={p.photoUrl} size={30} ring={2} />
+            {p.placed === "live" && (
+              <span
+                className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full"
+                style={{ background: "var(--good)", boxShadow: "0 0 0 2px var(--card)" }}
+                title="Live location"
+              />
+            )}
+          </button>
+          <PinCard person={p} />
+        </span>
       ))}
       {extra > 0 && (
         <button

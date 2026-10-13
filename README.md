@@ -108,6 +108,13 @@ server first or it fails on startup rather than on an assertion.
 
 ## Notes for whoever is next
 
+- **`drizzle-kit push` does not diff CHECK constraint changes.** It adds new
+  ones and silently leaves edited ones alone, so widening
+  `users_visibility` to accept `live` looked applied and wasn't — every save
+  failed with a bare 500 while the schema file said it was legal. Constraint
+  edits go in `drizzle/manual/` and are applied with `psql`; check
+  `pg_constraint` after any push that touches one.
+
 - **This is not the Next.js you know.** See `AGENTS.md`: read
   `node_modules/next/dist/docs/` before writing app code. `params` and
   `searchParams` are Promises.

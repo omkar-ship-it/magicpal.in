@@ -43,6 +43,10 @@ export async function createBoard(input: {
   startsAt?: Date | null;
   endsAt?: Date | null;
   parentBoardId?: string | null;
+  details?: string | null;
+  address?: string | null;
+  url?: string | null;
+  capacity?: number | null;
 }): Promise<Board | null> {
   if (!hasDb || !db) return null;
 
@@ -60,6 +64,10 @@ export async function createBoard(input: {
           name: input.name,
           blurb: input.blurb ?? null,
           place: input.place ?? null,
+          details: input.details ?? null,
+          address: input.address ?? null,
+          url: input.url ?? null,
+          capacity: input.capacity ?? null,
           lat: input.lat ?? null,
           lng: input.lng ?? null,
           startsAt: input.type === "event" ? (input.startsAt ?? new Date()) : null,
@@ -149,6 +157,23 @@ export async function boardsForUser(userId: string): Promise<Array<Board & { rol
     .where(and(eq(memberships.userId, userId), isNull(boards.archivedAt)))
     .orderBy(desc(memberships.role), desc(boards.createdAt));
   return rows.map((r) => ({ ...r.board, role: r.role, memberCount: r.memberCount }));
+}
+
+/** going / maybe counts for an event, plus the viewer's own answer. */
+export async function rsvpSummary(
+  boardId: string,
+  userId?: string
+): Promise<{ going: number; maybe: number; mine: string | null }> {
+  if (!hasDb || !db) return { going: 0, maybe: 0, mine: null };
+  const rows = await db
+    .select({ rsvp: memberships.rsvp, userId: memberships.userId })
+    .from(memberships)
+    .where(eq(memberships.boardId, boardId));
+  return {
+    going: rows.filter((r) => r.rsvp === "going").length,
+    maybe: rows.filter((r) => r.rsvp === "maybe").length,
+    mine: rows.find((r) => r.userId === userId)?.rsvp ?? null,
+  };
 }
 
 export async function memberCount(boardId: string): Promise<number> {

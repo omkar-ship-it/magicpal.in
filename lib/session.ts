@@ -18,7 +18,7 @@ export type SessionUser = {
    * assumes the worst, which for a location product means assuming they're
    * exposed. See users.visibility for what the values mean.
    */
-  visibility: "off" | "base" | "exact";
+  visibility: "off" | "base" | "exact" | "live";
   /** True once name is set — onboarding is the gate for everything else. */
   onboarded: boolean;
 };

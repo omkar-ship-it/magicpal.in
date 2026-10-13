@@ -49,10 +49,13 @@ type Draft = {
  */
 export default function ProfilePanel({
   networks,
+  connections,
   onSaved,
   onOpenNetwork,
 }: {
   networks: NetworkOption[];
+  /** Accepted connections — the one number that says the product worked. */
+  connections: number;
   onSaved: () => void;
   onOpenNetwork: (slug: string) => void;
 }) {
@@ -171,7 +174,16 @@ export default function ProfilePanel({
       <form onSubmit={save} className="flex flex-col gap-4 pb-2">
         {/* ------------------------------------------------- who you are */}
         <section>
-          <h2 className="text-[15px] font-semibold">Who you are</h2>
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-[15px] font-semibold">Who you are</h2>
+            {/* The one number that says the product did its job. Shown on
+                the profile rather than the dock because it's a record of
+                what's happened, not something waiting on you. */}
+            <span className="text-[12px] text-[var(--ink-soft)]">
+              <span className="font-semibold text-[var(--ink)]">{connections}</span>{" "}
+              {connections === 1 ? "connection" : "connections"}
+            </span>
+          </div>
           <div className="mt-3 flex flex-col gap-3">
             <AvatarPicker name={d.name || "You"} photoUrl={d.photoUrl} style={d.avatarStyle} onChange={onAvatar} />
             {photoError && <p className="text-[12px] font-medium text-[var(--warn)]">{photoError}</p>}

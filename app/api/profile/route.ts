@@ -54,7 +54,7 @@ export async function GET() {
   });
 }
 
-const VISIBILITIES = ["off", "base", "exact"] as const;
+const VISIBILITIES = ["off", "base", "exact", "live"] as const;
 type Visibility = (typeof VISIBILITIES)[number];
 
 /**

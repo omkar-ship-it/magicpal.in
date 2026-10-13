@@ -2,9 +2,9 @@ import { and, eq, inArray, isNotNull, isNull, lt, ne, or } from "drizzle-orm";
 import { db, hasDb } from "./db";
 import { memberships, users } from "./db/schema";
 import { distanceKm } from "./geo";
-import { ACTIVE_WINDOW_MINUTES, MAX_MAP_RESULTS } from "./rules";
+import { ACTIVE_WINDOW_MINUTES, LIVE_STALE_MINUTES, MAX_MAP_RESULTS } from "./rules";
 
-export type Visibility = "off" | "base" | "exact";
+export type Visibility = "off" | "base" | "exact" | "live";
 
 /**
  * A person as the map and the matcher both see them.
@@ -43,8 +43,8 @@ export type MapProfile = {
    */
   lat: number;
   lng: number;
-  /** Which of the two the coordinates above actually are. */
-  placed: "exact" | "base";
+  /** Which precision the coordinates above actually are. */
+  placed: "exact" | "base" | "live";
   /** Null when the caller gave no centre to measure from. */
   distanceKm: number | null;
   /** Heartbeat landed within ACTIVE_WINDOW_MINUTES. */
@@ -76,6 +76,7 @@ const PROFILE_COLUMNS = {
   baseLng: users.baseLng,
   baseLabel: users.baseLabel,
   visibility: users.visibility,
+  liveAt: users.liveAt,
   lastActiveAt: users.lastActiveAt,
 } as const;
 
@@ -96,7 +97,23 @@ function place(r: {
   baseLat: number | null;
   baseLng: number | null;
   baseLabel: string | null;
-}): { lat: number; lng: number; placed: "exact" | "base"; label: string | null } | null {
+  liveAt?: Date | string | null;
+}): { lat: number; lng: number; placed: "exact" | "base" | "live"; label: string | null } | null {
+  if (r.visibility === "live") {
+    // Decays on its own. Somebody who closed the tab three hours ago is not
+    // "here now", and nobody ever taps stop — so a stale live position is
+    // treated as no position at all rather than as a slightly old one.
+    const fresh =
+      r.liveAt != null && Date.now() - new Date(r.liveAt).getTime() < LIVE_STALE_MINUTES * 60_000;
+    if (fresh && r.lat != null && r.lng != null) {
+      return { lat: r.lat, lng: r.lng, placed: "live", label: r.locationLabel };
+    }
+    // Not fresh: fall back to the city they chose, never to a stale pin.
+    if (r.baseLat != null && r.baseLng != null) {
+      return { lat: r.baseLat, lng: r.baseLng, placed: "base", label: r.baseLabel };
+    }
+    return null;
+  }
   if (r.visibility === "exact" && r.lat != null && r.lng != null) {
     // No jitter. Someone who picked "exact" is asking to be findable at the
     // venue they're standing in; blurring it would quietly break that deal.
@@ -142,6 +159,7 @@ type ProfileRow = {
   baseLng: number | null;
   baseLabel: string | null;
   visibility: string;
+  liveAt: Date | null;
   lastActiveAt: Date | null;
 };
 
@@ -208,7 +226,16 @@ export async function getOpenMapProfiles(opts: {
         // not hand back rows that function is only going to discard.
         or(
           and(eq(users.visibility, "exact"), isNotNull(users.lat), isNotNull(users.lng)),
-          and(eq(users.visibility, "base"), isNotNull(users.baseLat), isNotNull(users.baseLng))
+          and(eq(users.visibility, "base"), isNotNull(users.baseLat), isNotNull(users.baseLng)),
+          // Live rows can resolve to either a fresh pin or their base city,
+          // so both coordinate pairs are acceptable here; place() decides.
+          and(
+            eq(users.visibility, "live"),
+            or(
+              and(isNotNull(users.lat), isNotNull(users.lng)),
+              and(isNotNull(users.baseLat), isNotNull(users.baseLng))
+            )
+          )
         ),
         opts.excludeUserId ? ne(users.id, opts.excludeUserId) : undefined
       )

@@ -4,6 +4,13 @@ import { boardBySlug, createBoard, membershipOf } from "@/lib/boards";
 
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
+/** Accepts "example.com/x" as readily as the full URL — nobody types the scheme. */
+function normalizeUrl(v: unknown, max = 300): string {
+  const s = str(v, max);
+  if (!s) return "";
+  return /^https?:\/\//i.test(s) ? s : `https://${s}`;
+}
+
 /**
  * Create a board.
  *
@@ -25,6 +32,11 @@ export async function POST(req: Request) {
   const name = str(body?.name, 80);
   const blurb = str(body?.blurb, 280);
   const place = str(body?.place, 160);
+  const details = str(body?.details, 2000);
+  const address = str(body?.address, 240);
+  const url = normalizeUrl(body?.url);
+  const capRaw = Number(body?.capacity);
+  const capacity = Number.isFinite(capRaw) && capRaw > 0 ? Math.min(Math.round(capRaw), 100_000) : null;
   const lat = Number(body?.lat);
   const lng = Number(body?.lng);
 
@@ -72,6 +84,10 @@ export async function POST(req: Request) {
     name,
     blurb: blurb || null,
     place: place || null,
+    details: details || null,
+    address: address || null,
+    url: url || null,
+    capacity,
     lat: Number.isFinite(lat) ? lat : null,
     lng: Number.isFinite(lng) ? lng : null,
     startsAt,

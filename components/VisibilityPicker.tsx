@@ -1,8 +1,8 @@
 "use client";
 
-import { IconCity, IconHidden, IconPin } from "./Icons";
+import { IconBeacon, IconCity, IconHidden, IconPin } from "./Icons";
 
-export type Visibility = "off" | "base" | "exact";
+export type Visibility = "off" | "base" | "exact" | "live";
 
 const OPTIONS: Array<{
   id: Visibility;
@@ -24,9 +24,16 @@ const OPTIONS: Array<{
   },
   {
     id: "exact",
-    label: "Exactly where I am",
-    detail: "A pin at street level. For a conference or a co-working day, when being findable is the point.",
+    label: "A fixed location",
+    detail: "A pin at the place you chose, street level. For a conference or a co-working day, when being findable is the point.",
     icon: <IconPin size={15} />,
+  },
+  {
+    id: "live",
+    label: "My live location",
+    detail:
+      "Follows your phone while this is open, and stops on its own if you close it. Falls back to your city rather than leaving an old pin behind.",
+    icon: <IconBeacon size={15} />,
   },
 ];
 
@@ -61,7 +68,10 @@ export default function VisibilityPicker({
       <legend className="label">On the public map, show</legend>
       <div className="flex flex-col gap-2">
         {OPTIONS.map((o) => {
-          const missing = (o.id === "exact" && !hasExact) || (o.id === "base" && !hasBase);
+          // Live needs a city too — it's where the pin falls back to when
+          // the session goes stale, which is the whole reason it's safe.
+          const missing =
+            (o.id === "exact" && !hasExact) || (o.id === "base" && !hasBase) || (o.id === "live" && !hasBase);
           const on = value === o.id;
           return (
             <label

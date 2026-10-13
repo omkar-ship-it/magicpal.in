@@ -475,6 +475,76 @@ async function main() {
     const blank = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}&radiusKm=25`, { jar: a.jar });
     assert(blank.data.hasSignals === false, "someone who stated nothing is flagged, not blamed on the room");
 
+    console.log("\nEvents carry their details, and take an RSVP");
+    const rich = await api("/api/boards", {
+      method: "POST", jar: a.jar,
+      body: {
+        type: "event", name: "Flowtest Dinner", blurb: "Long overdue",
+        details: "Dinner then drinks.", address: "2nd floor, ring the bell",
+        url: "lu.ma/flowtest", capacity: 2, place: "Delhi",
+        lat: HERE.lat, lng: HERE.lng,
+        startsAt: new Date(Date.now() + 86400_000).toISOString(),
+        endsAt: new Date(Date.now() + 90000_000).toISOString(),
+      },
+    });
+    assert(rich.status === 200, "an event saves with details, address, capacity and a link");
+    slugs.push(rich.data.slug);
+    const { rows: evRow } = await pool.query(
+      "select details, address, url, capacity, ends_at from boards where slug = $1", [rich.data.slug]
+    );
+    assert(evRow[0].details === "Dinner then drinks.", "details persist");
+    assert(evRow[0].address === "2nd floor, ring the bell", "the how-to-get-in note persists");
+    assert(evRow[0].url === "https://lu.ma/flowtest", "a bare link is given a scheme");
+    assert(evRow[0].capacity === 2, "capacity persists");
+    assert(evRow[0].ends_at !== null, "an end time persists");
+
+    const anonRsvp = await api(`/api/boards/${rich.data.slug}/rsvp`, { method: "POST", body: { rsvp: "going" } });
+    assert(anonRsvp.status === 401, "a signed-out visitor can't RSVP");
+    const badRsvp = await api(`/api/boards/${rich.data.slug}/rsvp`, { method: "POST", jar: b.jar, body: { rsvp: "perhaps" } });
+    assert(badRsvp.status === 400, "an invented answer is refused");
+
+    // Bob isn't a member yet: saying "going" has to join him, not fail.
+    const bobGoing = await api(`/api/boards/${rich.data.slug}/rsvp`, { method: "POST", jar: b.jar, body: { rsvp: "going" } });
+    assert(bobGoing.status === 200, "a non-member saying 'going' is joined, not rejected");
+    const { rows: rsvpRow } = await pool.query(
+      "select rsvp from memberships m join boards bd on bd.id = m.board_id where bd.slug = $1 and m.user_id = (select id from users where email = $2)",
+      [rich.data.slug, emailB]
+    );
+    assert(rsvpRow[0]?.rsvp === "going", "…and the answer is recorded");
+
+    const communityRsvp = await api(`/api/boards/${comm.data.slug}/rsvp`, { method: "POST", jar: a.jar, body: { rsvp: "going" } });
+    assert(communityRsvp.status === 400, "a community doesn't take an RSVP — only events do");
+
+    console.log("\nLive location can't be pushed unless you turned it on");
+    const liveOff = await api("/api/live", { method: "POST", jar: b.jar, body: { lat: 28.6, lng: 77.2 } });
+    assert(liveOff.status === 409, "a stale tab can't keep writing a position after you go private");
+    const goLive = await api("/api/profile", {
+      method: "POST", jar: b.jar,
+      body: {
+        name: "Flow Bob", headline: "Angel investor", lookingFor: ["product"], canHelpWith: ["funding"],
+        baseLat: CITY.lat, baseLng: CITY.lng, baseLabel: CITY.label, visibility: "live",
+      },
+    });
+    assert(goLive.status === 200, "switching to live sharing saves");
+    const liveOn = await api("/api/live", { method: "POST", jar: b.jar, body: { lat: 28.6, lng: 77.2 } });
+    assert(liveOn.status === 200, "…and can once live sharing is on");
+    const liveBad = await api("/api/live", { method: "POST", jar: b.jar, body: { lat: 999, lng: 77.2 } });
+    assert(liveBad.status === 400, "nonsense coordinates are refused");
+    const { rows: liveRow } = await pool.query("select live_at from users where email = $1", [emailB]);
+    assert(liveRow[0].live_at !== null, "the position is stamped so it can expire on its own");
+    const stopped = await api("/api/live", { method: "DELETE", jar: b.jar });
+    assert(stopped.status === 200, "stopping works");
+    const { rows: afterStop } = await pool.query("select visibility, live_at from users where email = $1", [emailB]);
+    assert(
+      afterStop[0].visibility === "base" && afterStop[0].live_at === null,
+      "…and drops you to your city rather than off the map entirely"
+    );
+
+    console.log("\nConnections are counted");
+    const counted = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}&radiusKm=25`, { jar: a.jar });
+    assert(typeof counted.data.connections === "number", "the payload carries a connection count");
+    assert(counted.data.connections >= 1, "…and it counts the accepted one from earlier");
+
     console.log("\nEvery entry point terminates");
     for (const [label, path] of [
       ["a QR scan while signed out", `/join/${slug}`],

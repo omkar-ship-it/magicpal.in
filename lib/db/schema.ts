@@ -7,6 +7,7 @@ import {
   index,
   boolean,
   doublePrecision,
+  integer,
   real,
   check,
   type AnyPgColumn,
@@ -114,6 +115,9 @@ export const users = pgTable(
      * about location, so it is one column read by every query rather than a
      * UI preference:
      *
+     *   live  — the device's position, refreshed while the app is open and
+     *           allowed to go stale on its own (see `liveAt`). For the hours
+     *           you're actually out at an event.
      *   exact — the real pin, street level. For "I'm at this venue, find me".
      *   base  — the city centroid only. Discoverable, not locatable.
      *   off   — absent from the open map entirely. Boards they joined still
@@ -128,6 +132,17 @@ export const users = pgTable(
     visibility: text("visibility").notNull().default("off"),
 
     /**
+     * When the live position was last written.
+     *
+     * Live location has to expire by itself. Nobody taps "stop sharing" —
+     * they close the tab, put the phone away, go home — so a live pin with
+     * no decay would quietly become a permanent broadcast of where somebody
+     * was last Tuesday. Reads treat anything older than LIVE_STALE_MINUTES
+     * as not live at all.
+     */
+    liveAt: timestamp("live_at", { withTimezone: true }),
+
+    /**
      * Touched by a heartbeat ping while any authenticated page is open —
      * powers the "N people active nearby right now" pulse. Deliberately
      * bucketed to a wide window at read time (see ACTIVE_WINDOW_MINUTES in
@@ -139,7 +154,7 @@ export const users = pgTable(
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [check("users_visibility", sql`${t.visibility} in ('off','base','exact')`)]
+  (t) => [check("users_visibility", sql`${t.visibility} in ('off','base','exact','live')`)]
 );
 
 export const otpCodes = pgTable("otp_codes", {
@@ -280,6 +295,15 @@ export const boards = pgTable(
     startsAt: timestamp("starts_at", { withTimezone: true }),
     endsAt: timestamp("ends_at", { withTimezone: true }),
 
+    /** The longer description — agenda, what to expect, how to find the room. */
+    details: text("details"),
+    /** Street address, kept apart from `place` so the map label stays short. */
+    address: text("address"),
+    /** Null means no limit. Shown as "N of M going" once set. */
+    capacity: integer("capacity"),
+    /** Tickets, a signup form, the host's own page. */
+    url: text("url"),
+
     /**
      * The admin pays and the members don't, because the admin is the one
      * with the problem — and a per-head price on a free WhatsApp group is a
@@ -329,11 +353,24 @@ export const memberships = pgTable(
      * and something you use during the coffee break.
      */
     checkedInAt: timestamp("checked_in_at", { withTimezone: true }),
+
+    /**
+     * going | maybe | no — or null, meaning they joined the board but
+     * haven't answered.
+     *
+     * Deliberately separate from membership: being on a board is "I'm part
+     * of this group", RSVP is "I'll be in that room on Thursday", and
+     * collapsing them would make leaving an event mean leaving the
+     * community that hosts it.
+     */
+    rsvp: text("rsvp"),
+    rsvpAt: timestamp("rsvp_at", { withTimezone: true }),
     joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     uniqueIndex("memberships_board_user_idx").on(t.boardId, t.userId),
     check("memberships_role", sql`${t.role} in ('host','member')`),
+    check("memberships_rsvp", sql`${t.rsvp} is null or ${t.rsvp} in ('going','maybe','no')`),
   ]
 );
 

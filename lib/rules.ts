@@ -22,6 +22,18 @@ export const MAX_TOPICS = 4;
  */
 export const MAX_INTERESTS = 5;
 
+/**
+ * How long a live position stays live without a refresh.
+ *
+ * Short on purpose. Nobody taps "stop sharing" — they close the tab — so
+ * this number, not a user action, is what stops live location becoming a
+ * permanent broadcast.
+ */
+export const LIVE_STALE_MINUTES = 12;
+
+/** How often the browser pushes a new live position while sharing. */
+export const LIVE_PING_MS = 90_000;
+
 /** How many recommendations a surface shows at once. */
 export const MATCHES_SHOWN = 3;
 

@@ -642,3 +642,25 @@ h1, h2, h3 {
 .mapboxgl-ctrl-group button:hover {
   background: color-mix(in srgb, var(--chrome-ink) 12%, transparent) !important;
 }
+
+/* Window title-bar controls. Small, quiet, and only coloured on hover —
+   three buttons on every window would otherwise be the loudest thing on a
+   screen whose point is the map underneath. */
+.win-dot {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border-radius: 999px;
+  color: var(--ink-soft);
+  transition: background 120ms ease, color 120ms ease;
+}
+.win-dot:hover {
+  background: var(--sunk);
+  color: var(--ink);
+}
+.win-dot:last-child:hover {
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
+  color: var(--warn);
+}
