@@ -36,6 +36,8 @@ export async function GET() {
       workingOn: row.workingOn ?? "",
       bio: row.bio ?? "",
       linkedinUrl: row.linkedinUrl ?? "",
+      phone: row.phone ?? "",
+      phoneVisibility: row.phoneVisibility ?? "connections",
       photoUrl: row.photoUrl,
       lookingFor: row.lookingFor ?? [],
       canHelpWith: row.canHelpWith ?? [],
@@ -79,6 +81,8 @@ export async function POST(req: Request) {
   const company = str(body?.company, 120);
   const bio = str(body?.bio, 600);
   const workingOn = str(body?.workingOn, 200);
+  const phone = str(body?.phone, 32);
+  const phoneVisibility = body?.phoneVisibility === "private" ? "private" : "connections";
   const linkedinUrl = normalizeUrl(body?.linkedinUrl);
   const instagramUrl = normalizeUrl(body?.instagramUrl);
   const websiteUrl = normalizeUrl(body?.websiteUrl);
@@ -134,6 +138,8 @@ export async function POST(req: Request) {
       company: company || null,
       bio: bio || null,
       workingOn: workingOn || null,
+      phone: phone || null,
+      phoneVisibility,
       linkedinUrl: linkedinUrl || null,
       instagramUrl: instagramUrl || null,
       websiteUrl: websiteUrl || null,

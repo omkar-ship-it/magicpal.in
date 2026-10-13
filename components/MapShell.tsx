@@ -12,10 +12,12 @@ import FloatWindow, { DEFAULT_WINDOW, type WindowState } from "./FloatWindow";
 import LiveLocation from "./LiveLocation";
 import MapTopBar from "./MapTopBar";
 import PersonCard from "./PersonCard";
+import PersonProfile from "./PersonProfile";
 import PanelNote from "./PanelNote";
 import FeedPanel from "./FeedPanel";
 import EventsPanel from "./EventsPanel";
 import ChatsPanel from "./ChatsPanel";
+import CommunityHome from "./CommunityHome";
 import SignInPanel from "./SignInPanel";
 import ProfilePanel from "./ProfilePanel";
 import PublicOptIn from "./PublicOptIn";
@@ -72,6 +74,7 @@ export default function MapShell({
    */
   const [wins, setWins] = useState<Record<string, WindowState>>(() => ({
     // `?panel=` from /you or /login decides what's already up on arrival.
+    home: { ...DEFAULT_WINDOW, x: 16, y: 72 },
     forYou: { ...DEFAULT_WINDOW, open: initialOverlay === null, x: 16, y: 72, z: 2 },
     feed: { ...DEFAULT_WINDOW, x: 56, y: 112 },
     people: { ...DEFAULT_WINDOW, x: 96, y: 152 },
@@ -239,11 +242,29 @@ export default function MapShell({
         onNetwork={switchNetwork}
         isLive={myVisibility === "live"}
         onGoLive={() => openWin("profile")}
+        onHome={() => openWin("home")}
       />
 
       {myVisibility === "live" && <LiveLocation onChanged={() => void load({})} />}
 
       {/* ------------------------------------------------ the windows */}
+      <FloatWindow
+        title={data.scope.slug ? data.scope.name : "Open network"}
+        state={wins.home}
+        onChange={(n) => win("home", n)}
+        onClose={() => win("home", { open: false })}
+        onFocus={() => focus("home")}
+        width={400}
+      >
+        <CommunityHome
+          scope={data.scope}
+          events={data.events}
+          memberCount={data.people.length + 1}
+          onOpenEvents={() => openWin("events")}
+          onOpenPeople={() => openWin("people")}
+        />
+      </FloatWindow>
+
       <FloatWindow
         title={<><IconSparkle size={12} className="mr-1 inline" />For you</>}
         state={wins.forYou}
@@ -376,12 +397,18 @@ export default function MapShell({
           onFocus={() => focus("person")}
         >
           <div className="min-h-0 flex-1 overflow-y-auto">
-            <PersonCard
-              person={selectedPerson}
+            <PersonProfile
+              personId={selectedPerson.id}
               reason={data.matches.find((m) => m.id === selectedPerson.id)?.reason}
               twoWay={data.matches.find((m) => m.id === selectedPerson.id)?.twoWay}
-            />
-            <ReachOut person={selectedPerson} signedIn={signedIn} onSignIn={() => openWin("signin")} />
+            >
+              <ReachOut
+                key={selectedPerson.id}
+                person={selectedPerson}
+                signedIn={signedIn}
+                onSignIn={() => openWin("signin")}
+              />
+            </PersonProfile>
           </div>
         </FloatWindow>
       )}
@@ -435,7 +462,7 @@ export default function MapShell({
       </FloatWindow>
 
       <MapDock
-        active={(["forYou", "feed", "people", "events", "chats"] as const).find(
+        active={(["home", "forYou", "feed", "people", "events", "chats"] as const).find(
           (k) => wins[k].open && !wins[k].min
         ) ?? null}
         counts={{
@@ -565,7 +592,17 @@ function ReachOut({
   onSignIn: () => void;
 }) {
   const [note, setNote] = useState("");
-  const [state, setState] = useState<string | null>(person.connectionStatus ?? null);
+  /**
+   * Only what *this* session just did. The truth lives on the person, which
+   * the server resolves on every payload — reading it into state on mount
+   * meant opening a second profile in the same window kept the first one's
+   * answer, and nothing ever corrected it.
+   */
+  const [justSent, setJustSent] = useState(false);
+  // `attachConnectionStatus` says "connected"; this read "accepted", which
+  // it never emits — so an established connection fell through to the
+  // request form and offered to connect you to somebody you already knew.
+  const state = justSent ? "pending" : (person.connectionStatus ?? "none");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -592,7 +629,7 @@ function ReachOut({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Couldn't send that.");
-      setState("pending");
+      setJustSent(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
@@ -600,7 +637,7 @@ function ReachOut({
     }
   }
 
-  if (state === "accepted") {
+  if (state === "connected") {
     return (
       <div className="card mt-2.5 p-3.5">
         <p className="text-[13px] font-semibold">You&rsquo;re connected</p>

@@ -690,6 +690,56 @@ async function main() {
     assert(tbc.lat === null, "…with no coordinates, which is what the UI warns about");
     assert(tbc.isHost === true, "…and the host is told so they can fix it");
 
+    console.log("\nA phone number is earned, not published");
+    await api("/api/profile", {
+      method: "POST", jar: b.jar,
+      body: {
+        name: "Flow Bob", headline: "Angel investor", lookingFor: ["product"], canHelpWith: ["funding"],
+        phone: "+91 90000 00001", phoneVisibility: "connections",
+        baseLat: CITY.lat, baseLng: CITY.lng, baseLabel: CITY.label, visibility: "base",
+      },
+    });
+    const bobId2 = (await pool.query("select id from users where email = $1", [emailB])).rows[0].id;
+
+    const asStranger = await api(`/api/person/${bobId2}`, { jar: c.jar });
+    assert(asStranger.status === 200, "anyone can read a profile");
+    assert(asStranger.data.person.phone === null, "a stranger never gets the number");
+    assert(asStranger.data.person.hasPhone === true, "…but is told one exists, which is what makes connecting worth it");
+
+    const asSelf = await api(`/api/person/${bobId2}`, { jar: b.jar });
+    assert(asSelf.data.person.phone === "+91 90000 00001", "you can always see your own");
+
+    // Alice and Bob connected earlier in this run.
+    const asConnection = await api(`/api/person/${bobId2}`, { jar: a.jar });
+    assert(asConnection.data.connection.status === "connected", "the connection is recognised");
+    assert(asConnection.data.person.phone === "+91 90000 00001", "an accepted connection gets the number");
+
+    await api("/api/profile", {
+      method: "POST", jar: b.jar,
+      body: {
+        name: "Flow Bob", headline: "Angel investor", lookingFor: ["product"], canHelpWith: ["funding"],
+        phone: "+91 90000 00001", phoneVisibility: "private",
+        baseLat: CITY.lat, baseLng: CITY.lng, baseLabel: CITY.label, visibility: "base",
+      },
+    });
+    const afterPrivate = await api(`/api/person/${bobId2}`, { jar: a.jar });
+    assert(afterPrivate.data.person.phone === null, "marking it private takes it back, even from a connection");
+
+    // And it must never ride along in a bulk payload.
+    const bulk = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}&radiusKm=50`, { jar: a.jar });
+    assert(
+      !JSON.stringify(bulk.data).includes("90000 00001"),
+      "a phone number never appears in the map payload, whatever the UI renders"
+    );
+
+    console.log("\nA community has a home of its own");
+    const withHome = await api(`/api/map?net=${comm.data.slug}`, { jar: a.jar });
+    assert(withHome.data.scope.home !== null, "a community scope carries its home data");
+    assert(withHome.data.scope.home.hostName.length > 0, "…naming who runs it");
+    assert(withHome.data.scope.home.isHost === true, "…and whether you do");
+    const openScope = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}&radiusKm=25`, { jar: a.jar });
+    assert(openScope.data.scope.home === null, "the open network has no home — it isn't a group");
+
     console.log("\nEvery entry point terminates");
     for (const [label, path] of [
       ["a QR scan while signed out", `/join/${slug}`],

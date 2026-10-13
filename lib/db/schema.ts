@@ -35,6 +35,18 @@ export const users = pgTable(
     skills: text("skills").array().notNull().default(sql`'{}'::text[]`),
     photoUrl: text("photo_url"),
 
+    /**
+     * A phone number, and who may see it.
+     *
+     * Private by default and never in any map payload — it leaves the
+     * server only on your own profile, or to somebody you have an accepted
+     * connection with. A networking product that puts phone numbers on a
+     * public map is a directory for cold callers, and the whole point of
+     * the connection request is that reaching someone costs their consent.
+     */
+    phone: text("phone"),
+    phoneVisibility: text("phone_visibility").notNull().default("connections"),
+
     // Optional — shown as icon links on the profile card when set.
     linkedinUrl: text("linkedin_url"),
     instagramUrl: text("instagram_url"),
@@ -154,7 +166,10 @@ export const users = pgTable(
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [check("users_visibility", sql`${t.visibility} in ('off','base','exact','live')`)]
+  (t) => [
+    check("users_visibility", sql`${t.visibility} in ('off','base','exact','live')`),
+    check("users_phone_visibility", sql`${t.phoneVisibility} in ('private','connections')`),
+  ]
 );
 
 export const otpCodes = pgTable("otp_codes", {

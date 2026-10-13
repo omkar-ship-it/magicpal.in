@@ -264,7 +264,7 @@ export default function MapCanvas({
                     : "0 0 0 3px var(--brand), var(--shadow)",
               }}
             >
-              <Avatar name={you.name} photoUrl={you.photoUrl} size={32} ring={2} />
+              <Avatar name={you.name} photoUrl={you.photoUrl} size={42} ring={3} />
             </span>
             <span
               className="pointer-events-none absolute left-1/2 top-full mt-1 -translate-x-1/2 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[9.5px] font-bold"
@@ -378,7 +378,7 @@ function FaceStack({
   const extra = sorted.length - faces.length;
 
   return (
-    <span className="flex items-center -space-x-2.5">
+    <span className="flex items-center -space-x-3">
       {faces.map((p) => (
         <span key={p.id} className="hover-host relative">
           <button
@@ -392,7 +392,7 @@ function FaceStack({
                 : undefined
             }
           >
-            <Avatar name={p.name} photoUrl={p.photoUrl} size={30} ring={2} />
+            <Avatar name={p.name} photoUrl={p.photoUrl} size={40} ring={2.5} />
             {p.placed === "live" && (
               <span
                 className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full"
@@ -407,7 +407,7 @@ function FaceStack({
       {extra > 0 && (
         <button
           type="button"
-          className="map-pin grid h-[30px] w-[30px] place-items-center rounded-full text-[11px] font-semibold"
+          className="map-pin grid h-[40px] w-[40px] place-items-center rounded-full text-[12px] font-semibold"
           style={{ background: "var(--card)", color: "var(--ink-soft)", boxShadow: "0 0 0 2px var(--card), var(--shadow)" }}
           onClick={() => onSelect?.(sorted[faces.length].id)}
           aria-label={`${extra} more people here`}

@@ -71,7 +71,22 @@ export type SelfMarker = {
 };
 
 export type ShellPayload = {
-  scope: { kind: "open" | "event" | "community"; slug: string | null; name: string; blurb: string | null };
+  scope: {
+    kind: "open" | "event" | "community";
+    slug: string | null;
+    name: string;
+    blurb: string | null;
+    /** Everything the community's own home needs. Null on the open map. */
+    home: {
+      place: string | null;
+      hostName: string;
+      memberCount: number;
+      eventCount: number;
+      createdAt: string;
+      isHost: boolean;
+      hereNow: number;
+    } | null;
+  };
   people: MapProfile[];
   matches: Array<{ id: string; reason: string; twoWay: boolean }>;
   events: EventRef[];
@@ -181,12 +196,22 @@ export async function shellPayload(opts: {
           : [];
 
       const children = board.type === "community" ? await childEvents(board.id) : [];
+      const host = await getProfileById(board.hostUserId);
       return {
         scope: {
           kind: board.type as "event" | "community",
           slug: board.slug,
           name: board.name,
           blurb: board.blurb,
+          home: {
+            place: board.place,
+            hostName: host?.name ?? "a member",
+            memberCount: members.length + 1,
+            eventCount: children.length,
+            createdAt: board.createdAt.toISOString(),
+            isHost: board.hostUserId === opts.userId,
+            hereNow: members.filter((m) => m.hereNow).length,
+          },
         },
         people: members,
         matches,
@@ -230,7 +255,7 @@ export async function shellPayload(opts: {
   const events = await publicEvents();
 
   return {
-    scope: { kind: "open", slug: null, name: "Open network", blurb: null },
+    scope: { kind: "open", slug: null, name: "Open network", blurb: null, home: null },
     people: withStatus,
     matches,
     events: await toEventRefs(events, opts.userId),

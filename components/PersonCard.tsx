@@ -33,7 +33,7 @@ export default function PersonCard({
   return (
     <article className="card p-3.5">
       <button type="button" onClick={onOpen} className="flex w-full items-start gap-3 text-left tap">
-        <Avatar name={person.name} photoUrl={person.photoUrl} size={compact ? 40 : 46} />
+        <Avatar name={person.name} photoUrl={person.photoUrl} size={compact ? 46 : 56} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <h3 className="min-w-0 truncate text-[14px] font-semibold">{person.name}</h3>

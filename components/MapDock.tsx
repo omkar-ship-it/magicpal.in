@@ -1,11 +1,12 @@
 "use client";
 
 import Avatar from "./Avatar";
-import { IconCalendar, IconChat, IconFeed, IconPeople, IconSparkle, IconUser } from "./Icons";
+import { IconCalendar, IconChat, IconFeed, IconGlobe, IconPeople, IconSparkle, IconUser } from "./Icons";
 
-export type DockTab = "forYou" | "feed" | "people" | "events" | "chats" | null;
+export type DockTab = "home" | "forYou" | "feed" | "people" | "events" | "chats" | null;
 
 const SLOTS: Array<{ id: Exclude<DockTab, null>; label: string; icon: React.ReactNode }> = [
+  { id: "home", label: "Home", icon: <IconGlobe size={17} /> },
   { id: "forYou", label: "For you", icon: <IconSparkle size={17} /> },
   { id: "feed", label: "Feed", icon: <IconFeed size={17} /> },
   { id: "people", label: "People", icon: <IconPeople size={17} /> },
@@ -73,11 +74,11 @@ export default function MapDock({
             type="button"
             onClick={onProfile}
             aria-label="Your profile"
-            className="ml-0.5 flex w-[54px] sm:w-[66px] flex-none flex-col items-center justify-center gap-1 rounded-2xl py-2 tap"
+            className="ml-0.5 flex w-[46px] sm:w-[66px] flex-none flex-col items-center justify-center gap-1 rounded-2xl py-2 tap"
             style={{ background: "color-mix(in srgb, var(--chrome-ink) 10%, transparent)" }}
           >
             <Avatar name={me.name} photoUrl={me.photoUrl} size={21} />
-            <span className="text-[9.5px] sm:text-[10.5px] font-semibold" style={{ color: "var(--chrome-ink)" }}>
+            <span className="text-[9px] sm:text-[10.5px] font-semibold" style={{ color: "var(--chrome-ink)" }}>
               You
             </span>
           </button>
@@ -89,7 +90,7 @@ export default function MapDock({
             <span style={{ color: "var(--chrome-soft)" }}>
               <IconUser size={17} />
             </span>
-            <span className="text-[9.5px] sm:text-[10.5px] font-semibold" style={{ color: "var(--chrome-ink)" }}>
+            <span className="text-[9px] sm:text-[10.5px] font-semibold" style={{ color: "var(--chrome-ink)" }}>
               Sign in
             </span>
           </button>
@@ -100,7 +101,7 @@ export default function MapDock({
 }
 
 const SLOT =
-  "flex w-[54px] sm:w-[66px] flex-none flex-col items-center justify-center gap-1 rounded-2xl py-2 transition-colors tap";
+  "flex w-[46px] sm:w-[66px] flex-none flex-col items-center justify-center gap-1 rounded-2xl py-2 transition-colors tap";
 
 function DockButton({
   on,
@@ -139,7 +140,7 @@ function DockButton({
         )}
       </span>
       <span
-        className="whitespace-nowrap text-[9.5px] sm:text-[10.5px] font-semibold"
+        className="whitespace-nowrap text-[9px] sm:text-[10.5px] font-semibold"
         style={{ color: on ? "var(--brand)" : "var(--chrome-ink)" }}
       >
         {label}

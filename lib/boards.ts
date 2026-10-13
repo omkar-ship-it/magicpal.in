@@ -185,6 +185,32 @@ export async function rsvpSummary(
   };
 }
 
+/**
+ * Communities both people belong to.
+ *
+ * The most useful line on a stranger's profile: "you're both in RGUKT
+ * Alumni" does more to explain why you should talk than any amount of
+ * stated intent, because somebody already vouched for both of you.
+ */
+export async function sharedBoardsBetween(
+  aId: string,
+  bId: string
+): Promise<Array<{ slug: string; name: string; type: string }>> {
+  if (!hasDb || !db) return [];
+  const rows = await db
+    .select({ slug: boards.slug, name: boards.name, type: boards.type })
+    .from(memberships)
+    .innerJoin(boards, eq(boards.id, memberships.boardId))
+    .where(
+      and(
+        eq(memberships.userId, aId),
+        isNull(boards.archivedAt),
+        sql`exists (select 1 from ${memberships} m2 where m2.board_id = ${boards.id} and m2.user_id = ${bId})`
+      )
+    );
+  return rows;
+}
+
 export async function memberCount(boardId: string): Promise<number> {
   if (!hasDb || !db) return 0;
   const [row] = await db

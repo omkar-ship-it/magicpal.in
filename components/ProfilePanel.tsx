@@ -34,6 +34,8 @@ type Draft = {
   company: string;
   workingOn: string;
   linkedinUrl: string;
+  phone: string;
+  phoneVisibility: "private" | "connections";
   photoUrl: string | null;
   avatarStyle: string;
   lookingFor: string[];
@@ -95,6 +97,8 @@ export default function ProfilePanel({
           company: p.company,
           workingOn: p.workingOn,
           linkedinUrl: p.linkedinUrl,
+          phone: p.phone ?? "",
+          phoneVisibility: p.phoneVisibility ?? "connections",
           photoUrl: p.photoUrl,
           avatarStyle: "notionists",
           lookingFor: p.lookingFor,
@@ -262,6 +266,46 @@ export default function ProfilePanel({
                 value={d.linkedinUrl}
                 onChange={(e) => set("linkedinUrl", e.target.value)}
               />
+            </div>
+
+            <div>
+              <label className="label" htmlFor="p-phone">
+                Phone
+              </label>
+              <input
+                id="p-phone"
+                className="input"
+                inputMode="tel"
+                placeholder="+91 98765 43210"
+                value={d.phone}
+                onChange={(e) => set("phone", e.target.value)}
+              />
+              {/* Never in a map payload — it leaves the server only to you
+                  or to somebody you've accepted. Said here because a phone
+                  number is the field people most want to be sure about. */}
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {(
+                  [
+                    ["connections", "Visible to connections"],
+                    ["private", "Private — only me"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className="chip-toggle tap"
+                    data-on={d.phoneVisibility === id ? "true" : "false"}
+                    aria-pressed={d.phoneVisibility === id}
+                    onClick={() => set("phoneVisibility", id)}
+                  >
+                    {d.phoneVisibility === id && <IconCheck size={11} />}
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1.5 text-[12px] leading-[1.45] text-[var(--ink-soft)]">
+                Never shown on the map or in any list. Shared only after someone you accepted asks.
+              </p>
             </div>
           </div>
         </section>

@@ -30,6 +30,9 @@ export const AVATAR_STYLES = [
 
 export type AvatarStyle = (typeof AVATAR_STYLES)[number]["id"];
 
+/** The default when nobody has chosen — warmer and more legible at 40px than the sketch set. */
+export const DEFAULT_AVATAR_STYLE = "adventurer";
+
 export function characterUrl(style: string, seed: string): string {
   return `https://api.dicebear.com/9.x/${style}/svg?seed=${encodeURIComponent(seed)}&backgroundColor=transparent`;
 }

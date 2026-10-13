@@ -14,7 +14,7 @@ import { avatarTint, characterUrl } from "@/lib/avatar";
 export default function Avatar({
   name,
   photoUrl,
-  style = "notionists",
+  style = "adventurer",
   size = 36,
   ring,
   className = "",

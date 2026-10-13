@@ -27,6 +27,7 @@ export default function MapTopBar({
   onNetwork,
   isLive,
   onGoLive,
+  onHome,
 }: {
   networks: NetworkOption[];
   activeSlug: string | null;
@@ -39,6 +40,8 @@ export default function MapTopBar({
   /** Room and building scale need live location to mean anything. */
   isLive: boolean;
   onGoLive: () => void;
+  /** Tapping the community's name opens its home — where people look for it. */
+  onHome: () => void;
 }) {
   const [picking, setPicking] = useState(false);
   const [filtering, setFiltering] = useState(false);
@@ -170,6 +173,19 @@ export default function MapTopBar({
                 {n.slug === activeSlug && <IconCheck size={14} style={{ color: "var(--brand)" }} />}
               </button>
             ))}
+            {activeSlug && (
+              <button
+                type="button"
+                onClick={() => {
+                  onHome();
+                  setPicking(false);
+                }}
+                className="mt-1 w-full rounded-xl p-2.5 text-left text-[12.5px] font-semibold tap hover:bg-[var(--sunk)]"
+                style={{ color: "var(--brand)" }}
+              >
+                About {active?.name} →
+              </button>
+            )}
             {networks.length === 1 && (
               <p className="px-2.5 pb-2 pt-1 text-[11.5px] leading-[1.45] text-[var(--ink-soft)]">
                 Boards you join appear here. Scan a QR code or create one.
