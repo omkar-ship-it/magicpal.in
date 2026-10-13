@@ -46,6 +46,8 @@ export type EventRef = {
   memberCount: number;
   going: number;
   myRsvp: string | null;
+  /** Only the host sees the edit affordance. */
+  isHost: boolean;
 };
 
 /**
@@ -270,6 +272,7 @@ async function toEventRefs(rows: Board[], viewerId?: string): Promise<EventRef[]
         memberCount: 0,
         going: rsvp.going,
         myRsvp: rsvp.mine,
+        isHost: Boolean(viewerId && e.hostUserId === viewerId),
       };
     })
   );

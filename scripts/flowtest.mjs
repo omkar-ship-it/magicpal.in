@@ -643,6 +643,53 @@ async function main() {
       "removed posts leave the feed"
     );
 
+    console.log("\nOnly a host can edit a board");
+    const anonEdit = await api(`/api/boards/${rich.data.slug}`, { method: "PATCH", body: { name: "Hijacked" } });
+    assert(anonEdit.status === 401, "a signed-out visitor can't edit");
+    const memberEdit = await api(`/api/boards/${rich.data.slug}`, {
+      method: "PATCH", jar: b.jar, body: { name: "Hijacked" },
+    });
+    assert(memberEdit.status === 403, "a member who isn't the host can't edit");
+
+    const hostEdit = await api(`/api/boards/${rich.data.slug}`, {
+      method: "PATCH", jar: a.jar,
+      body: { name: "Flowtest Dinner v2", address: "4th floor", lat: HERE.lat + 0.01, lng: HERE.lng + 0.01 },
+    });
+    assert(hostEdit.status === 200, "the host can edit");
+    const { rows: edited } = await pool.query(
+      "select name, address, lat, details from boards where slug = $1", [rich.data.slug]
+    );
+    assert(edited[0].name === "Flowtest Dinner v2", "the name changed");
+    assert(edited[0].address === "4th floor", "the address changed");
+    assert(Math.abs(Number(edited[0].lat) - (HERE.lat + 0.01)) < 0.0001, "the pin moved");
+    // A partial form must not wipe what it didn't send.
+    assert(edited[0].details === "Dinner then drinks.", "fields not in the patch are left alone");
+
+    const badTimes = await api(`/api/boards/${rich.data.slug}`, {
+      method: "PATCH", jar: a.jar,
+      body: {
+        startsAt: new Date(Date.now() + 90000_000).toISOString(),
+        endsAt: new Date(Date.now() + 86400_000).toISOString(),
+      },
+    });
+    assert(badTimes.status === 400, "an end before its start is refused");
+
+    console.log("\nAn event with no venue is flagged, not silently missing");
+    const noVenue = await api("/api/boards", {
+      method: "POST", jar: a.jar,
+      body: {
+        type: "event", name: "Venue TBC", parentSlug: comm.data.slug,
+        startsAt: new Date(Date.now() + 86400_000).toISOString(),
+      },
+    });
+    assert(noVenue.status === 200, "an event can be created before the venue is known");
+    slugs.push(noVenue.data.slug);
+    const scoped = await api(`/api/map?net=${comm.data.slug}`, { jar: a.jar });
+    const tbc = scoped.data.events.find((e) => e.slug === noVenue.data.slug);
+    assert(Boolean(tbc), "it still appears in the events list");
+    assert(tbc.lat === null, "…with no coordinates, which is what the UI warns about");
+    assert(tbc.isHost === true, "…and the host is told so they can fix it");
+
     console.log("\nEvery entry point terminates");
     for (const [label, path] of [
       ["a QR scan while signed out", `/join/${slug}`],

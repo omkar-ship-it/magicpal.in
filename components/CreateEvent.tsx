@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import PlaceSearch, { type Place } from "./PlaceSearch";
+import { resolveTypedPlace } from "@/lib/resolvePlace";
 import { IconCalendar, IconPeople } from "./Icons";
 
 /**
@@ -37,6 +38,7 @@ export default function CreateEvent({
   const [address, setAddress] = useState("");
   const [capacity, setCapacity] = useState("");
   const [url, setUrl] = useState("");
+  const [typedVenue, setTypedVenue] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -45,6 +47,20 @@ export default function CreateEvent({
     setBusy(true);
     setError("");
     try {
+      // Rescue a venue that was typed but never picked from the list —
+      // otherwise the form looks filled in and the event silently has no
+      // coordinates, which is the single most common way one ends up
+      // missing from the map.
+      let pin = place;
+      if (!pin && typedVenue.trim()) {
+        pin = await resolveTypedPlace(typedVenue);
+        if (!pin) {
+          setError(`Couldn't find "${typedVenue.trim()}" — pick a venue from the list.`);
+          setBusy(false);
+          return;
+        }
+        setPlace(pin);
+      }
       const res = await fetch("/api/boards", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -56,9 +72,9 @@ export default function CreateEvent({
           address,
           url,
           capacity: capacity ? Number(capacity) : undefined,
-          place: place?.label ?? "",
-          lat: place?.lat,
-          lng: place?.lng,
+          place: pin?.label ?? "",
+          lat: pin?.lat,
+          lng: pin?.lng,
           // datetime-local gives wall-clock text with no zone. Parsing it as
           // local time is what the host meant — they typed the time that
           // will be on the invitation, not a UTC instant.
@@ -149,7 +165,16 @@ export default function CreateEvent({
         <label className="label" htmlFor="ev-venue">
           Venue
         </label>
-        <PlaceSearch id="ev-venue" value={place?.label ?? null} placeholder="T-Hub, Hyderabad" onPick={setPlace} />
+        <PlaceSearch
+          id="ev-venue"
+          value={place?.label ?? null}
+          placeholder="T-Hub, Hyderabad"
+          onPick={(pl) => {
+            setPlace(pl);
+            setTypedVenue("");
+          }}
+          onTyped={setTypedVenue}
+        />
         <p className="mt-1.5 text-[12px] leading-[1.45] text-[var(--ink-soft)]">
           Puts the event on the map so people can find the room.
         </p>

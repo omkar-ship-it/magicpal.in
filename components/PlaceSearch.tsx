@@ -17,11 +17,21 @@ export type Place = { label: string; lat: number; lng: number };
 export default function PlaceSearch({
   value,
   onPick,
+  onTyped,
   placeholder = "Search for a place",
   id,
 }: {
   value: string | null;
   onPick: (p: Place) => void;
+  /**
+   * The raw text, for callers that want to rescue an unpicked search.
+   *
+   * Typing a venue and never tapping a suggestion used to save nothing at
+   * all — the form looked filled in and the event quietly had no
+   * coordinates, so it never appeared on the map and the host had no way to
+   * tell. Callers now resolve this text on submit.
+   */
+  onTyped?: (text: string) => void;
   placeholder?: string;
   id?: string;
 }) {
@@ -78,7 +88,10 @@ export default function PlaceSearch({
           style={{ paddingLeft: 32 }}
           placeholder={value ? "Change it" : placeholder}
           value={q}
-          onChange={(e) => setQ(e.target.value)}
+          onChange={(e) => {
+            setQ(e.target.value);
+            onTyped?.(e.target.value);
+          }}
           onFocus={() => visible.length > 0 && setOpen(true)}
         />
       </div>
@@ -99,6 +112,7 @@ export default function PlaceSearch({
                 onClick={() => {
                   onPick(r);
                   setQ("");
+                  onTyped?.("");
                   setOpen(false);
                 }}
               >

@@ -6,6 +6,7 @@ import { whenLabel } from "@/lib/time";
 import PanelNote from "./PanelNote";
 import BoardQR from "./BoardQR";
 import CreateEvent from "./CreateEvent";
+import EditEvent from "./EditEvent";
 import { IconBeacon, IconCalendar, IconCheck, IconChevronLeft, IconClock, IconPeople, IconPin, IconPlus, IconX } from "./Icons";
 
 /**
@@ -170,6 +171,11 @@ export default function EventsPanel({
                     {e.place ? `${e.place} · ` : ""}
                     {e.startsAt ? whenLabel(e.startsAt) : ""}
                   </span>
+                  {e.lat == null && (
+                    <span className="block text-[11px] font-semibold" style={{ color: "var(--warn)" }}>
+                      Not on the map{e.isHost ? " — add a venue" : ""}
+                    </span>
+                  )}
                   <span className="mt-0.5 flex items-center gap-2 text-[11px] text-[var(--ink-soft)]">
                     <span>{e.going} going</span>
                     {e.myRsvp === "going" && (
@@ -207,10 +213,12 @@ function EventDetail({
   onShow: () => void;
   onChanged: () => void;
 }) {
+  const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [mine, setMine] = useState(event.myRsvp);
   const [error, setError] = useState("");
   const full = event.capacity != null && event.going >= event.capacity;
+  const onMap = event.lat != null && event.lng != null;
 
   async function answer(rsvp: "going" | "maybe" | "no") {
     setBusy(true);
@@ -234,6 +242,19 @@ function EventDetail({
     }
   }
 
+  if (editing) {
+    return (
+      <EditEvent
+        event={event}
+        onCancel={() => setEditing(false)}
+        onSaved={() => {
+          setEditing(false);
+          onChanged();
+        }}
+      />
+    );
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <div>
@@ -251,15 +272,26 @@ function EventDetail({
             </span>
           </p>
         )}
-        {event.place && (
-          <p className="flex items-start gap-2">
-            <IconPin size={13} className="mt-0.5 flex-none text-[var(--ink-soft)]" />
+        <p className="flex items-start gap-2">
+          <IconPin
+            size={13}
+            className="mt-0.5 flex-none"
+            style={{ color: onMap ? "var(--ink-soft)" : "var(--warn)" }}
+          />
+          {onMap ? (
             <span>
               {event.place}
               {event.address && <span className="block text-[var(--ink-soft)]">{event.address}</span>}
             </span>
-          </p>
-        )}
+          ) : (
+            <span style={{ color: "var(--warn)" }}>
+              {event.place ? `${event.place} — ` : ""}
+              not on the map yet
+              {event.isHost ? ", pick a venue to put it there" : ""}
+              {event.address && <span className="block text-[var(--ink-soft)]">{event.address}</span>}
+            </span>
+          )}
+        </p>
         <p className="flex items-start gap-2">
           <IconPeople size={13} className="mt-0.5 flex-none text-[var(--ink-soft)]" />
           <span>
@@ -310,9 +342,18 @@ function EventDetail({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {event.lat != null && event.lng != null && (
+        {onMap && (
           <button type="button" className="btn btn-ghost btn-sm" onClick={onShow}>
             <IconPin size={12} /> Show on map
+          </button>
+        )}
+        {event.isHost && (
+          <button
+            type="button"
+            className={onMap ? "btn btn-ghost btn-sm" : "btn btn-primary btn-sm"}
+            onClick={() => setEditing(true)}
+          >
+            {onMap ? "Edit" : "Add a venue"}
           </button>
         )}
         <button type="button" className="btn btn-ghost btn-sm" onClick={onShare}>
