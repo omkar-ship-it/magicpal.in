@@ -15,9 +15,9 @@ import MapShell from "@/components/MapShellLoader";
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ net?: string; panel?: string; join?: string }>;
+  searchParams: Promise<{ net?: string; panel?: string; join?: string; event?: string }>;
 }) {
-  const { net, panel, join } = await searchParams;
+  const { net, panel, join, event } = await searchParams;
   const user = await getSessionUser();
 
   // Fetched here rather than in the client: the first thing a visitor has
@@ -38,6 +38,7 @@ export default async function Home({
       initial={initial}
       initialOverlay={user ? overlay : overlay === "profile" ? "signin" : overlay}
       pendingJoin={join ?? null}
+      initialEvent={event ?? null}
       signedIn={Boolean(user)}
       onboarded={Boolean(user?.onboarded)}
       myVisibility={user?.visibility ?? "off"}

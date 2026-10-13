@@ -545,6 +545,45 @@ async function main() {
     assert(typeof counted.data.connections === "number", "the payload carries a connection count");
     assert(counted.data.connections >= 1, "…and it counts the accepted one from earlier");
 
+    console.log("\nCommunities are networks; events happen inside them");
+    const nets = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}&radiusKm=25`, { jar: a.jar });
+    assert(
+      nets.data.networks.every((n) => n.slug === null || n.type === "community"),
+      "the switcher lists communities only, never one-evening events"
+    );
+    assert(
+      nets.data.networks.some((n) => n.slug === comm.data.slug),
+      "…and does list the community"
+    );
+
+    // Scanning an event's QR joins the event, its community, and RSVPs.
+    const inner = await api("/api/boards", {
+      method: "POST", jar: a.jar,
+      body: {
+        type: "event", name: "Members Evening Two", parentSlug: comm.data.slug,
+        startsAt: new Date(Date.now() + 86400_000).toISOString(),
+      },
+    });
+    assert(inner.status === 200, "an event can be created inside a community");
+    slugs.push(inner.data.slug);
+
+    const scan = await followChain(`/join/${inner.data.slug}`, { jar: b.jar });
+    assert(!scan.looped, "scanning an event's code doesn't loop");
+    const landed = scan.chain[scan.chain.length - 1];
+    assert(landed.includes(`net=${comm.data.slug}`), "it lands on the community, not a network of one evening");
+    assert(landed.includes(`event=${inner.data.slug}`), "…opened on the event that was scanned");
+
+    const { rows: afterScan } = await pool.query(
+      `select bd.slug, m.rsvp from memberships m join boards bd on bd.id = m.board_id
+       where m.user_id = (select id from users where email = $1) and bd.slug = any($2)`,
+      [emailB, [inner.data.slug, comm.data.slug]]
+    );
+    assert(afterScan.length === 2, "the scan joined both the event and its community");
+    assert(
+      afterScan.find((r) => r.slug === inner.data.slug)?.rsvp === "going",
+      "…and recorded them as going"
+    );
+
     console.log("\nEvery entry point terminates");
     for (const [label, path] of [
       ["a QR scan while signed out", `/join/${slug}`],

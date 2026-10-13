@@ -40,6 +40,7 @@ export default function MapShell({
   initial,
   initialOverlay = null,
   pendingJoin = null,
+  initialEvent = null,
   signedIn,
   onboarded,
   myVisibility,
@@ -54,6 +55,8 @@ export default function MapShell({
    * and making them find it again after signing in loses most of them.
    */
   pendingJoin?: string | null;
+  /** From ?event= — a QR scan opens on the event it was printed for. */
+  initialEvent?: string | null;
   signedIn: boolean;
   onboarded: boolean;
   myVisibility: "off" | "base" | "exact" | "live";
@@ -80,6 +83,7 @@ export default function MapShell({
   }));
   const topZ = useRef(3);
   const [selected, setSelected] = useState<string | null>(null);
+  const [activeEvent, setActiveEvent] = useState<string | null>(initialEvent);
   const [loading, setLoading] = useState(false);
   /**
    * Overlays are the second layer of chrome: full surfaces (sign in, your
@@ -189,6 +193,11 @@ export default function MapShell({
           people={shown}
           you={data.you}
           events={data.events}
+          // Opening Events turns the map into a map of events. Asking
+          // "what's happening" and "who's nearby" at the same time answers
+          // neither: the event pins vanish into the crowd.
+          eventsOnly={wins.events.open && !wins.events.min}
+          activeEventSlug={activeEvent}
           initialLat={data.centre?.lat ?? initial.centre?.lat ?? 17.4065}
           initialLng={data.centre?.lng ?? initial.centre?.lng ?? 78.4772}
           initialZoom={isOpenNet ? 10 : data.scope.kind === "event" ? 12 : 3}
@@ -203,7 +212,10 @@ export default function MapShell({
             setSelected(id);
             openWin("person");
           }}
-          onSelectEvent={() => openWin("events")}
+          onSelectEvent={(slug) => {
+            setActiveEvent(slug);
+            openWin("events");
+          }}
           onMoveEnd={(c) => {
             at.current = { lat: c.lat, lng: c.lng };
             // Only the open network is a radius query; a board's membership
@@ -225,6 +237,8 @@ export default function MapShell({
         }}
         countLabel={`${shown.length} of ${data.people.length} shown`}
         onNetwork={switchNetwork}
+        isLive={myVisibility === "live"}
+        onGoLive={() => openWin("profile")}
       />
 
       {myVisibility === "live" && <LiveLocation onChanged={() => void load({})} />}
@@ -324,6 +338,8 @@ export default function MapShell({
           scopeName={data.scope.name}
           scopeSlug={data.scope.slug}
           canCreate={signedIn && onboarded}
+          openSlug={activeEvent}
+          onOpenSlug={setActiveEvent}
           onChanged={() => void load({})}
           onShow={(e: EventRef) => {
             if (e.lat != null && e.lng != null) {

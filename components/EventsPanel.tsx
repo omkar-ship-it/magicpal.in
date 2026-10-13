@@ -21,6 +21,8 @@ export default function EventsPanel({
   scopeName,
   scopeSlug,
   canCreate,
+  openSlug,
+  onOpenSlug,
   onShow,
   onChanged,
 }: {
@@ -28,18 +30,39 @@ export default function EventsPanel({
   scopeName: string;
   scopeSlug: string | null;
   canCreate: boolean;
+  /** Controlled by the shell so a map click and this list agree. */
+  openSlug: string | null;
+  onOpenSlug: (slug: string | null) => void;
   /** Centre the map on it rather than navigating away from the map. */
   onShow: (e: EventRef) => void;
   onChanged: () => void;
 }) {
   const [creating, setCreating] = useState(false);
-  const [openSlug, setOpenSlug] = useState<string | null>(null);
   const [sharing, setSharing] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+  const [when, setWhen] = useState<"all" | "upcoming" | "going">("upcoming");
 
-  const sorted = [...events].sort((a, b) => {
-    if (a.live !== b.live) return a.live ? -1 : 1;
-    return (a.startsAt ?? "").localeCompare(b.startsAt ?? "");
-  });
+  // Captured once rather than read during render: Date.now() is impure and
+  // the compiler rejects it, and pinning it also stops the list quietly
+  // reshuffling under somebody as an event slips into the past while they
+  // are reading it.
+  const [now] = useState(() => Date.now());
+  const sorted = [...events]
+    .filter((e) => {
+      if (when === "upcoming" && e.startsAt && new Date(e.startsAt).getTime() < now && !e.live) return false;
+      if (when === "going" && e.myRsvp !== "going") return false;
+      const needle = q.trim().toLowerCase();
+      if (!needle) return true;
+      return [e.name, e.blurb, e.place, e.address, e.details]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(needle);
+    })
+    .sort((a, b) => {
+      if (a.live !== b.live) return a.live ? -1 : 1;
+      return (a.startsAt ?? "").localeCompare(b.startsAt ?? "");
+    });
   const open = sorted.find((e) => e.slug === openSlug) ?? null;
 
   if (creating) {
@@ -52,7 +75,7 @@ export default function EventsPanel({
           onCreated={(slug) => {
             setCreating(false);
             setSharing(slug);
-            setOpenSlug(slug);
+            onOpenSlug(slug);
             onChanged();
           }}
         />
@@ -63,7 +86,7 @@ export default function EventsPanel({
   if (open) {
     return (
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <button type="button" className="btn btn-ghost btn-sm mb-2" onClick={() => setOpenSlug(null)}>
+        <button type="button" className="btn btn-ghost btn-sm mb-2" onClick={() => onOpenSlug(null)}>
           <IconChevronLeft size={13} /> All events
         </button>
         <EventDetail
@@ -79,11 +102,42 @@ export default function EventsPanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto">
+      <div className="flex flex-none gap-1.5">
+        <input
+          className="input flex-1"
+          placeholder="Search events"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          aria-label="Search events"
+        />
+      </div>
+      <div className="flex flex-none gap-1.5">
+        {([
+          ["upcoming", "Upcoming"],
+          ["going", "I’m going"],
+          ["all", "All"],
+        ] as const).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            className="chip-toggle tap"
+            data-on={when === id ? "true" : "false"}
+            aria-pressed={when === id}
+            onClick={() => setWhen(id)}
+          >
+            {when === id && <IconCheck size={11} />}
+            {label}
+          </button>
+        ))}
+      </div>
+
       {sorted.length === 0 ? (
-        <PanelNote title={`No events on ${scopeName} yet`}>
-          {canCreate
-            ? "Create one and you'll get a QR code to share — people who scan it land straight on it."
-            : "Public events show up here. Members of a community see that community's events instead."}
+        <PanelNote title={q || when !== "all" ? "Nothing matches that" : `No events in ${scopeName} yet`}>
+          {q || when !== "all"
+            ? "Try a different search, or show all events."
+            : canCreate
+              ? "Create one and you'll get a QR code to share — whoever scans it joins the event and the community."
+              : "Events your communities are running show up here."}
         </PanelNote>
       ) : (
         <ul className="stagger flex flex-col gap-2">
@@ -91,7 +145,7 @@ export default function EventsPanel({
             <li key={e.slug}>
               <button
                 type="button"
-                onClick={() => setOpenSlug(e.slug)}
+                onClick={() => onOpenSlug(e.slug)}
                 className="card flex w-full items-start gap-3 p-3 text-left tap"
               >
                 <span

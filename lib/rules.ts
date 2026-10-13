@@ -1,5 +1,32 @@
-export const RADIUS_OPTIONS_KM = [5, 10, 25, 50, 100] as const;
+/**
+ * The proximity scale, from a room to a city.
+ *
+ * This is what lets one product serve three situations that look different
+ * and aren't: a conference hall, a co-working floor, and an IT corridor are
+ * the same question — who near me is worth talking to — asked at 50 metres,
+ * 150 metres and 10 kilometres. Giving the distance a name rather than a
+ * number is what makes that obvious to the person choosing.
+ *
+ * The two tightest steps need `needsLive`: a city centroid or a pin typed
+ * last week cannot answer "who is in this room", so offering them without
+ * live location would be a promise the data can't keep.
+ */
+export const PROXIMITY_STEPS = [
+  { km: 0.05, label: "This room", needsLive: true },
+  { km: 0.15, label: "This building", needsLive: true },
+  { km: 2, label: "2 km" },
+  { km: 5, label: "5 km" },
+  { km: 10, label: "10 km" },
+  { km: 25, label: "25 km" },
+  { km: 50, label: "50 km" },
+] as const;
+
+export const RADIUS_OPTIONS_KM = PROXIMITY_STEPS.map((s) => s.km);
 export const DEFAULT_RADIUS_KM = 25;
+
+export function proximityLabel(km: number): string {
+  return PROXIMITY_STEPS.find((s) => s.km === km)?.label ?? `${km} km`;
+}
 export const MAX_SKILLS = 8;
 export const MAX_MAP_RESULTS = 200;
 

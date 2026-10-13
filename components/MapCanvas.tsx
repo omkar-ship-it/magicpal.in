@@ -9,6 +9,7 @@ import type { MapProfile } from "@/lib/profiles";
 import type { SelfMarker } from "@/lib/shell";
 import Avatar from "./Avatar";
 import { topicById } from "@/lib/intents";
+import { whenLabel } from "@/lib/time";
 import { IconCalendar, IconCity, IconPin } from "./Icons";
 
 /**
@@ -35,6 +36,7 @@ export type MapEvent = {
   lat: number | null;
   lng: number | null;
   startsAt: string | null;
+  going?: number;
 };
 
 /**
@@ -55,6 +57,8 @@ export default function MapCanvas({
   people,
   you = null,
   events = [],
+  eventsOnly = false,
+  activeEventSlug = null,
   initialLat,
   initialLng,
   initialZoom = 10,
@@ -70,6 +74,15 @@ export default function MapCanvas({
   /** The viewer, drawn distinctly so they can verify their own visibility. */
   you?: SelfMarker | null;
   events?: MapEvent[];
+  /**
+   * Events instead of faces.
+   *
+   * When somebody opens Events they're asking what's happening, not who's
+   * nearby — and a map carrying both at once answers neither question well,
+   * since the events disappear into a crowd of people.
+   */
+  eventsOnly?: boolean;
+  activeEventSlug?: string | null;
   initialLat: number;
   initialLng: number;
   initialZoom?: number;
@@ -205,21 +218,29 @@ export default function MapCanvas({
       {events.map((ev) =>
         ev.lat != null && ev.lng != null ? (
           <Marker key={ev.slug} latitude={ev.lat} longitude={ev.lng} anchor="bottom">
-            <button
-              type="button"
-              className="layer-pin tap"
-              style={{ borderColor: "var(--layer-event)", color: "var(--layer-event)" }}
-              onClick={() => onSelectEvent?.(ev.slug)}
-              title={ev.name}
-              aria-label={ev.name}
-            >
-              <IconCalendar size={14} />
-            </button>
+            <span className="hover-host relative">
+              <button
+                type="button"
+                className="layer-pin tap"
+                style={{
+                  borderColor: "var(--layer-event)",
+                  color: "var(--layer-event)",
+                  // The one being read sits proud of the rest.
+                  transform: activeEventSlug === ev.slug ? "scale(1.25)" : undefined,
+                  boxShadow: activeEventSlug === ev.slug ? "0 0 0 3px var(--layer-event)" : undefined,
+                }}
+                onClick={() => onSelectEvent?.(ev.slug)}
+                aria-label={ev.name}
+              >
+                <IconCalendar size={14} />
+              </button>
+              <EventCard event={ev} />
+            </span>
           </Marker>
         ) : null
       )}
 
-      {you && (
+      {!eventsOnly && you && (
         <Marker latitude={you.lat} longitude={you.lng} anchor="center">
           <span className="relative flex items-center">
             <span
@@ -258,15 +279,12 @@ export default function MapCanvas({
         </Marker>
       )}
 
-      {stacks.map((s) => (
-        <Marker key={s.key} latitude={s.lat} longitude={s.lng} anchor="center">
-          <FaceStack
-            group={s.group}
-            highlighted={highlighted}
-            onSelect={onSelectPerson}
-          />
-        </Marker>
-      ))}
+      {!eventsOnly &&
+        stacks.map((s) => (
+          <Marker key={s.key} latitude={s.lat} longitude={s.lng} anchor="center">
+            <FaceStack group={s.group} highlighted={highlighted} onSelect={onSelectPerson} />
+          </Marker>
+        ))}
     </MapGL>
   );
 }
@@ -312,6 +330,28 @@ function PinCard({ person }: { person: MapProfile & { hereNow?: boolean } }) {
               {t!.need}
             </span>
           ))}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** Hover preview for an event marker — the same idea as a person's. */
+function EventCard({ event }: { event: MapEvent }) {
+  return (
+    <span
+      className="hover-card pointer-events-none absolute z-50 block w-[220px] rounded-2xl border border-[var(--line)] p-2.5 text-left"
+      style={{ background: "var(--card)", boxShadow: "var(--shadow-lift)" }}
+      aria-hidden="true"
+    >
+      <span className="block truncate text-[12.5px] font-semibold">{event.name}</span>
+      {event.place && <span className="block truncate text-[11.5px] text-[var(--ink-soft)]">{event.place}</span>}
+      {event.startsAt && (
+        <span className="mt-0.5 block text-[11px] text-[var(--ink-soft)]">{whenLabel(event.startsAt)}</span>
+      )}
+      {event.going != null && (
+        <span className="mt-1 block text-[11px] font-semibold" style={{ color: "var(--layer-event)" }}>
+          {event.going} going
         </span>
       )}
     </span>

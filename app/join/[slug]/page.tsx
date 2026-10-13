@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { boardBySlug, joinBoard, membershipOf } from "@/lib/boards";
+import { boardById, boardBySlug, joinBoard, membershipOf, setRsvp } from "@/lib/boards";
 import { getSessionUser } from "@/lib/session";
 
 /**
@@ -38,12 +38,34 @@ export default async function JoinPage({ params }: { params: Promise<{ slug: str
     await joinBoard(board.id, user.id);
   }
 
+  // Scanning an event's code at the door means three things at once: I'm
+  // here, I'm coming, and I'm part of whoever runs this. Joining the parent
+  // community is what turns a meetup into a network instead of an evening —
+  // without it the host's audience evaporates when the room empties.
+  let netSlug = board.slug;
+  if (board.type === "event") {
+    await setRsvp(board.id, user.id, "going");
+    if (board.parentBoardId) {
+      const parent = await boardById(board.parentBoardId);
+      if (parent) {
+        await joinBoard(parent.id, user.id);
+        netSlug = parent.slug;
+      }
+    }
+  }
+
   // A profile with no stated intent can be listed but not matched, and the
   // recommendations are the reason anybody scanned the code. Membership is
   // already saved above, so this detour can't lose them the board.
   if (!user.onboarded) {
-    redirect(`/?net=${encodeURIComponent(board.slug)}&panel=profile`);
+    redirect(`/?net=${encodeURIComponent(netSlug)}&panel=profile`);
   }
 
-  redirect(`/?net=${encodeURIComponent(board.slug)}`);
+  // Opens on the event itself inside its community, which is what the
+  // person holding the phone is actually standing in.
+  redirect(
+    board.type === "event"
+      ? `/?net=${encodeURIComponent(netSlug)}&event=${encodeURIComponent(board.slug)}`
+      : `/?net=${encodeURIComponent(netSlug)}`
+  );
 }

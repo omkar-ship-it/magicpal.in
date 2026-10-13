@@ -2,38 +2,32 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import PlaceSearch, { type Place } from "./PlaceSearch";
-import { IconCalendar, IconPeople } from "./Icons";
+import { IconPeople } from "./Icons";
 
 /**
- * Create a board.
+ * Create a community — the only kind of network there is.
  *
- * The type choice comes first and changes the form, because the two really
- * are different asks — an event needs a date and a venue, a community
- * needs neither and would be insulted by being asked. Everything else is
- * shared, which is the same observation the schema makes.
+ * This used to offer a choice between an event and a community, which gave
+ * a host two things to create when they only ever meant one. An event is
+ * something that happens *inside* a community (see CreateEvent): the
+ * community is the audience you keep, the event is the evening. A one-off
+ * meetup host makes "Hyderabad Product Meetups" once and hangs every
+ * evening off it, instead of starting from an empty room each time.
  */
 export default function CreateBoard({
-  parentSlug,
-  parentName,
   onCreated,
 }: {
-  parentSlug?: string;
-  parentName?: string;
   /**
    * Handed the new slug so the caller can stay put. Without it this
-   * navigates, which is right for the standalone page and wrong inside the
-   * profile overlay — the map is supposed to stay behind everything.
+   * navigates, which is right for a standalone page and wrong inside the
+   * profile window — the map is supposed to stay behind everything.
    */
   onCreated?: (slug: string) => void;
 }) {
   const router = useRouter();
-  const [type, setType] = useState<"event" | "community">("event");
   const [name, setName] = useState("");
   const [blurb, setBlurb] = useState("");
-  const [place, setPlace] = useState<Place | null>(null);
   const [placeText, setPlaceText] = useState("");
-  const [startsAt, setStartsAt] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -45,19 +39,7 @@ export default function CreateBoard({
       const res = await fetch("/api/boards", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type,
-          name,
-          blurb,
-          place: place?.label ?? placeText,
-          lat: place?.lat,
-          lng: place?.lng,
-          // datetime-local gives a wall-clock string with no zone. Parsing
-          // it as local time is what the host meant — they typed the time
-          // on the invitation, not a UTC instant.
-          startsAt: type === "event" && startsAt ? new Date(startsAt).toISOString() : undefined,
-          parentSlug,
-        }),
+        body: JSON.stringify({ type: "community", name, blurb, place: placeText }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Couldn't create that.");
@@ -66,10 +48,10 @@ export default function CreateBoard({
         setBusy(false);
         setName("");
         setBlurb("");
-        setStartsAt("");
+        setPlaceText("");
         return;
       }
-      router.push(`/b/${data.slug}?new=1`);
+      router.push(`/?net=${data.slug}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
       setBusy(false);
@@ -77,31 +59,10 @@ export default function CreateBoard({
   }
 
   return (
-    <form onSubmit={submit} className="card flex flex-col gap-4 p-5">
-      {parentName && (
-        <p className="text-[12.5px] text-[var(--ink-soft)]">
-          Inside <span className="font-semibold text-[var(--ink)]">{parentName}</span> — only its members will see it.
-        </p>
-      )}
-
-      {!parentSlug && (
-        <div className="grid grid-cols-2 gap-2">
-          <TypeOption
-            on={type === "event"}
-            onClick={() => setType("event")}
-            icon={<IconCalendar size={15} />}
-            label="An event"
-            detail="One room, one day"
-          />
-          <TypeOption
-            on={type === "community"}
-            onClick={() => setType("community")}
-            icon={<IconPeople size={15} />}
-            label="A community"
-            detail="A group, ongoing"
-          />
-        </div>
-      )}
+    <form onSubmit={submit} className="card flex flex-col gap-3 p-4">
+      <p className="flex items-center gap-1.5 text-[13.5px] font-semibold">
+        <IconPeople size={14} /> New community
+      </p>
 
       <div>
         <label className="label" htmlFor="board-name">
@@ -111,7 +72,7 @@ export default function CreateBoard({
           id="board-name"
           className="input"
           required
-          placeholder={type === "event" ? "Hyderabad Product Meetup #12" : "ISB Alumni — Hyderabad"}
+          placeholder="RGUKT Alumni, or Hyderabad Product Meetups"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
@@ -124,94 +85,35 @@ export default function CreateBoard({
         <input
           id="board-blurb"
           className="input"
-          placeholder={type === "event" ? "Talks, then an hour of actual mingling" : "Where our batch actually keeps in touch"}
+          placeholder="Where our batch actually keeps in touch"
           value={blurb}
           onChange={(e) => setBlurb(e.target.value)}
         />
       </div>
 
-      {type === "event" ? (
-        <>
-          <div>
-            <label className="label" htmlFor="board-when">
-              When
-            </label>
-            <input
-              id="board-when"
-              type="datetime-local"
-              className="input"
-              required
-              value={startsAt}
-              onChange={(e) => setStartsAt(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="label" htmlFor="board-venue">
-              Venue
-            </label>
-            <PlaceSearch
-              id="board-venue"
-              value={place?.label ?? null}
-              placeholder="T-Hub, Hyderabad"
-              onPick={setPlace}
-            />
-          </div>
-        </>
-      ) : (
-        <div>
-          <label className="label" htmlFor="board-where">
-            Where it&rsquo;s based
-          </label>
-          <input
-            id="board-where"
-            className="input"
-            placeholder="Everywhere, or a city"
-            value={placeText}
-            onChange={(e) => setPlaceText(e.target.value)}
-          />
-          {/* A community map is about spread, so it centres on its members
-              rather than on one address. Nothing to geocode. */}
-          <p className="mt-1.5 text-[12px] leading-[1.45] text-[var(--ink-soft)]">
-            Free text — the map centres on wherever your members actually are.
-          </p>
-        </div>
-      )}
+      <div>
+        <label className="label" htmlFor="board-where">
+          Where it&rsquo;s based
+        </label>
+        <input
+          id="board-where"
+          className="input"
+          placeholder="Everywhere, or a city"
+          value={placeText}
+          onChange={(e) => setPlaceText(e.target.value)}
+        />
+        {/* A community map is about spread, so it centres on its members
+            rather than on one address. Nothing to geocode. */}
+        <p className="mt-1.5 text-[12px] leading-[1.45] text-[var(--ink-soft)]">
+          Free text — the map centres on wherever your members actually are.
+        </p>
+      </div>
 
-      {error && <p className="text-[13px] font-medium text-[var(--warn)]">{error}</p>}
+      {error && <p className="text-[12.5px] font-medium text-[var(--warn)]">{error}</p>}
 
-      <button type="submit" disabled={busy} className="btn btn-primary">
+      <button type="submit" disabled={busy} className="btn btn-primary btn-sm">
         {busy ? "Creating…" : "Create and get the QR code"}
       </button>
     </form>
-  );
-}
-
-function TypeOption({
-  on,
-  onClick,
-  icon,
-  label,
-  detail,
-}: {
-  on: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-  detail: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={on}
-      className="flex flex-col items-start gap-0.5 rounded-xl border p-3 text-left tap"
-      style={{ borderColor: on ? "var(--brand)" : "var(--line)", background: on ? "var(--sunk)" : "var(--card)" }}
-    >
-      <span className="flex items-center gap-1.5 text-[13.5px] font-semibold">
-        {icon}
-        {label}
-      </span>
-      <span className="text-[11.5px] text-[var(--ink-soft)]">{detail}</span>
-    </button>
   );
 }

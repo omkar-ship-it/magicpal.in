@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { SECTORS, STAGES, TOPICS } from "@/lib/intents";
-import { RADIUS_OPTIONS_KM } from "@/lib/rules";
+import { PROXIMITY_STEPS } from "@/lib/rules";
 import type { NetworkOption } from "@/lib/shell";
 import { facetsActive, NO_FACETS, type Facets } from "@/lib/search";
 import { IconCheck, IconChevronDown, IconGlobe, IconPeople, IconSearch, IconX } from "./Icons";
@@ -25,6 +25,8 @@ export default function MapTopBar({
   onRadius,
   countLabel,
   onNetwork,
+  isLive,
+  onGoLive,
 }: {
   networks: NetworkOption[];
   activeSlug: string | null;
@@ -34,6 +36,9 @@ export default function MapTopBar({
   onRadius: (km: number) => void;
   countLabel: string;
   onNetwork: (slug: string | null) => void;
+  /** Room and building scale need live location to mean anything. */
+  isLive: boolean;
+  onGoLive: () => void;
 }) {
   const [picking, setPicking] = useState(false);
   const [filtering, setFiltering] = useState(false);
@@ -242,22 +247,36 @@ export default function MapTopBar({
 
             <div className="mt-3.5 flex flex-wrap items-center gap-2">
               {isOpen && (
-                <label className="flex items-center gap-2 text-[12.5px]">
-                  <span className="label m-0">Within</span>
-                  <select
-                    value={radiusKm}
-                    onChange={(e) => onRadius(Number(e.target.value))}
-                    className="input"
-                    style={{ width: "auto", padding: "5px 8px" }}
-                    aria-label="Search radius"
-                  >
-                    {RADIUS_OPTIONS_KM.map((r) => (
-                      <option key={r} value={r}>
-                        {r} km
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <div className="w-full">
+                  <p className="label">How close</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {PROXIMITY_STEPS.map((step) => {
+                      const needsLive = "needsLive" in step && step.needsLive && !isLive;
+                      return (
+                        <button
+                          key={step.km}
+                          type="button"
+                          className="chip-toggle tap"
+                          data-on={radiusKm === step.km ? "true" : "false"}
+                          aria-pressed={radiusKm === step.km}
+                          // Not disabled: tapping it turns live sharing on,
+                          // which is the thing the person actually wants.
+                          onClick={() => (needsLive ? onGoLive() : onRadius(step.km))}
+                          title={needsLive ? "Needs your live location" : undefined}
+                          style={needsLive ? { opacity: 0.6 } : undefined}
+                        >
+                          {radiusKm === step.km && <IconCheck size={11} />}
+                          {step.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {!isLive && (
+                    <p className="mt-1.5 text-[11.5px] leading-[1.45] text-[var(--ink-soft)]">
+                      Room and building need your live location — a city pin can&rsquo;t tell who&rsquo;s in the room.
+                    </p>
+                  )}
+                </div>
               )}
               {!isOpen && (
                 <button

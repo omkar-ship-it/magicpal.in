@@ -12,7 +12,21 @@ import VisibilityPicker, { type Visibility } from "./VisibilityPicker";
 import CreateBoard from "./CreateBoard";
 import BoardQR from "./BoardQR";
 import PanelNote from "./PanelNote";
-import { IconCheck, IconPeople, IconPlus, IconSparkle } from "./Icons";
+import Avatar from "./Avatar";
+import { IconCheck, IconPeople, IconPin, IconPlus, IconSparkle, IconUser } from "./Icons";
+
+/** One heading shape for every section, so the long form reads as a list. */
+function SectionTitle({ icon, title, hint }: { icon: React.ReactNode; title: string; hint?: string }) {
+  return (
+    <div>
+      <h2 className="flex items-center gap-1.5 text-[14px] font-semibold">
+        <span style={{ color: "var(--brand)" }}>{icon}</span>
+        {title}
+      </h2>
+      {hint && <p className="mt-1 text-[12px] leading-[1.5] text-[var(--ink-soft)]">{hint}</p>}
+    </div>
+  );
+}
 
 type Draft = {
   name: string;
@@ -169,21 +183,45 @@ export default function ProfilePanel({
 
   const myBoards = networks.filter((n) => n.slug !== null);
 
+  const visibilityLine =
+    d.visibility === "off"
+      ? "Not on the public map"
+      : d.visibility === "base"
+        ? `Showing ${d.baseLabel ?? "your city"}`
+        : d.visibility === "live"
+          ? "Sharing live location"
+          : `Pinned at ${d.locationLabel ?? "your location"}`;
+
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <form onSubmit={save} className="flex flex-col gap-4 pb-2">
-        {/* ------------------------------------------------- who you are */}
-        <section>
-          <div className="flex items-baseline justify-between gap-3">
-            <h2 className="text-[15px] font-semibold">Who you are</h2>
-            {/* The one number that says the product did its job. Shown on
-                the profile rather than the dock because it's a record of
-                what's happened, not something waiting on you. */}
-            <span className="text-[12px] text-[var(--ink-soft)]">
+      {/* A standing summary, so the long form below is something you scroll
+          into rather than the first thing you meet. */}
+      <div className="mb-4 flex items-center gap-3 rounded-2xl p-3" style={{ background: "var(--sunk)" }}>
+        <Avatar name={d.name || "You"} photoUrl={d.photoUrl} size={44} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[14px] font-semibold">{d.name || "Your profile"}</p>
+          <p className="truncate text-[12px] text-[var(--ink-soft)]">
+            {d.headline || "Add a line about yourself"}
+          </p>
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11.5px] text-[var(--ink-soft)]">
+            <span>
               <span className="font-semibold text-[var(--ink)]">{connections}</span>{" "}
               {connections === 1 ? "connection" : "connections"}
             </span>
-          </div>
+            <span aria-hidden="true">·</span>
+            <span
+              style={{ color: d.visibility === "off" ? "var(--ink-soft)" : "var(--good)" }}
+            >
+              {visibilityLine}
+            </span>
+          </p>
+        </div>
+      </div>
+
+      <form onSubmit={save} className="flex flex-col gap-5 pb-2">
+        {/* ------------------------------------------------- who you are */}
+        <section>
+          <SectionTitle icon={<IconUser size={13} />} title="Who you are" />
           <div className="mt-3 flex flex-col gap-3">
             <AvatarPicker name={d.name || "You"} photoUrl={d.photoUrl} style={d.avatarStyle} onChange={onAvatar} />
             {photoError && <p className="text-[12px] font-medium text-[var(--warn)]">{photoError}</p>}
@@ -230,13 +268,11 @@ export default function ProfilePanel({
 
         {/* --------------------------------------------- what drives match */}
         <section>
-          <h2 className="flex items-center gap-1.5 text-[15px] font-semibold">
-            <IconSparkle size={14} style={{ color: "var(--brand)" }} />
-            What you&rsquo;re here for
-          </h2>
-          <p className="mt-1 text-[12.5px] leading-[1.5] text-[var(--ink-soft)]">
-            Every recommendation you get — and every one you appear in — is built from these.
-          </p>
+          <SectionTitle
+            icon={<IconSparkle size={13} />}
+            title="What you're here for"
+            hint="Every recommendation you get — and every one you appear in — is built from these."
+          />
 
           <div className="mt-3 flex flex-col gap-4">
             <TopicPicker side="need" selected={d.lookingFor} onChange={(v) => set("lookingFor", v)} />
@@ -314,10 +350,11 @@ export default function ProfilePanel({
 
         {/* ------------------------------------------------- where you are */}
         <section>
-          <h2 className="text-[15px] font-semibold">Where you appear</h2>
-          <p className="mt-1 text-[12.5px] leading-[1.5] text-[var(--ink-soft)]">
-            This is the public map only. Networks you join always show you — that&rsquo;s what joining one means.
-          </p>
+          <SectionTitle
+            icon={<IconPin size={13} />}
+            title="Where you appear"
+            hint="The public map only. Networks you join always show you — that's what joining one means."
+          />
           <div className="mt-3 flex flex-col gap-3">
             <VisibilityPicker
               value={d.visibility}
@@ -365,11 +402,12 @@ export default function ProfilePanel({
       </form>
 
       {/* ------------------------------------------------- your networks */}
-      <section className="mt-2 border-t border-[var(--line)] pt-4">
-        <h2 className="text-[15px] font-semibold">Your networks</h2>
-        <p className="mt-1 text-[12.5px] leading-[1.5] text-[var(--ink-soft)]">
-          A board is a group with its own map. Share the link or QR and people land straight on it.
-        </p>
+      <section className="mt-5 border-t border-[var(--line)] pt-4">
+        <SectionTitle
+          icon={<IconPeople size={13} />}
+          title="Your communities"
+          hint="A community is a group with its own map. Share the link or QR and people land straight on it. Events live inside one."
+        />
 
         {myBoards.length > 0 && (
           <ul className="mt-3 flex flex-col gap-2">
@@ -431,7 +469,7 @@ export default function ProfilePanel({
             />
           ) : (
             <button type="button" className="btn btn-ghost btn-sm w-full" onClick={() => setCreating(true)}>
-              <IconPlus size={13} /> Create a network
+              <IconPlus size={13} /> Create a community
             </button>
           )}
         </div>

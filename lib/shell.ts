@@ -1,4 +1,4 @@
-import { boardBySlug, boardsForUser, childEvents, isLive, membershipOf, publicEvents, rsvpSummary, type Board } from "./boards";
+import { boardById, boardBySlug, boardsForUser, childEvents, isLive, membershipOf, publicEvents, rsvpSummary, type Board } from "./boards";
 import { getBoardMembers, getOpenMapProfiles, getProfileById, touchActivity, type MapProfile } from "./profiles";
 import { matchesFor, type Surface } from "./matching";
 import { attachConnectionStatus } from "./connections";
@@ -107,15 +107,21 @@ export async function shellPayload(opts: {
   // network. It is a view switcher, not a directory of other people's
   // private groups.
   const mine = opts.userId ? await boardsForUser(opts.userId) : [];
+  // Communities only. An event is something that happens *inside* a
+  // community, not a network you belong to — listing both made the switcher
+  // a pile of one-evening entries that never go away, and gave a host two
+  // different things to create when they only ever meant one.
   const networks: NetworkOption[] = [
     OPEN_NETWORK,
-    ...mine.map((b) => ({
-      slug: b.slug,
-      name: b.name,
-      type: b.type as "event" | "community",
-      memberCount: b.memberCount,
-      live: isLive(b),
-    })),
+    ...mine
+      .filter((b) => b.type === "community")
+      .map((b) => ({
+        slug: b.slug,
+        name: b.name,
+        type: "community" as const,
+        memberCount: b.memberCount,
+        live: false,
+      })),
   ];
 
   const waiting = opts.userId ? await waitingCount(opts.userId) : 0;
@@ -143,16 +149,26 @@ export async function shellPayload(opts: {
 
   // ------------------------------------------------------------- board
   if (opts.scope.kind === "board") {
-    const board = await boardBySlug(opts.scope.slug);
+    let board = await boardBySlug(opts.scope.slug);
+    // An event slug selects its community: the network is the community, and
+    // the event itself is shown on the map and in the Events window.
+    if (board?.type === "event" && board.parentBoardId) {
+      board = (await boardById(board.parentBoardId)) ?? board;
+    }
     const membership = board && opts.userId ? await membershipOf(board.id, opts.userId) : null;
     // Falling back rather than erroring: a stale `?net=` from a bookmark or
     // a board you left should land you on the open map, not a dead screen.
     if (board && membership) {
-      const members = await getBoardMembers(board.id, {
+      const rawMembers = await getBoardMembers(board.id, {
         excludeUserId: opts.userId,
         centerLat: board.lat ?? undefined,
         centerLng: board.lng ?? undefined,
       });
+      // Attached here too, not only on the open map. Without it every face
+      // inside a community offered "Ask to connect" however long ago you
+      // actually connected — the request had already been sent and accepted
+      // and the UI had no idea.
+      const members = (await attachConnectionStatus(rawMembers, opts.userId)) as typeof rawMembers;
       const surface = board.type as Surface;
       const matches =
         me?.name

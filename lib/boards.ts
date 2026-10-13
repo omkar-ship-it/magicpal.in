@@ -159,6 +159,15 @@ export async function boardsForUser(userId: string): Promise<Array<Board & { rol
   return rows.map((r) => ({ ...r.board, role: r.role, memberCount: r.memberCount }));
 }
 
+/** Set or change somebody's answer to an event. */
+export async function setRsvp(boardId: string, userId: string, rsvp: string): Promise<void> {
+  if (!hasDb || !db) return;
+  await db
+    .update(memberships)
+    .set({ rsvp, rsvpAt: new Date() })
+    .where(and(eq(memberships.boardId, boardId), eq(memberships.userId, userId)));
+}
+
 /** going / maybe counts for an event, plus the viewer's own answer. */
 export async function rsvpSummary(
   boardId: string,
