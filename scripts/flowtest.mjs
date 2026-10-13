@@ -432,6 +432,49 @@ async function main() {
       "…and the reason says why, rather than falling back to 'no overlap'"
     );
 
+    console.log("\nYou can always see yourself");
+    const mine = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}&radiusKm=25`, { jar: a.jar });
+    assert(Boolean(mine.data.you), "the payload carries your own marker");
+    assert(mine.data.you.id && mine.data.you.name === "Flow Alice", "…and it's you");
+    assert(
+      !mine.data.people.some((p) => p.id === mine.data.you.id),
+      "you are not also in the people list — one marker, not two"
+    );
+
+    // Going dark must not hide you from your own screen: the only way to
+    // check a privacy setting is to see what it did.
+    await api("/api/profile", {
+      method: "POST", jar: a.jar,
+      body: {
+        name: "Flow Alice", headline: "Founder, test co",
+        lookingFor: ["funding"], canHelpWith: ["product"], interests: ["fintech"],
+        lat: HERE.lat, lng: HERE.lng, locationLabel: HERE.label,
+        baseLat: CITY.lat, baseLng: CITY.lng, baseLabel: CITY.label,
+        visibility: "off",
+      },
+    });
+    const dark = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}&radiusKm=25`, { jar: a.jar });
+    assert(Boolean(dark.data.you), "you still see yourself when you're off the map");
+    assert(dark.data.you.visibility === "off", "…labelled as hidden, so the setting is checkable");
+    const seenByOther = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}&radiusKm=25`, { jar: b.jar });
+    assert(
+      !seenByOther.data.people.some((p) => p.name === "Flow Alice"),
+      "…while nobody else sees you at all"
+    );
+
+    console.log("\nNo stated signals is a different problem from no matches");
+    assert(dark.data.hasSignals === true, "someone with intents has signals");
+    await api("/api/profile", {
+      method: "POST", jar: a.jar,
+      body: {
+        name: "Flow Alice", headline: "Founder, test co",
+        lookingFor: [], canHelpWith: [], interests: [],
+        lat: HERE.lat, lng: HERE.lng, locationLabel: HERE.label, visibility: "exact",
+      },
+    });
+    const blank = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}&radiusKm=25`, { jar: a.jar });
+    assert(blank.data.hasSignals === false, "someone who stated nothing is flagged, not blamed on the room");
+
     console.log("\nEvery entry point terminates");
     for (const [label, path] of [
       ["a QR scan while signed out", `/join/${slug}`],

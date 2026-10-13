@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 // bare — this exact collision has broken this file before.
 import MapGL, { Marker, NavigationControl, type ViewStateChangeEvent } from "react-map-gl/mapbox";
 import type { MapProfile } from "@/lib/profiles";
+import type { SelfMarker } from "@/lib/shell";
 import Avatar from "./Avatar";
 import { IconCalendar } from "./Icons";
 
@@ -51,6 +52,7 @@ export type MapEvent = {
  */
 export default function MapCanvas({
   people,
+  you = null,
   events = [],
   initialLat,
   initialLng,
@@ -64,6 +66,8 @@ export default function MapCanvas({
   onMoveEnd,
 }: {
   people: Array<MapProfile & { hereNow?: boolean }>;
+  /** The viewer, drawn distinctly so they can verify their own visibility. */
+  you?: SelfMarker | null;
   events?: MapEvent[];
   initialLat: number;
   initialLng: number;
@@ -212,6 +216,45 @@ export default function MapCanvas({
             </button>
           </Marker>
         ) : null
+      )}
+
+      {you && (
+        <Marker latitude={you.lat} longitude={you.lng} anchor="center">
+          <span className="relative flex items-center">
+            <span
+              className="map-pin"
+              title={
+                you.visibility === "off"
+                  ? "You — only you can see this"
+                  : you.visibility === "base"
+                    ? "You — showing your city"
+                    : "You — showing your exact location"
+              }
+              style={{
+                borderRadius: 999,
+                // Off the map is drawn faded rather than hidden: the whole
+                // question somebody has is "where would I be, and am I
+                // showing?", and an absent marker answers neither.
+                opacity: you.visibility === "off" ? 0.45 : 1,
+                boxShadow:
+                  you.visibility === "off"
+                    ? "0 0 0 2px var(--ink-soft), var(--shadow)"
+                    : "0 0 0 3px var(--brand), var(--shadow)",
+              }}
+            >
+              <Avatar name={you.name} photoUrl={you.photoUrl} size={32} ring={2} />
+            </span>
+            <span
+              className="pointer-events-none absolute left-1/2 top-full mt-1 -translate-x-1/2 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[9.5px] font-bold"
+              style={{
+                background: you.visibility === "off" ? "var(--ink-soft)" : "var(--brand)",
+                color: "#fff",
+              }}
+            >
+              {you.visibility === "off" ? "Hidden" : "You"}
+            </span>
+          </span>
+        </Marker>
       )}
 
       {stacks.map((s) => (

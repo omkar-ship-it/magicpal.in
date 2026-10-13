@@ -156,6 +156,7 @@ export default function MapShell({
         <MapCanvas
           key={data.scope.slug ?? "open"}
           people={shown}
+          you={data.you}
           events={data.events}
           initialLat={data.centre?.lat ?? initial.centre?.lat ?? 17.4065}
           initialLng={data.centre?.lng ?? initial.centre?.lng ?? 78.4772}
@@ -213,6 +214,7 @@ export default function MapShell({
                 loading={loading}
                 signedIn={signedIn}
                 onboarded={onboarded}
+                hasSignals={data.hasSignals}
                 filtering={filtering}
                 scopeName={data.scope.name}
                 onOpen={setSelected}
@@ -362,6 +364,7 @@ function ForYou({
   loading,
   signedIn,
   onboarded,
+  hasSignals,
   filtering,
   scopeName,
   onOpen,
@@ -372,6 +375,8 @@ function ForYou({
   loading: boolean;
   signedIn: boolean;
   onboarded: boolean;
+  /** False when the viewer has stated no needs, offers or interests. */
+  hasSignals: boolean;
   filtering: boolean;
   scopeName: string;
   onOpen: (id: string) => void;
@@ -399,6 +404,20 @@ function ForYou({
     );
   }
   if (loading) return <PanelNote title="Looking for people worth your time…" />;
+  // Checked before the empty-result case: with nothing stated, the matcher
+  // has nothing to run on, and "nobody here lines up with what you're
+  // after" blames the room for a blank in your own profile.
+  if (!hasSignals) {
+    return (
+      <PanelNote title="Tell us what you're looking for">
+        Recommendations are built from what you need, what you can offer and what you&rsquo;re into. Without any of
+        those there&rsquo;s nothing to match on — the People tab still shows everyone.
+        <button type="button" className="btn btn-primary btn-sm mt-3" onClick={onProfile}>
+          Add your signals
+        </button>
+      </PanelNote>
+    );
+  }
   if (matched.length === 0) {
     return (
       <PanelNote title={filtering ? "No matches inside those filters" : `No strong match on ${scopeName} yet`}>

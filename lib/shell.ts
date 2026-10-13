@@ -39,6 +39,26 @@ export type EventRef = {
   memberCount: number;
 };
 
+/**
+ * The viewer's own marker.
+ *
+ * Every map product shows you yourself, and this one has a specific reason
+ * to: visibility is the product's central promise, and the only way to
+ * check that your setting does what you think is to see where — and
+ * whether — you appear. A map that hides you reads as broken even when it
+ * is working.
+ */
+export type SelfMarker = {
+  id: string;
+  name: string;
+  photoUrl: string | null;
+  lat: number;
+  lng: number;
+  placed: "exact" | "base";
+  /** `off` still draws, muted: it's your own screen, and it answers the question. */
+  visibility: "off" | "base" | "exact";
+};
+
 export type ShellPayload = {
   scope: { kind: "open" | "event" | "community"; slug: string | null; name: string; blurb: string | null };
   people: MapProfile[];
@@ -48,6 +68,9 @@ export type ShellPayload = {
   waiting: number;
   radiusKm: number;
   centre: { lat: number; lng: number } | null;
+  you: SelfMarker | null;
+  /** Whether the viewer has given the matcher anything to work with. */
+  hasSignals: boolean;
 };
 
 export const OPEN_NETWORK: NetworkOption = {
@@ -85,6 +108,26 @@ export async function shellPayload(opts: {
   ];
 
   const waiting = opts.userId ? await waitingCount(opts.userId) : 0;
+
+  // Drawn from the row directly rather than through place(), which exists to
+  // decide what *other* people may see. You always get your real position,
+  // including when you're off the map — that's the point of showing it.
+  const you: SelfMarker | null =
+    me?.name && (me.lat != null || me.baseLat != null)
+      ? {
+          id: me.id,
+          name: me.name,
+          photoUrl: me.photoUrl,
+          lat: me.visibility === "base" ? (me.baseLat ?? me.lat!) : (me.lat ?? me.baseLat!),
+          lng: me.visibility === "base" ? (me.baseLng ?? me.lng!) : (me.lng ?? me.baseLng!),
+          placed: me.visibility === "base" ? "base" : "exact",
+          visibility: (me.visibility as SelfMarker["visibility"]) ?? "off",
+        }
+      : null;
+
+  const hasSignals = Boolean(
+    me && ((me.lookingFor?.length ?? 0) > 0 || (me.canHelpWith?.length ?? 0) > 0 || (me.interests?.length ?? 0) > 0)
+  );
 
   // ------------------------------------------------------------- board
   if (opts.scope.kind === "board") {
@@ -131,6 +174,8 @@ export async function shellPayload(opts: {
         waiting,
         radiusKm,
         centre: board.lat != null && board.lng != null ? { lat: board.lat, lng: board.lng } : null,
+        you,
+        hasSignals,
       };
     }
   }
@@ -180,6 +225,8 @@ export async function shellPayload(opts: {
     waiting,
     radiusKm,
     centre,
+    you,
+    hasSignals,
   };
 }
 
