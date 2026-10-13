@@ -37,6 +37,7 @@ export type Overlay = "signin" | "profile" | null;
 export default function MapShell({
   initial,
   initialOverlay = null,
+  pendingJoin = null,
   signedIn,
   onboarded,
   myVisibility,
@@ -45,6 +46,12 @@ export default function MapShell({
   initial: ShellPayload;
   /** From ?panel= — lets /you, /login and friends stay real addresses. */
   initialOverlay?: Overlay;
+  /**
+   * A board slug carried through sign-in from a QR scan. Joined the moment
+   * there's a session — the scanner's whole intent was to be in that room,
+   * and making them find it again after signing in loses most of them.
+   */
+  pendingJoin?: string | null;
   signedIn: boolean;
   onboarded: boolean;
   myVisibility: "off" | "base" | "exact";
@@ -311,11 +318,16 @@ export default function MapShell({
               <div className="flex min-h-0 flex-1 flex-col p-3">
                 {overlay === "signin" ? (
                   <SignInPanel
-                    onDone={(wasOnboarded) => {
+                    onDone={async (wasOnboarded) => {
+                      if (pendingJoin) {
+                        // Best-effort: a failed join still leaves them
+                        // signed in on the map rather than stuck.
+                        await fetch(`/api/boards/${pendingJoin}/join`, { method: "POST" }).catch(() => {});
+                      }
                       // Straight into the profile when there's nothing to
                       // match on yet — the whole point of signing in.
                       setOverlay(wasOnboarded ? null : "profile");
-                      void load({});
+                      void load(pendingJoin ? { net: pendingJoin } : {});
                     }}
                   />
                 ) : (

@@ -97,6 +97,34 @@ async function signUp(email) {
   return { jar, userId: null, email, onboarded: data.onboarded };
 }
 
+/**
+ * Walk a redirect chain by hand, with a hop limit.
+ *
+ * Added after /join and /login were each written to redirect to the other,
+ * which turned every QR scan by a signed-out visitor into an infinite
+ * redirect. Nothing in the API tests could see it: they authenticate
+ * directly and never walk the page graph. Any entry point a person can
+ * actually arrive at has to terminate, and that is only checkable here.
+ */
+async function followChain(path, { jar, max = 6 } = {}) {
+  const chain = [path];
+  let url = BASE + path;
+  for (let i = 0; i < max; i++) {
+    const res = await fetch(url, {
+      redirect: "manual",
+      headers: { ...(jar ? jar.headers() : {}) },
+    });
+    const next = res.headers.get("location");
+    if (!next) return { chain, status: res.status, looped: false };
+    const resolved = new URL(next, url);
+    const rel = resolved.pathname + resolved.search;
+    if (chain.includes(rel)) return { chain: [...chain, rel], status: res.status, looped: true };
+    chain.push(rel);
+    url = resolved.toString();
+  }
+  return { chain, status: 0, looped: true };
+}
+
 async function main() {
   console.log(`Starting server on :${PORT}…`);
   const server = spawn("npx", ["next", "dev", "-p", String(PORT)], {
@@ -403,6 +431,32 @@ async function main() {
       Boolean(carol) && /both into fintech/i.test(carol.reason),
       "…and the reason says why, rather than falling back to 'no overlap'"
     );
+
+    console.log("\nEvery entry point terminates");
+    for (const [label, path] of [
+      ["a QR scan while signed out", `/join/${slug}`],
+      ["the board's own address", `/b/${slug}`],
+      ["the old /login with a join target", `/login?next=${encodeURIComponent(`/join/${slug}`)}`],
+      ["the old /you", "/you"],
+      ["the old /boards", "/boards"],
+    ]) {
+      const walked = await followChain(path);
+      assert(!walked.looped, `${label} doesn't loop  (${walked.chain.join(" → ")})`);
+      assert(walked.status === 200, `${label} ends on a real page`);
+    }
+
+    // And signed in, where the join actually happens.
+    const scanned = await followChain(`/join/${slug}`, { jar: c.jar });
+    assert(!scanned.looped, "a signed-in scan doesn't loop");
+    assert(
+      scanned.chain.some((u) => u.startsWith("/?net=")),
+      "a signed-in scan lands on the map with that board selected"
+    );
+    const joinedRow = await pool.query(
+      "select 1 from memberships m join boards bd on bd.id = m.board_id where bd.slug = $1 and m.user_id = (select id from users where email = $2)",
+      [slug, emailC]
+    );
+    assert(joinedRow.rowCount === 1, "…and the scan actually joined them");
 
     console.log(`\n${pass} passed, ${fail} failed`);
   } finally {
