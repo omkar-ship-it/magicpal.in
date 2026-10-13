@@ -12,8 +12,12 @@ import MapShell from "@/components/MapShellLoader";
  * `?net=<slug>` picks the network, so a board is a shareable address of
  * this same screen rather than a different one.
  */
-export default async function Home({ searchParams }: { searchParams: Promise<{ net?: string }> }) {
-  const { net } = await searchParams;
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ net?: string; panel?: string }>;
+}) {
+  const { net, panel } = await searchParams;
   const user = await getSessionUser();
 
   // Fetched here rather than in the client: the first thing a visitor has
@@ -25,9 +29,14 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ n
     radiusKm: DEFAULT_RADIUS_KM,
   });
 
+  // `panel` keeps /you and /login working as real addresses — they redirect
+  // here rather than rendering a mapless page.
+  const overlay = panel === "profile" || panel === "signin" ? panel : null;
+
   return (
     <MapShell
       initial={initial}
+      initialOverlay={user ? overlay : overlay === "profile" ? "signin" : overlay}
       signedIn={Boolean(user)}
       onboarded={Boolean(user?.onboarded)}
       myVisibility={user?.visibility ?? "off"}

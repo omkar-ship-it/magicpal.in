@@ -55,6 +55,29 @@ export const users = pgTable(
     workingOn: text("working_on"),
 
     /**
+     * What they're into, as distinct from what they need.
+     *
+     * The only *symmetric* signal the matcher has: two people deep in
+     * climate are worth introducing even when neither wants anything the
+     * other is offering. Without it the recommender has nothing to say to
+     * the large middle of any room — people whose needs don't happen to
+     * interlock — and falls back to "no overlap", which is true and useless.
+     *
+     * Vocabulary in lib/intents.ts (SECTORS), same reasoning as topics: an
+     * enumerated overlap is exactly computable and exactly explainable.
+     */
+    interests: text("interests").array().notNull().default(sql`'{}'::text[]`),
+
+    /**
+     * Founder, operator, investor, student… One value, from STAGES.
+     *
+     * Context rather than score: it rarely decides a match on its own, but
+     * it is what makes a recommendation legible at a glance, and it is the
+     * filter people actually reach for ("who here is an investor").
+     */
+    stage: text("stage"),
+
+    /**
      * Mentorship, carried as two flags and nothing else.
      *
      * The matching surface is deliberately not built yet: it needs a board

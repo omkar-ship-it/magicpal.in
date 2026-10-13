@@ -13,6 +13,15 @@ export const MAX_MAP_RESULTS = 200;
  */
 export const MAX_TOPICS = 4;
 
+/**
+ * Interests get a slightly looser cap than needs.
+ *
+ * Claiming four things you need is a stretch; being into five sectors is
+ * ordinary, and over-claiming here costs much less because interests are a
+ * symmetric signal rather than a promise to anybody.
+ */
+export const MAX_INTERESTS = 5;
+
 /** How many recommendations a surface shows at once. */
 export const MATCHES_SHOWN = 3;
 

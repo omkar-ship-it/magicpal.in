@@ -14,7 +14,12 @@ import PanelNote from "./PanelNote";
 import FeedPanel from "./FeedPanel";
 import EventsPanel from "./EventsPanel";
 import ChatsPanel from "./ChatsPanel";
+import SignInPanel from "./SignInPanel";
+import ProfilePanel from "./ProfilePanel";
+import PublicOptIn from "./PublicOptIn";
 import { IconHidden, IconX } from "./Icons";
+
+export type Overlay = "signin" | "profile" | null;
 
 /**
  * The whole app, on top of a map.
@@ -31,12 +36,15 @@ import { IconHidden, IconX } from "./Icons";
  */
 export default function MapShell({
   initial,
+  initialOverlay = null,
   signedIn,
   onboarded,
   myVisibility,
   me,
 }: {
   initial: ShellPayload;
+  /** From ?panel= — lets /you, /login and friends stay real addresses. */
+  initialOverlay?: Overlay;
   signedIn: boolean;
   onboarded: boolean;
   myVisibility: "off" | "base" | "exact";
@@ -48,6 +56,13 @@ export default function MapShell({
   const [tab, setTab] = useState<DockTab>("forYou");
   const [selected, setSelected] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  /**
+   * Overlays are the second layer of chrome: full surfaces (sign in, your
+   * profile) rather than dock panels. They sit over the map like everything
+   * else — the map is the app's background, not a component inside it, so
+   * nothing in this product is ever shown without it.
+   */
+  const [overlay, setOverlay] = useState<Overlay>(initialOverlay);
 
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [feedLoading, setFeedLoading] = useState(false);
@@ -182,6 +197,7 @@ export default function MapShell({
                 reason={data.matches.find((m) => m.id === selectedPerson.id)?.reason}
                 twoWay={data.matches.find((m) => m.id === selectedPerson.id)?.twoWay}
                 signedIn={signedIn}
+                onSignIn={() => setOverlay("signin")}
                 onClose={() => setSelected(null)}
               />
             ) : tab === "forYou" ? (
@@ -193,6 +209,8 @@ export default function MapShell({
                 filtering={filtering}
                 scopeName={data.scope.name}
                 onOpen={setSelected}
+                onSignIn={() => setOverlay("signin")}
+                onProfile={() => setOverlay("profile")}
               />
             ) : tab === "feed" ? (
               <div className="min-h-0 flex-1 overflow-y-auto">
@@ -261,7 +279,66 @@ export default function MapShell({
         signedIn={signedIn}
         me={me}
         onSelect={openTab}
+        onProfile={() => setOverlay(signedIn ? "profile" : "signin")}
       />
+
+      {overlay && (
+        <>
+          <button
+            type="button"
+            className="absolute inset-0 z-40 cursor-default"
+            style={{ background: "color-mix(in srgb, var(--ink) 38%, transparent)", backdropFilter: "blur(2px)" }}
+            onClick={() => setOverlay(null)}
+            aria-label="Close"
+          />
+          <div className="pointer-events-none absolute inset-0 z-50 flex items-start justify-center p-3 sm:p-6">
+            <div
+              className="floating-panel panel-enter pointer-events-auto flex max-h-[min(84dvh,720px)] w-full max-w-lg flex-col overflow-hidden"
+              role="dialog"
+              aria-modal="true"
+            >
+              <div className="flex flex-none items-center justify-between gap-2 border-b border-[var(--line)] p-3">
+                <p className="label m-0">{overlay === "signin" ? "Sign in" : "Your profile"}</p>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setOverlay(null)}
+                  aria-label="Close"
+                >
+                  <IconX size={13} />
+                </button>
+              </div>
+              <div className="flex min-h-0 flex-1 flex-col p-3">
+                {overlay === "signin" ? (
+                  <SignInPanel
+                    onDone={(wasOnboarded) => {
+                      // Straight into the profile when there's nothing to
+                      // match on yet — the whole point of signing in.
+                      setOverlay(wasOnboarded ? null : "profile");
+                      void load({});
+                    }}
+                  />
+                ) : (
+                  <ProfilePanel
+                    networks={data.networks}
+                    onSaved={() => void load({})}
+                    onOpenNetwork={(slug) => {
+                      setOverlay(null);
+                      switchNetwork(slug);
+                    }}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Members of a board who aren't on the public map get the one-tap
+          way in, where the decision actually comes up. */}
+      {signedIn && onboarded && !isOpenNet && myVisibility === "off" && (
+        <PublicOptIn networkName={data.scope.name} onDone={() => void load({})} />
+      )}
 
       {signedIn && onboarded && myVisibility === "off" && isOpenNet && <OffMapNudge />}
     </div>
@@ -276,6 +353,8 @@ function ForYou({
   filtering,
   scopeName,
   onOpen,
+  onSignIn,
+  onProfile,
 }: {
   matched: Array<{ match: { id: string; reason: string; twoWay: boolean }; person: MapProfile }>;
   loading: boolean;
@@ -284,14 +363,16 @@ function ForYou({
   filtering: boolean;
   scopeName: string;
   onOpen: (id: string) => void;
+  onSignIn: () => void;
+  onProfile: () => void;
 }) {
   if (!signedIn) {
     return (
       <PanelNote title="Sign in to get recommendations">
         The map is public. Who you should meet on it isn&rsquo;t — that needs to know what you&rsquo;re looking for.
-        <Link href="/login" className="btn btn-primary btn-sm mt-3">
+        <button type="button" className="btn btn-primary btn-sm mt-3" onClick={onSignIn}>
           Sign in
-        </Link>
+        </button>
       </PanelNote>
     );
   }
@@ -299,9 +380,9 @@ function ForYou({
     return (
       <PanelNote title="Say what you're here for">
         Two questions — what you need, and what you can offer. Every recommendation is built from those.
-        <Link href="/you" className="btn btn-primary btn-sm mt-3">
+        <button type="button" className="btn btn-primary btn-sm mt-3" onClick={onProfile}>
           Finish your profile
-        </Link>
+        </button>
       </PanelNote>
     );
   }
@@ -337,12 +418,14 @@ function Profile({
   reason,
   twoWay,
   signedIn,
+  onSignIn,
   onClose,
 }: {
   person: MapProfile & { connectionStatus?: string | null; connectionId?: string | null };
   reason?: string;
   twoWay?: boolean;
   signedIn: boolean;
+  onSignIn: () => void;
   onClose: () => void;
 }) {
   return (
@@ -355,7 +438,7 @@ function Profile({
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <PersonCard person={person} reason={reason} twoWay={twoWay} />
-        <ReachOut person={person} signedIn={signedIn} />
+        <ReachOut person={person} signedIn={signedIn} onSignIn={onSignIn} />
       </div>
     </div>
   );
@@ -372,9 +455,11 @@ function Profile({
 function ReachOut({
   person,
   signedIn,
+  onSignIn,
 }: {
   person: MapProfile & { connectionStatus?: string | null };
   signedIn: boolean;
+  onSignIn: () => void;
 }) {
   const [note, setNote] = useState("");
   const [state, setState] = useState<string | null>(person.connectionStatus ?? null);
@@ -385,9 +470,9 @@ function ReachOut({
     return (
       <div className="mt-2.5">
         <PanelNote title="Sign in to reach out">
-          <Link href="/login" className="btn btn-primary btn-sm mt-3">
+          <button type="button" className="btn btn-primary btn-sm mt-3" onClick={onSignIn}>
             Sign in
-          </Link>
+          </button>
         </PanelNote>
       </div>
     );

@@ -101,7 +101,7 @@ export async function shellPayload(opts: {
       const surface = board.type as Surface;
       const matches =
         me?.name
-          ? matchesFor({ id: me.id, lookingFor: me.lookingFor, canHelpWith: me.canHelpWith }, members, {
+          ? matchesFor({ id: me.id, lookingFor: me.lookingFor, canHelpWith: me.canHelpWith, interests: me.interests }, members, {
               surface,
               limit: MATCHES_SHOWN,
             }).map((m) => ({ id: m.other.id, reason: m.reason, twoWay: m.twoWay }))
@@ -153,7 +153,7 @@ export async function shellPayload(opts: {
   });
 
   const matches = me?.name
-    ? matchesFor({ id: me.id, lookingFor: me.lookingFor, canHelpWith: me.canHelpWith }, people, {
+    ? matchesFor({ id: me.id, lookingFor: me.lookingFor, canHelpWith: me.canHelpWith, interests: me.interests }, people, {
         surface: "open",
         limit: MATCHES_SHOWN,
       }).map((m) => ({ id: m.other.id, reason: m.reason, twoWay: m.twoWay }))

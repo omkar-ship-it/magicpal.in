@@ -13,7 +13,20 @@ import { IconCalendar, IconPeople } from "./Icons";
  * needs neither and would be insulted by being asked. Everything else is
  * shared, which is the same observation the schema makes.
  */
-export default function CreateBoard({ parentSlug, parentName }: { parentSlug?: string; parentName?: string }) {
+export default function CreateBoard({
+  parentSlug,
+  parentName,
+  onCreated,
+}: {
+  parentSlug?: string;
+  parentName?: string;
+  /**
+   * Handed the new slug so the caller can stay put. Without it this
+   * navigates, which is right for the standalone page and wrong inside the
+   * profile overlay — the map is supposed to stay behind everything.
+   */
+  onCreated?: (slug: string) => void;
+}) {
   const router = useRouter();
   const [type, setType] = useState<"event" | "community">("event");
   const [name, setName] = useState("");
@@ -48,6 +61,14 @@ export default function CreateBoard({ parentSlug, parentName }: { parentSlug?: s
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Couldn't create that.");
+      if (onCreated) {
+        onCreated(data.slug);
+        setBusy(false);
+        setName("");
+        setBlurb("");
+        setStartsAt("");
+        return;
+      }
       router.push(`/b/${data.slug}?new=1`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");

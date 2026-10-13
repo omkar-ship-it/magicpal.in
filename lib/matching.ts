@@ -1,4 +1,4 @@
-import { describeOverlap, isTwoWay, overlaps, type Overlap } from "./intents";
+import { describeOverlap, isTwoWay, overlaps, sharedInterests, type Overlap } from "./intents";
 import type { MapProfile } from "./profiles";
 
 /**
@@ -50,6 +50,16 @@ const DIRECTION_WEIGHT: Record<Overlap["direction"], number> = {
 const TWO_WAY_BONUS = 3;
 
 /**
+ * A shared sector, per sector, capped at two.
+ *
+ * Deliberately below a complementary need (3): wanting the same things is
+ * weaker evidence than one person having what the other asked for. But it
+ * is far from nothing, and it is the only signal that reaches the large
+ * middle of any room — people whose needs simply don't interlock.
+ */
+const INTEREST_WEIGHT = 1.4;
+
+/**
  * Diminishing returns past the first two overlaps.
  *
  * Someone who ticked nine boxes is not nine times more relevant — they are
@@ -84,7 +94,7 @@ function proximityScore(surface: Surface, other: MapProfile): number {
  * rank in well under a millisecond.
  */
 export function matchesFor(
-  me: { id: string; lookingFor: readonly string[]; canHelpWith: readonly string[] },
+  me: { id: string; lookingFor: readonly string[]; canHelpWith: readonly string[]; interests?: readonly string[] },
   pool: readonly MapProfile[],
   opts: { surface: Surface; limit?: number; exclude?: readonly string[] } = { surface: "open" }
 ): Match[] {
@@ -97,12 +107,16 @@ export function matchesFor(
     const list = overlaps(me, other);
     const base = overlapScore(list);
     const two = isTwoWay(list);
-    // Someone with nothing in common is not a match at any distance. The
+    const shared = sharedInterests(me.interests ?? [], other.interests);
+    const affinity = Math.min(shared.length, 2) * INTEREST_WEIGHT;
+    // Someone with nothing in common is not a match at any distance — the
     // open map would otherwise recommend the nearest stranger, which is
-    // exactly the uselessness this product exists to replace.
-    if (base === 0 && opts.surface !== "event") continue;
+    // exactly the uselessness this product exists to replace. A shared
+    // sector counts as something in common.
+    if (base === 0 && affinity === 0 && opts.surface !== "event") continue;
     const score =
       base +
+      affinity +
       (two ? TWO_WAY_BONUS : 0) +
       proximityScore(opts.surface, other) +
       (other.active ? 0.4 : 0);
@@ -110,7 +124,7 @@ export function matchesFor(
       other,
       score,
       overlaps: list,
-      reason: describeOverlap(list, firstName(other.name), other),
+      reason: describeOverlap(list, firstName(other.name), other, shared),
       twoWay: two,
     });
   }

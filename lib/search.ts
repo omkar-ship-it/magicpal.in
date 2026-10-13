@@ -1,4 +1,4 @@
-import { topicById, validTopics } from "./intents";
+import { sectorById, stageById, topicById, validSectors, validTopics } from "./intents";
 import type { MapProfile } from "./profiles";
 
 /**
@@ -16,16 +16,27 @@ export type Facets = {
   q: string;
   /** Topic ids. A person matches if the topic appears on *either* side. */
   topics: string[];
+  /** Sector ids — what they're into, rather than what they need. */
+  sectors: string[];
+  /** A single stage id, or empty for any. */
+  stage: string;
   /** Board surfaces only: in the room right now. */
   hereNow: boolean;
   /** Only people who agreed to a street-level pin. */
   exactOnly: boolean;
 };
 
-export const NO_FACETS: Facets = { q: "", topics: [], hereNow: false, exactOnly: false };
+export const NO_FACETS: Facets = { q: "", topics: [], sectors: [], stage: "", hereNow: false, exactOnly: false };
 
 export function facetsActive(f: Facets): number {
-  return (f.q.trim() ? 1 : 0) + f.topics.length + (f.hereNow ? 1 : 0) + (f.exactOnly ? 1 : 0);
+  return (
+    (f.q.trim() ? 1 : 0) +
+    f.topics.length +
+    f.sectors.length +
+    (f.stage ? 1 : 0) +
+    (f.hereNow ? 1 : 0) +
+    (f.exactOnly ? 1 : 0)
+  );
 }
 
 /**
@@ -41,7 +52,10 @@ function haystack(p: MapProfile): string {
       return t ? `${t.need} ${t.offer}` : "";
     })
     .join(" ");
-  return [p.name, p.headline, p.company, p.workingOn, p.locationLabel, topicWords]
+  const sectorWords = validSectors(p.interests)
+    .map((id) => sectorById(id)?.label ?? "")
+    .join(" ");
+  return [p.name, p.headline, p.company, p.workingOn, p.locationLabel, topicWords, sectorWords, stageById(p.stage)?.label]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
@@ -61,6 +75,12 @@ export function matchesFacets(p: MapProfile & { hereNow?: boolean }, f: Facets):
     const theirs = new Set([...validTopics(p.lookingFor), ...validTopics(p.canHelpWith)]);
     if (!f.topics.some((t) => theirs.has(t))) return false;
   }
+
+  if (f.sectors.length > 0) {
+    const theirs = new Set(validSectors(p.interests));
+    if (!f.sectors.some((sec) => theirs.has(sec))) return false;
+  }
+  if (f.stage && p.stage !== f.stage) return false;
 
   if (f.hereNow && !p.hereNow) return false;
   if (f.exactOnly && p.placed !== "exact") return false;

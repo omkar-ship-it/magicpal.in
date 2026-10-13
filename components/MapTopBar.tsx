@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { TOPICS } from "@/lib/intents";
+import { SECTORS, STAGES, TOPICS } from "@/lib/intents";
 import { RADIUS_OPTIONS_KM } from "@/lib/rules";
 import type { NetworkOption } from "@/lib/shell";
-import { facetsActive, type Facets } from "@/lib/search";
+import { facetsActive, NO_FACETS, type Facets } from "@/lib/search";
 import { IconCheck, IconChevronDown, IconGlobe, IconPeople, IconSearch, IconX } from "./Icons";
 
 /**
@@ -199,6 +199,47 @@ export default function MapTopBar({
               Matches people looking for it or offering it.
             </p>
 
+            <p className="label mt-3.5">What they&rsquo;re into</p>
+            <div className="flex flex-wrap gap-1.5">
+              {SECTORS.map((sec) => (
+                <button
+                  key={sec.id}
+                  type="button"
+                  className="chip-toggle tap"
+                  data-on={facets.sectors.includes(sec.id) ? "true" : "false"}
+                  aria-pressed={facets.sectors.includes(sec.id)}
+                  onClick={() =>
+                    onFacets({
+                      ...facets,
+                      sectors: facets.sectors.includes(sec.id)
+                        ? facets.sectors.filter((x) => x !== sec.id)
+                        : [...facets.sectors, sec.id],
+                    })
+                  }
+                >
+                  {facets.sectors.includes(sec.id) && <IconCheck size={11} />}
+                  {sec.label}
+                </button>
+              ))}
+            </div>
+
+            <p className="label mt-3.5">Where they are</p>
+            <div className="flex flex-wrap gap-1.5">
+              {STAGES.map((st) => (
+                <button
+                  key={st.id}
+                  type="button"
+                  className="chip-toggle tap"
+                  data-on={facets.stage === st.id ? "true" : "false"}
+                  aria-pressed={facets.stage === st.id}
+                  onClick={() => onFacets({ ...facets, stage: facets.stage === st.id ? "" : st.id })}
+                >
+                  {facets.stage === st.id && <IconCheck size={11} />}
+                  {st.label}
+                </button>
+              ))}
+            </div>
+
             <div className="mt-3.5 flex flex-wrap items-center gap-2">
               {isOpen && (
                 <label className="flex items-center gap-2 text-[12.5px]">
@@ -247,7 +288,7 @@ export default function MapTopBar({
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm"
-                    onClick={() => onFacets({ q: "", topics: [], hereNow: false, exactOnly: false })}
+                    onClick={() => onFacets(NO_FACETS)}
                   >
                     Clear
                   </button>

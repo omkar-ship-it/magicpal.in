@@ -128,6 +128,71 @@ export const TOPICS: Topic[] = [
   },
 ];
 
+/**
+ * What somebody is *into*, as opposed to what they need.
+ *
+ * Deliberately sectors rather than skills: "fintech" is something two
+ * strangers can talk about for an hour, "React" is something they can
+ * compare CVs about. Kept to twelve for the same reason TOPICS is short —
+ * every entry is a chip somebody taps on a phone in a noisy room.
+ */
+export type Sector = { id: string; label: string };
+
+export const SECTORS: Sector[] = [
+  { id: "fintech", label: "Fintech" },
+  { id: "ai", label: "AI & data" },
+  { id: "climate", label: "Climate & energy" },
+  { id: "health", label: "Health" },
+  { id: "consumer", label: "Consumer & retail" },
+  { id: "saas", label: "B2B & SaaS" },
+  { id: "design", label: "Design & brand" },
+  { id: "education", label: "Education" },
+  { id: "media", label: "Media & creator" },
+  { id: "deeptech", label: "Hardware & deeptech" },
+  { id: "social", label: "Social impact" },
+  { id: "gaming", label: "Gaming" },
+];
+
+export const SECTOR_BY_ID = new Map(SECTORS.map((s) => [s.id, s]));
+export const sectorById = (id: string): Sector | undefined => SECTOR_BY_ID.get(id);
+
+export function validSectors(ids: readonly string[] | null | undefined): string[] {
+  return (ids ?? []).filter((id) => SECTOR_BY_ID.has(id));
+}
+
+/** Shared sectors, strongest-first by nothing in particular — order is input order. */
+export function sharedInterests(a: readonly string[], b: readonly string[]): Sector[] {
+  const theirs = new Set(validSectors(b));
+  return validSectors(a)
+    .filter((id) => theirs.has(id))
+    .map((id) => SECTOR_BY_ID.get(id)!)
+    .filter(Boolean);
+}
+
+/**
+ * Where somebody is standing right now. One value, context not score.
+ *
+ * It is what makes a card legible at a glance and it is the filter people
+ * actually reach for — "who here is an investor" is the single most common
+ * question asked of any room.
+ */
+export type Stage = { id: string; label: string };
+
+export const STAGES: Stage[] = [
+  { id: "founder", label: "Founder" },
+  { id: "operator", label: "Operator" },
+  { id: "investor", label: "Investor" },
+  { id: "freelance", label: "Freelance / independent" },
+  { id: "exec", label: "Exec / leadership" },
+  { id: "student", label: "Student / early career" },
+  { id: "researcher", label: "Researcher / academic" },
+  { id: "exploring", label: "Between things" },
+];
+
+export const STAGE_BY_ID = new Map(STAGES.map((s) => [s.id, s]));
+export const stageById = (id: string | null | undefined): Stage | undefined =>
+  id ? STAGE_BY_ID.get(id) : undefined;
+
 export const TOPIC_BY_ID = new Map(TOPICS.map((t) => [t.id, t]));
 
 export const topicById = (id: string): Topic | undefined => TOPIC_BY_ID.get(id);
@@ -209,12 +274,15 @@ export function describeOverlap(
    * so the fallback reaches for the most concrete thing on their profile
    * instead, in descending order of how specific it is.
    */
-  other?: { canHelpWith: readonly string[]; workingOn?: string | null }
+  other?: { canHelpWith: readonly string[]; workingOn?: string | null },
+  /** Sectors both people picked. The symmetric signal, used in two places. */
+  shared: Sector[] = []
 ): string {
   if (list.length === 0) {
     // Never restates `workingOn`: the card renders that line directly
     // underneath, and a reason that repeats the sentence below it reads as
     // padding and makes the whole panel look automated.
+    if (shared.length > 0) return `You're both into ${joinWords(shared.map((s) => s.label.toLowerCase()))}.`;
     const offer = validTopics(other?.canHelpWith)[0];
     if (offer) return `No overlap with what you asked for, but they offer ${TOPIC_BY_ID.get(offer)!.offer.toLowerCase()}.`;
     return `In the room. ${firstName} hasn't said what they're after yet.`;
@@ -236,5 +304,11 @@ export function describeOverlap(
   const mutual = list.find((o) => o.direction === "mutual");
   if (mutual) return `You're both ${mutual.topic.needGerund}.`;
   return `In the room.`;
+}
+
+/** "a, b and c" — an Oxford-comma-free list, because these are at most three. */
+function joinWords(words: string[]): string {
+  if (words.length <= 1) return words[0] ?? "";
+  return `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
 }
 

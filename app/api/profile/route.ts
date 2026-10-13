@@ -4,8 +4,8 @@ import { db, hasDb } from "@/lib/db";
 import { consents, users } from "@/lib/db/schema";
 import { getSessionUser } from "@/lib/session";
 import { getProfileById } from "@/lib/profiles";
-import { validTopics } from "@/lib/intents";
-import { CONSENT_COPY_VERSION, MAX_SKILLS, MAX_TOPICS } from "@/lib/rules";
+import { STAGE_BY_ID, validSectors, validTopics } from "@/lib/intents";
+import { CONSENT_COPY_VERSION, MAX_INTERESTS, MAX_SKILLS, MAX_TOPICS } from "@/lib/rules";
 
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
@@ -14,6 +14,44 @@ function normalizeUrl(v: unknown, max = 300): string {
   const s = str(v, max);
   if (!s) return "";
   return /^https?:\/\//i.test(s) ? s : `https://${s}`;
+}
+
+/**
+ * Your own profile, for the overlay that edits it.
+ *
+ * Deliberately only ever yours — there is no `?userId=` here. Other people's
+ * profiles reach the client through the map payload, which has already run
+ * every field through the visibility rules in lib/profiles.ts.
+ */
+export async function GET() {
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
+  const row = await getProfileById(user.id);
+  if (!row) return NextResponse.json({ error: "No profile." }, { status: 404 });
+  return NextResponse.json({
+    profile: {
+      name: row.name ?? "",
+      headline: row.headline ?? "",
+      company: row.company ?? "",
+      workingOn: row.workingOn ?? "",
+      bio: row.bio ?? "",
+      linkedinUrl: row.linkedinUrl ?? "",
+      photoUrl: row.photoUrl,
+      lookingFor: row.lookingFor ?? [],
+      canHelpWith: row.canHelpWith ?? [],
+      interests: row.interests ?? [],
+      stage: row.stage ?? "",
+      locationLabel: row.locationLabel,
+      lat: row.lat,
+      lng: row.lng,
+      baseLabel: row.baseLabel,
+      baseLat: row.baseLat,
+      baseLng: row.baseLng,
+      visibility: row.visibility,
+      openToMentor: row.openToMentor,
+      seekingMentor: row.seekingMentor,
+    },
+  });
 }
 
 const VISIBILITIES = ["off", "base", "exact"] as const;
@@ -47,6 +85,8 @@ export async function POST(req: Request) {
 
   const lookingFor = validTopics(body?.lookingFor).slice(0, MAX_TOPICS);
   const canHelpWith = validTopics(body?.canHelpWith).slice(0, MAX_TOPICS);
+  const interests = validSectors(body?.interests).slice(0, MAX_INTERESTS);
+  const stage = STAGE_BY_ID.has(body?.stage) ? (body.stage as string) : null;
 
   const locationLabel = str(body?.locationLabel, 160);
   const lat = Number(body?.lat);
@@ -100,6 +140,8 @@ export async function POST(req: Request) {
       skills,
       lookingFor,
       canHelpWith,
+      interests,
+      stage,
       openToMentor: Boolean(body?.openToMentor),
       seekingMentor: Boolean(body?.seekingMentor),
       // Locations are only ever set from a geocoded result, so a request

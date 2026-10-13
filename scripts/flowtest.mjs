@@ -166,6 +166,32 @@ async function main() {
     const { rows: ir } = await pool.query("select looking_for from users where email = $1", [emailA]);
     assert(ir[0].looking_for.length === 1 && ir[0].looking_for[0] === "funding", "an unknown topic id is dropped rather than stored");
 
+    console.log("\nInterests and stage are closed vocabularies too");
+    await api("/api/profile", {
+      method: "POST", jar: a.jar,
+      body: {
+        name: "Flow Alice", headline: "Founder, test co",
+        lookingFor: ["funding"], canHelpWith: ["product"],
+        interests: ["fintech", "not-a-sector"], stage: "not-a-stage",
+        lat: HERE.lat, lng: HERE.lng, locationLabel: HERE.label, visibility: "exact",
+      },
+    });
+    const { rows: sig } = await pool.query("select interests, stage from users where email = $1", [emailA]);
+    assert(sig[0].interests.length === 1 && sig[0].interests[0] === "fintech", "an unknown sector is dropped rather than stored");
+    assert(sig[0].stage === null, "an unknown stage is stored as null rather than echoed back");
+
+    await api("/api/profile", {
+      method: "POST", jar: a.jar,
+      body: {
+        name: "Flow Alice", headline: "Founder, test co",
+        lookingFor: ["funding"], canHelpWith: ["product"],
+        interests: ["fintech"], stage: "founder",
+        lat: HERE.lat, lng: HERE.lng, locationLabel: HERE.label, visibility: "exact",
+      },
+    });
+    const { rows: sig2 } = await pool.query("select stage from users where email = $1", [emailA]);
+    assert(sig2[0].stage === "founder", "a known stage is stored");
+
     console.log("\nVisibility is the product's actual promise");
     const b = await signUp(emailB);
     const saveB = (visibility) => api("/api/profile", {
@@ -354,6 +380,29 @@ async function main() {
       method: "POST", jar: c.jar, body: { connectionId: connId, body: "butting in" },
     });
     assert(snoopAfter.status === 404, "a stranger still can't post into it");
+
+    console.log("\nShared interests are a matching signal of their own");
+    // Carol shares a sector with Alice but needs nothing Alice offers, so
+    // she can only surface through the symmetric interest signal.
+    await api("/api/profile", {
+      method: "POST", jar: c.jar,
+      body: {
+        name: "Flow Carol", headline: "Curious stranger",
+        lookingFor: [], canHelpWith: [], interests: ["fintech"], stage: "operator",
+        lat: HERE.lat + 0.002, lng: HERE.lng + 0.002, locationLabel: "Near Alice",
+        baseLat: CITY.lat, baseLng: CITY.lng, baseLabel: CITY.label,
+        visibility: "exact",
+      },
+    });
+    const withShared = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}&radiusKm=25`, { jar: a.jar });
+    const carol = withShared.data.matches.find((m) =>
+      withShared.data.people.find((p) => p.id === m.id && p.name === "Flow Carol")
+    );
+    assert(Boolean(carol), "someone with no complementary need still matches on a shared interest");
+    assert(
+      Boolean(carol) && /both into fintech/i.test(carol.reason),
+      "…and the reason says why, rather than falling back to 'no overlap'"
+    );
 
     console.log(`\n${pass} passed, ${fail} failed`);
   } finally {

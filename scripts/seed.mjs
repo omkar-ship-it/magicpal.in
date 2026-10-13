@@ -51,6 +51,8 @@ const CITIES = {
 const PEOPLE = [
   {
     email: "meera@example.com",
+    interests: ['fintech','saas'],
+    stage: "founder",
     name: "Meera Raghavan",
     headline: "Founder, cross-border payments",
     company: "Talu",
@@ -63,6 +65,8 @@ const PEOPLE = [
   {
     // The clean counterpart to Meera: she's raising, he invests.
     email: "arjun@example.com",
+    interests: ['fintech','ai'],
+    stage: "investor",
     name: "Arjun Desai",
     headline: "Angel investor, ex-operator",
     company: "Independent",
@@ -74,6 +78,8 @@ const PEOPLE = [
   },
   {
     email: "priya@example.com",
+    interests: ['saas','ai'],
+    stage: "operator",
     name: "Priya Nair",
     headline: "Engineering lead, platform",
     company: "Northwind",
@@ -87,6 +93,8 @@ const PEOPLE = [
     // Priya needs hiring help; Rohan recruits. And Rohan wants career
     // advice, which Priya offers — a genuine two-way trade.
     email: "rohan@example.com",
+    interests: ['saas','consumer'],
+    stage: "operator",
     name: "Rohan Mehta",
     headline: "Technical recruiter",
     company: "Seedling Talent",
@@ -98,6 +106,8 @@ const PEOPLE = [
   },
   {
     email: "divya@example.com",
+    interests: ['consumer','design'],
+    stage: "exploring",
     name: "Divya Krishnan",
     headline: "Senior PM, marketplaces",
     company: "Looking",
@@ -109,6 +119,8 @@ const PEOPLE = [
   },
   {
     email: "sameer@example.com",
+    interests: ['consumer','media'],
+    stage: "operator",
     name: "Sameer Qureshi",
     headline: "Head of growth",
     company: "Brightline",
@@ -120,6 +132,8 @@ const PEOPLE = [
   },
   {
     email: "ananya@example.com",
+    interests: ['design','media'],
+    stage: "freelance",
     name: "Ananya Iyer",
     headline: "Design lead",
     company: "Studio Kaleido",
@@ -132,6 +146,8 @@ const PEOPLE = [
   {
     // Symmetric pair with Ananya — both want a co-founder.
     email: "vikram@example.com",
+    interests: ['saas','deeptech'],
+    stage: "exploring",
     name: "Vikram Shetty",
     headline: "Backend engineer, ex-Flipkart",
     company: "Between things",
@@ -144,6 +160,8 @@ const PEOPLE = [
   // City-only: discoverable, not locatable. These render as a circle.
   {
     email: "lakshmi@example.com",
+    interests: ['saas','health'],
+    stage: "exec",
     name: "Lakshmi Venkatesh",
     headline: "VP Product",
     company: "Corelane",
@@ -155,6 +173,8 @@ const PEOPLE = [
   },
   {
     email: "nikhil@example.com",
+    interests: ['climate','deeptech'],
+    stage: "founder",
     name: "Nikhil Rao",
     headline: "Founder, climate hardware",
     company: "Verdant",
@@ -166,6 +186,8 @@ const PEOPLE = [
   },
   {
     email: "fatima@example.com",
+    interests: ['fintech','saas'],
+    stage: "investor",
     name: "Fatima Sheikh",
     headline: "Partner, early stage fund",
     company: "Mallow Capital",
@@ -177,6 +199,8 @@ const PEOPLE = [
   },
   {
     email: "aditya@example.com",
+    interests: ['saas','ai'],
+    stage: "operator",
     name: "Aditya Varma",
     headline: "Sales lead, enterprise SaaS",
     company: "Pierpoint",
@@ -191,6 +215,8 @@ const PEOPLE = [
   // to prove it.
   {
     email: "zoya@example.com",
+    interests: ['ai','health'],
+    stage: "operator",
     name: "Zoya Kapoor",
     headline: "Data scientist",
     company: "Northwind",
@@ -202,6 +228,8 @@ const PEOPLE = [
   },
   {
     email: "karthik@example.com",
+    interests: ['ai','saas'],
+    stage: "founder",
     name: "Karthik Subramanian",
     headline: "Founder, devtools",
     company: "Parsely",
@@ -227,8 +255,8 @@ try {
       `insert into users
          (email, name, headline, company, working_on, looking_for, can_help_with,
           lat, lng, location_label, base_lat, base_lng, base_label, visibility,
-          linkedin_url, last_active_at)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15, now())
+          linkedin_url, interests, stage, last_active_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17, now())
        on conflict (email) do update set
          name = excluded.name,
          headline = excluded.headline,
@@ -244,6 +272,8 @@ try {
          base_label = excluded.base_label,
          visibility = excluded.visibility,
          linkedin_url = excluded.linkedin_url,
+         interests = excluded.interests,
+         stage = excluded.stage,
          last_active_at = now()
        returning id`,
       [
@@ -265,6 +295,8 @@ try {
         (city ?? CITIES.hyderabad).label,
         p.visibility,
         `https://linkedin.com/in/${p.email.split("@")[0]}`,
+        p.interests ?? [],
+        p.stage ?? null,
       ]
     );
     ids[p.email] = rows[0].id;

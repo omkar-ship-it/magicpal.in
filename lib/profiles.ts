@@ -30,6 +30,9 @@ export type MapProfile = {
   /** What the matcher scores on. */
   lookingFor: string[];
   canHelpWith: string[];
+  /** Symmetric affinity — shared sectors, for people whose needs don't interlock. */
+  interests: string[];
+  stage: string | null;
   workingOn: string | null;
 
   /**
@@ -64,6 +67,8 @@ const PROFILE_COLUMNS = {
   websiteUrl: users.websiteUrl,
   lookingFor: users.lookingFor,
   canHelpWith: users.canHelpWith,
+  interests: users.interests,
+  stage: users.stage,
   workingOn: users.workingOn,
   lat: users.lat,
   lng: users.lng,
@@ -128,6 +133,8 @@ type ProfileRow = {
   websiteUrl: string | null;
   lookingFor: string[] | null;
   canHelpWith: string[] | null;
+  interests: string[] | null;
+  stage: string | null;
   workingOn: string | null;
   lat: number | null;
   lng: number | null;
@@ -156,6 +163,8 @@ function toMapProfile(r: ProfileRow, centre?: { lat: number; lng: number }): Map
     websiteUrl: r.websiteUrl,
     lookingFor: r.lookingFor ?? [],
     canHelpWith: r.canHelpWith ?? [],
+    interests: r.interests ?? [],
+    stage: r.stage,
     workingOn: r.workingOn,
     lat: placed.lat,
     lng: placed.lng,
@@ -279,6 +288,8 @@ export async function getBoardMembers(
       websiteUrl: r.websiteUrl,
       lookingFor: r.lookingFor ?? [],
       canHelpWith: r.canHelpWith ?? [],
+      interests: r.interests ?? [],
+      stage: r.stage,
       workingOn: r.workingOn,
       lat: 0,
       lng: 0,

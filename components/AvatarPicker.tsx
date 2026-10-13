@@ -112,14 +112,24 @@ export default function AvatarPicker({
         </p>
       )}
 
-      <div className="mt-4 flex items-center justify-between">
-        <span className="label">Or pick a character</span>
-        <button onClick={() => setVariant((v) => (v + 1) % 8)} className="text-[11.5px] font-semibold" style={{ color: "var(--brand)" }}>
-          Shuffle
-        </button>
-      </div>
+      {/* Collapsed by default. Eight character tiles are a pleasant thing to
+          browse once and a wall between the reader and the fields that
+          actually drive matching every time after that. */}
+      <details className="mt-3">
+        <summary className="label cursor-pointer select-none">Or pick a character</summary>
 
-      <div className="mt-2 grid grid-cols-4 gap-2">
+        <div className="mt-2 flex items-center justify-end">
+          <button
+            type="button"
+            onClick={() => setVariant((v) => (v + 1) % 8)}
+            className="text-[11.5px] font-semibold"
+            style={{ color: "var(--brand)" }}
+          >
+            Shuffle
+          </button>
+        </div>
+
+        <div className="mt-2 grid grid-cols-4 gap-2">
         {AVATAR_STYLES.map((st) => {
           const on = !photoUrl && style === st.id;
           return (
@@ -145,7 +155,8 @@ export default function AvatarPicker({
             </button>
           );
         })}
-      </div>
+        </div>
+      </details>
     </div>
   );
 }

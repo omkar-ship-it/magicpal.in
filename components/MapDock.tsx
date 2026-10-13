@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import Avatar from "./Avatar";
 import { IconCalendar, IconChat, IconFeed, IconPeople, IconSparkle, IconUser } from "./Icons";
 
@@ -32,6 +31,7 @@ export default function MapDock({
   signedIn,
   me,
   onSelect,
+  onProfile,
 }: {
   active: DockTab;
   /** Shown inline in the label. Absent or zero renders nothing. */
@@ -39,6 +39,8 @@ export default function MapDock({
   signedIn: boolean;
   me: { name: string; photoUrl: string | null } | null;
   onSelect: (tab: Exclude<DockTab, null>) => void;
+  /** Opens the profile overlay — or sign-in, when there's nobody yet. */
+  onProfile: () => void;
 }) {
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-2 pb-[max(10px,env(safe-area-inset-bottom))]">
@@ -67,8 +69,10 @@ export default function MapDock({
         ))}
 
         {signedIn && me ? (
-          <Link
-            href="/you"
+          <button
+            type="button"
+            onClick={onProfile}
+            aria-label="Your profile"
             className="ml-0.5 flex w-[54px] sm:w-[66px] flex-none flex-col items-center justify-center gap-1 rounded-2xl py-2 tap"
             style={{ background: "color-mix(in srgb, var(--chrome-ink) 10%, transparent)" }}
           >
@@ -76,19 +80,19 @@ export default function MapDock({
             <span className="text-[9.5px] sm:text-[10.5px] font-semibold" style={{ color: "var(--chrome-ink)" }}>
               You
             </span>
-          </Link>
+          </button>
         ) : (
           // Quiet, not filled: the panel above already carries the one
           // primary Sign in, and two filled buttons a thumb apart read as a
           // mistake rather than emphasis.
-          <Link href="/login" className={SLOT}>
+          <button type="button" onClick={onProfile} aria-label="Sign in" className={SLOT}>
             <span style={{ color: "var(--chrome-soft)" }}>
               <IconUser size={17} />
             </span>
             <span className="text-[9.5px] sm:text-[10.5px] font-semibold" style={{ color: "var(--chrome-ink)" }}>
               Sign in
             </span>
-          </Link>
+          </button>
         )}
       </div>
     </div>
