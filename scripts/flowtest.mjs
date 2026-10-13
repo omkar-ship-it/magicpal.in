@@ -740,6 +740,26 @@ async function main() {
     const openScope = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}&radiusKm=25`, { jar: a.jar });
     assert(openScope.data.scope.home === null, "the open network has no home — it isn't a group");
 
+    console.log("\nA venue can be a search or a set of coordinates");
+    const named = await api(`/api/geocode?q=${encodeURIComponent("Hyderabad")}`);
+    assert(named.status === 200 && named.data.results.length > 0, "forward lookup still works");
+
+    const reversed = await api(`/api/geocode?lat=${HERE.lat}&lng=${HERE.lng}`);
+    assert(reversed.status === 200, "a reverse lookup answers");
+    assert(reversed.data.results.length === 1, "…with exactly one place");
+    assert(typeof reversed.data.results[0].label === "string" && reversed.data.results[0].label.length > 0,
+      "…carrying a readable name, so nobody has to verify raw coordinates");
+    // The caller's own point, not the geocoder's nearest match: somebody who
+    // said "here" meant here, not the building across the road.
+    assert(
+      reversed.data.results[0].lat === HERE.lat && reversed.data.results[0].lng === HERE.lng,
+      "…and the exact coordinates that were asked about"
+    );
+
+    const nonsense = await api(`/api/geocode?lat=999&lng=999`);
+    assert(nonsense.status === 200, "out-of-range coordinates don't error");
+    assert(Array.isArray(nonsense.data.results), "…they just come back empty or best-effort");
+
     console.log("\nEvery entry point terminates");
     for (const [label, path] of [
       ["a QR scan while signed out", `/join/${slug}`],

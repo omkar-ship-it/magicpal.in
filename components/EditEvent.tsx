@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import type { EventRef } from "@/lib/shell";
-import PlaceSearch, { type Place } from "./PlaceSearch";
+import { type Place } from "./PlaceSearch";
+import VenuePicker from "./VenuePicker";
 import { resolveTypedPlace } from "@/lib/resolvePlace";
 import { IconPin } from "./Icons";
 
@@ -147,10 +148,9 @@ export default function EditEvent({
         <label className="label" htmlFor="ed-venue">
           Venue
         </label>
-        <PlaceSearch
+        <VenuePicker
           id="ed-venue"
           value={place?.label ?? event.place ?? null}
-          placeholder="T-Hub, Hyderabad"
           onPick={(pl) => {
             setPlace(pl);
             setTypedVenue("");

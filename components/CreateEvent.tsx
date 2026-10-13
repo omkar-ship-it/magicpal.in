@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import PlaceSearch, { type Place } from "./PlaceSearch";
+import { type Place } from "./PlaceSearch";
+import VenuePicker from "./VenuePicker";
 import { resolveTypedPlace } from "@/lib/resolvePlace";
 import { IconCalendar, IconPeople } from "./Icons";
 
@@ -165,10 +166,9 @@ export default function CreateEvent({
         <label className="label" htmlFor="ev-venue">
           Venue
         </label>
-        <PlaceSearch
+        <VenuePicker
           id="ev-venue"
           value={place?.label ?? null}
-          placeholder="T-Hub, Hyderabad"
           onPick={(pl) => {
             setPlace(pl);
             setTypedVenue("");
@@ -176,7 +176,8 @@ export default function CreateEvent({
           onTyped={setTypedVenue}
         />
         <p className="mt-1.5 text-[12px] leading-[1.45] text-[var(--ink-soft)]">
-          Puts the event on the map so people can find the room.
+          Puts the event on the map so people can find the room. For something starting now, &ldquo;I&rsquo;m here
+          now&rsquo; pins where you&rsquo;re sitting.
         </p>
       </div>
 
