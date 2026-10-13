@@ -420,6 +420,52 @@ export const matches = pgTable(
   ]
 );
 
+// ----------------------------------------------------------------- posts
+
+/**
+ * What somebody actually wrote on a community's feed.
+ *
+ * The feed was derived-only until now: every line read a timestamp that
+ * existed for another reason, so it could never show activity that hadn't
+ * happened. That was the right guard against *invented* motion, and it also
+ * quietly ruled out the most ordinary thing a group does — saying something
+ * to itself. Posts are real activity, written by a real member, and they
+ * merge into the same feed as the derived lines.
+ *
+ * Any member may post. `deletedAt` is a soft delete so an author can take
+ * something back and a host can remove it, without the row vanishing from
+ * under a reply or a report.
+ */
+export const posts = pgTable(
+  "posts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    boardId: uuid("board_id")
+      .notNull()
+      .references(() => boards.id, { onDelete: "cascade" }),
+    authorId: uuid("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    /** One optional link. */
+    url: text("url"),
+    /**
+     * An event this post is about, so "registrations open" can carry the
+     * thing it's announcing and be RSVP'd from the post itself. Set null
+     * rather than cascade: deleting an event shouldn't erase the
+     * announcement that it happened.
+     */
+    eventBoardId: uuid("event_board_id").references((): AnyPgColumn => boards.id, {
+      onDelete: "set null",
+    }),
+    /** Blob URLs. Photos from the last meetup are what bring people back. */
+    images: text("images").array().notNull().default(sql`'{}'::text[]`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => [index("posts_board_idx").on(t.boardId, t.createdAt)]
+);
+
 // -------------------------------------------------------------- consents
 
 /**

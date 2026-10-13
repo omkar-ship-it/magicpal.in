@@ -1,6 +1,7 @@
 import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import { db, hasDb } from "./db";
 import { boards, consents, memberships, users } from "./db/schema";
+import { postsFor } from "./posts";
 
 /**
  * What has actually happened lately, derived rather than recorded.
@@ -20,8 +21,17 @@ import { boards, consents, memberships, users } from "./db/schema";
 
 export type FeedItem = {
   id: string;
-  kind: "joined" | "board-created" | "on-the-map";
+  kind: "joined" | "board-created" | "on-the-map" | "post";
   at: string;
+  /** Posts only — what somebody actually wrote. */
+  post?: {
+    id: string;
+    body: string;
+    url: string | null;
+    images: string[];
+    event: { slug: string; name: string } | null;
+    canDelete: boolean;
+  };
   /** Who it happened to. Null when the person has since been deleted. */
   person: { id: string; name: string; headline: string | null; photoUrl: string | null } | null;
   /** The board it happened on, for scoped feeds and for context. */
@@ -46,6 +56,31 @@ export async function feedFor(opts: {
   const limit = opts.limit ?? 30;
   const since = new Date(Date.now() - LOOKBACK_DAYS * 86_400_000);
   const items: FeedItem[] = [];
+
+  // ------------------------------------------------------------- posts
+  // What members actually wrote, merged with the derived lines rather than
+  // kept on a separate surface: a group's feed is one thing to its members,
+  // whatever each line happens to be read from.
+  if (opts.boardId) {
+    for (const p of await postsFor(opts.boardId, opts.viewerId)) {
+      items.push({
+        id: `post-${p.id}`,
+        kind: "post",
+        at: p.at,
+        person: p.author,
+        board: null,
+        line: "posted",
+        post: {
+          id: p.id,
+          body: p.body,
+          url: p.url,
+          images: p.images,
+          event: p.event,
+          canDelete: p.canDelete,
+        },
+      });
+    }
+  }
 
   // ---------------------------------------------------------- arrivals
   const joinRows = await db
@@ -167,7 +202,9 @@ export async function feedFor(opts: {
   }
 
   return items
-    .filter((i) => i.person?.id !== opts.viewerId)
+    // Your own arrival isn't news to you, but your own post is — it's the
+    // confirmation that it went through.
+    .filter((i) => i.kind === "post" || i.person?.id !== opts.viewerId)
     .sort((a, b) => b.at.localeCompare(a.at))
     .slice(0, limit);
 }

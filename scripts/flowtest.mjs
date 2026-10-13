@@ -584,6 +584,65 @@ async function main() {
       "…and recorded them as going"
     );
 
+    console.log("\nPosting to a community's feed");
+    const stranger = await api("/api/posts", {
+      method: "POST", jar: c.jar, body: { boardSlug: comm.data.slug, body: "let me in" },
+    });
+    assert(stranger.status === 403, "a non-member can't post to a community");
+    const anonPost = await api("/api/posts", { method: "POST", body: { boardSlug: comm.data.slug, body: "hi" } });
+    assert(anonPost.status === 401, "a signed-out visitor can't post");
+    const emptyPost = await api("/api/posts", {
+      method: "POST", jar: a.jar, body: { boardSlug: comm.data.slug, body: "   " },
+    });
+    assert(emptyPost.status === 400, "an empty post is refused");
+
+    const posted = await api("/api/posts", {
+      method: "POST", jar: a.jar,
+      body: { boardSlug: comm.data.slug, body: "Dinner photos are up", url: "rgukt.ac.in/alumni" },
+    });
+    assert(posted.status === 200, "a member can post");
+
+    const feedAfter = await api(`/api/feed?net=${comm.data.slug}`, { jar: a.jar });
+    const mine2 = feedAfter.data.items.find((i) => i.kind === "post");
+    assert(Boolean(mine2), "the post appears in that community's feed");
+    assert(mine2.post.url === "https://rgukt.ac.in/alumni", "a bare link is given a scheme");
+    assert(mine2.post.canDelete === true, "the author may remove their own");
+
+    // A post is private to its community, like everything else on a board.
+    const openFeed2 = await api("/api/feed", { jar: a.jar });
+    assert(
+      !openFeed2.data.items.some((i) => i.kind === "post"),
+      "community posts never leak onto the open network's feed"
+    );
+
+    // An event from somewhere else can't be advertised into this community.
+    const wrongEvent = await api("/api/posts", {
+      method: "POST", jar: a.jar,
+      body: { boardSlug: comm.data.slug, body: "come along", eventSlug: slug },
+    });
+    assert(wrongEvent.status === 400, "an event from another community can't be attached");
+
+    console.log("\nRemoving a post");
+    const notYours = await api(`/api/posts/${mine2.post.id}`, { method: "DELETE", jar: c.jar });
+    assert(notYours.status === 403, "a stranger can't remove somebody else's post");
+
+    // Bob joins and posts; Alice hosts the community, so she can remove it.
+    await api(`/api/boards/${comm.data.slug}/join`, { method: "POST", jar: b.jar });
+    const bobPost = await api("/api/posts", {
+      method: "POST", jar: b.jar, body: { boardSlug: comm.data.slug, body: "see you there" },
+    });
+    assert(bobPost.status === 200, "a newly joined member can post");
+    const hostRemoved = await api(`/api/posts/${bobPost.data.id}`, { method: "DELETE", jar: a.jar });
+    assert(hostRemoved.status === 200, "the community's host can remove any post on it");
+
+    const ownRemoved = await api(`/api/posts/${mine2.post.id}`, { method: "DELETE", jar: a.jar });
+    assert(ownRemoved.status === 200, "an author can remove their own");
+    const feedFinal = await api(`/api/feed?net=${comm.data.slug}`, { jar: a.jar });
+    assert(
+      !feedFinal.data.items.some((i) => i.kind === "post"),
+      "removed posts leave the feed"
+    );
+
     console.log("\nEvery entry point terminates");
     for (const [label, path] of [
       ["a QR scan while signed out", `/join/${slug}`],

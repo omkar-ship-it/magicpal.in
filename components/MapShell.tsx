@@ -281,6 +281,10 @@ export default function MapShell({
             loading={feedLoading}
             signedIn={signedIn}
             scopeName={data.scope.name}
+            scopeSlug={data.scope.slug}
+            events={data.events}
+            canPost={signedIn && onboarded}
+            onChanged={() => void loadFeed(data.scope.slug)}
             onOpenPerson={(id) => {
               if (byId.has(id)) {
                 setSelected(id);
@@ -420,7 +424,12 @@ export default function MapShell({
             // Straight into the profile when there's nothing to match on
             // yet — the whole point of signing in.
             if (!wasOnboarded) openWin("profile");
-            void load(pendingJoin ? { net: pendingJoin } : {});
+            // Re-resolve the network from the URL. The first render happened
+            // without a session, so `?net=` fell back to the open map —
+            // membership couldn't be checked for somebody who wasn't signed
+            // in yet. Signing in is exactly when that becomes answerable.
+            const fromUrl = new URLSearchParams(window.location.search).get("net");
+            void load({ net: pendingJoin ?? fromUrl ?? null });
           }}
         />
       </FloatWindow>
