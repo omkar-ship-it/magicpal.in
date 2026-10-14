@@ -2,7 +2,14 @@
 
 import { useState } from "react";
 import type { PinRef } from "@/lib/pins";
-import { MAX_PIN_MESSAGE, PIN_DURATIONS } from "@/lib/rules";
+import {
+  DEFAULT_PIN_REACH_KM,
+  MAX_PIN_MESSAGE,
+  PIN_DURATIONS,
+  PIN_REACHES,
+  pinReachLabel,
+  reachNeedsPrecise,
+} from "@/lib/rules";
 import { TOPICS, topicById } from "@/lib/intents";
 import Avatar from "./Avatar";
 import PanelNote from "./PanelNote";
@@ -61,10 +68,18 @@ export default function PinsPanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto">
-      {sorted.length === 0 ? (
-        <PanelNote title="Nobody's dropped a pin nearby">
-          A pin says &ldquo;I&rsquo;m at this café for the next two hours, come say hello&rdquo;. It needs no
-          community and no planning, and it disappears on its own.
+      {!signedIn ? (
+        // Nothing is being withheld as a tease: reach is measured from where
+        // the reader is, and a signed-out visitor has no position to measure
+        // from. Somebody's live whereabouts isn't browsable anonymously.
+        <PanelNote title="Sign in to see who's around">
+          A pin says &ldquo;I&rsquo;m at this café for the next two hours, come say hello&rdquo;. Because pins are
+          live locations, they only show to people signed in and genuinely nearby.
+        </PanelNote>
+      ) : sorted.length === 0 ? (
+        <PanelNote title="Nobody's dropped a pin near you">
+          Each pin only carries as far as the person dropping it chose — so this list follows where you actually are,
+          not where the map is pointed.
         </PanelNote>
       ) : (
         <ul className="stagger flex flex-col gap-2">
@@ -98,11 +113,9 @@ export default function PinsPanel({
         </PanelNote>
       )}
       {!signedIn && (
-        <PanelNote title="Sign in to drop a pin">
-          <button type="button" className="btn btn-primary btn-sm mt-3" onClick={onSignIn}>
-            Sign in
-          </button>
-        </PanelNote>
+        <button type="button" className="btn btn-primary btn-sm w-full" onClick={onSignIn}>
+          Sign in
+        </button>
       )}
     </div>
   );
@@ -183,6 +196,7 @@ function PinCard({
               <IconClock size={10} />
               {pin.minutesLeft > 60 ? `${Math.round(pin.minutesLeft / 60)}h left` : `${pin.minutesLeft}m left`}
             </span>
+            {pin.mine && <span>· reaches {pinReachLabel(pin.reachKm)}</span>}
             {pin.audience === "communities" && <span>· your communities only</span>}
           </p>
           {topic && (
@@ -240,6 +254,7 @@ function DropPin({ onCancel, onDropped }: { onCancel: () => void; onDropped: () 
   const [typed, setTyped] = useState("");
   const [minutes, setMinutes] = useState<number>(180);
   const [audience, setAudience] = useState<"open" | "communities">("open");
+  const [reachKm, setReachKm] = useState<number>(DEFAULT_PIN_REACH_KM);
   const [topic, setTopic] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -277,6 +292,7 @@ function DropPin({ onCancel, onDropped }: { onCancel: () => void; onDropped: () 
           placeLabel: pin.label,
           minutes,
           audience,
+          reachKm,
           topic: topic || undefined,
         }),
       });
@@ -354,6 +370,32 @@ function DropPin({ onCancel, onDropped }: { onCancel: () => void; onDropped: () 
             </button>
           ))}
         </div>
+      </div>
+
+      <div>
+        <p className="label">How far it carries</p>
+        <div className="flex flex-wrap gap-1.5">
+          {PIN_REACHES.map((r) => (
+            <button
+              key={r.km}
+              type="button"
+              className="chip-toggle tap"
+              data-on={reachKm === r.km ? "true" : "false"}
+              aria-pressed={reachKm === r.km}
+              onClick={() => setReachKm(r.km)}
+            >
+              {reachKm === r.km && <IconCheck size={11} />}
+              {r.label}
+            </button>
+          ))}
+        </div>
+        {/* The trade-off stated at the moment of choosing, because a tight
+            pin that reaches nobody looks broken rather than contained. */}
+        <p className="mt-1.5 text-[12px] leading-[1.45] text-[var(--ink-soft)]">
+          {reachNeedsPrecise(reachKm)
+            ? "Only reaches people sharing their live location — far fewer people, but the ones who could actually walk over."
+            : `Only people within ${pinReachLabel(reachKm)} of you will see this pin at all.`}
+        </p>
       </div>
 
       <div>

@@ -77,6 +77,48 @@ export const PIN_DURATIONS = [
 
 export const MAX_PIN_MESSAGE = 200;
 
+/**
+ * How far a pin carries — chosen by whoever drops it, not by whoever reads.
+ *
+ * `PROXIMITY_STEPS` above is a *viewer's* filter: "don't show me things far
+ * away." This is the opposite direction and the stronger claim: "don't show
+ * me to people far away." A desk on the 3rd floor and a café open to the
+ * neighbourhood are different invitations, and only the person sitting there
+ * knows which one they're making.
+ *
+ * `needsPrecise` is the honest consequence of a tight reach. A city centroid
+ * cannot answer "is this person in my building", so a 150 m pin can only
+ * ever reach people whose own position is precise — which is far fewer
+ * people. Said out loud at the moment of choosing in `PinsPanel`, because
+ * otherwise a tight pin looks broken rather than contained.
+ */
+export const PIN_REACHES = [
+  { km: 0.15, label: "This building", needsPrecise: true },
+  { km: 0.5, label: "500 m", needsPrecise: true },
+  { km: 1, label: "1 km" },
+  { km: 3, label: "3 km" },
+  { km: 5, label: "5 km" },
+  { km: 10, label: "10 km" },
+] as const;
+
+/** Walking distance. The whole premise is that somebody can come over now. */
+export const DEFAULT_PIN_REACH_KM = 1;
+
+/** Nothing carries further, so nothing beyond this is worth even loading. */
+export const MAX_PIN_REACH_KM = Math.max(...PIN_REACHES.map((r) => r.km));
+
+/** Widened on purpose: this is for validating arbitrary request input. */
+export const PIN_REACH_OPTIONS_KM: readonly number[] = PIN_REACHES.map((r) => r.km);
+
+export function pinReachLabel(km: number): string {
+  return PIN_REACHES.find((r) => r.km === km)?.label ?? `${km} km`;
+}
+
+/** Whether a reach is tight enough to demand a precise position to match. */
+export function reachNeedsPrecise(km: number): boolean {
+  return PIN_REACHES.some((r) => r.km === km && "needsPrecise" in r && r.needsPrecise);
+}
+
 /** How many recommendations a surface shows at once. */
 export const MATCHES_SHOWN = 3;
 

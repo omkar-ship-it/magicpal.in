@@ -528,6 +528,16 @@ export const pins = pgTable(
      */
     audience: text("audience").notNull().default("open"),
 
+    /**
+     * How far this carries, in kilometres — see PIN_REACHES in lib/rules.
+     *
+     * Audience answers *who* (strangers, or only people from my communities);
+     * this answers *how near*. Both apply, and the narrower one wins. Stored
+     * per pin rather than inferred from the message, because "on the 3rd
+     * floor" and "around Banjara Hills" are the same sentence to a database.
+     */
+    reachKm: doublePrecision("reach_km").notNull().default(1),
+
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     /** Set when somebody takes it down early. */
     endedAt: timestamp("ended_at", { withTimezone: true }),
@@ -535,6 +545,9 @@ export const pins = pgTable(
   },
   (t) => [
     check("pins_audience", sql`${t.audience} in ('open','communities')`),
+    // Kept to the published ladder so a reach is always a value the UI can
+    // name back. An arbitrary 7.3 km would render as a number nobody chose.
+    check("pins_reach", sql`${t.reachKm} in (0.15, 0.5, 1, 3, 5, 10)`),
     index("pins_live_idx").on(t.expiresAt),
     index("pins_user_idx").on(t.userId),
   ]

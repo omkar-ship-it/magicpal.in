@@ -5,7 +5,7 @@ import { attachConnectionStatus } from "./connections";
 import { waitingCount } from "./messages";
 import { listAcceptedConnections } from "./connections";
 import { livePinsFor, myLivePin, type PinRef } from "./pins";
-import { DEFAULT_RADIUS_KM, MATCHES_SHOWN } from "./rules";
+import { DEFAULT_RADIUS_KM, MATCHES_SHOWN, MAX_PIN_REACH_KM } from "./rules";
 
 /**
  * One scoped payload for the whole app shell.
@@ -279,11 +279,16 @@ export async function shellPayload(opts: {
     you,
     hasSignals,
     connections,
+    // Deliberately not narrowed by the people-radius. Each pin already
+    // carries its own reach, enforced in livePinsFor against where you
+    // actually are, and that is the limit that matters — someone browsing
+    // "this room" for people still wants to hear about a café two streets
+    // away. The floor keeps the viewer's filter from double-counting.
     pins: await livePinsFor({
       viewerId: opts.userId,
       centerLat: centre.lat,
       centerLng: centre.lng,
-      radiusKm: Math.max(radiusKm, 25),
+      radiusKm: Math.max(radiusKm, MAX_PIN_REACH_KM),
     }),
     myPinId: mine_pin?.id ?? null,
   };

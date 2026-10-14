@@ -1,11 +1,13 @@
-import { and, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, isNull, lte, or, sql } from "drizzle-orm";
 import { db, hasDb } from "./db";
 import { memberships, pinJoins, pins, users } from "./db/schema";
 import { distanceKm } from "./geo";
 
+import { LIVE_STALE_MINUTES, MAX_PIN_REACH_KM, reachNeedsPrecise } from "./rules";
+
 // Re-exported for server callers; the constants themselves live in rules.ts
 // so client components can import them without pulling in the database.
-export { PIN_DURATIONS, MAX_PIN_MESSAGE } from "./rules";
+export { PIN_DURATIONS, MAX_PIN_MESSAGE, PIN_REACHES, DEFAULT_PIN_REACH_KM } from "./rules";
 
 /**
  * Ad-hoc pins: somebody is somewhere now and would rather not be alone.
@@ -24,6 +26,8 @@ export type PinRef = {
   message: string;
   topic: string | null;
   audience: string;
+  /** How far the dropper let this carry — see PIN_REACHES. */
+  reachKm: number;
   expiresAt: string;
   minutesLeft: number;
   person: { id: string; name: string; headline: string | null; photoUrl: string | null };
@@ -36,6 +40,57 @@ export type PinRef = {
 
 /** The live condition, in one place so nothing can define it differently. */
 const liveNow = () => and(gt(pins.expiresAt, new Date()), isNull(pins.endedAt));
+
+/**
+ * Where the *viewer* actually is, and how well we know it.
+ *
+ * Looked up here from the session id rather than accepted as an argument,
+ * and deliberately so: a pin's reach is only meaningful if it's measured
+ * from where the reader is standing. The map centre is a camera — it pans,
+ * and the client chooses it — so enforcing reach against it would let
+ * anyone see a 150 m pin by scrolling to the café. There is no parameter a
+ * caller can pass to influence this.
+ *
+ * `precise` separates a coordinate that can answer "which building" from
+ * one that can only answer "which city". A live position gone stale decays
+ * to the city centroid, same rule as `place()` in lib/profiles — somebody
+ * who closed the tab this morning is not in the room now.
+ */
+async function viewerPosition(
+  viewerId: string
+): Promise<{ lat: number; lng: number; precise: boolean } | null> {
+  if (!hasDb || !db) return null;
+  const [me] = await db
+    .select({
+      lat: users.lat,
+      lng: users.lng,
+      baseLat: users.baseLat,
+      baseLng: users.baseLng,
+      visibility: users.visibility,
+      liveAt: users.liveAt,
+    })
+    .from(users)
+    .where(eq(users.id, viewerId))
+    .limit(1);
+  if (!me) return null;
+
+  const liveFresh =
+    me.visibility === "live" &&
+    me.liveAt != null &&
+    Date.now() - new Date(me.liveAt).getTime() < LIVE_STALE_MINUTES * 60_000;
+
+  // 'off' lands here too, on purpose. Turning yourself off hides you from
+  // other people; it doesn't promise that a position you pinned at some
+  // point is still where you are, so it buys the coarse treatment.
+  if ((liveFresh || me.visibility === "exact") && me.lat != null && me.lng != null) {
+    return { lat: me.lat, lng: me.lng, precise: true };
+  }
+  if (me.baseLat != null && me.baseLng != null) {
+    return { lat: me.baseLat, lng: me.baseLng, precise: false };
+  }
+  if (me.lat != null && me.lng != null) return { lat: me.lat, lng: me.lng, precise: false };
+  return null;
+}
 
 /**
  * Pins this viewer may see.
@@ -52,6 +107,30 @@ export async function livePinsFor(opts: {
   radiusKm?: number;
 }): Promise<PinRef[]> {
   if (!hasDb || !db) return [];
+
+  // A pin is somebody's real-time physical location — the most sensitive
+  // thing this product holds. Reach is measured from the reader's own
+  // position, so a visitor with no position has nothing to be near and sees
+  // nothing. That also means these never leak to an anonymous scraper.
+  if (!opts.viewerId) return [];
+  const here = await viewerPosition(opts.viewerId);
+
+  // Nothing carries past the widest reach, so nothing further is worth
+  // loading. A box, not a circle — it's a prefilter, and the exact distance
+  // test below is what actually decides. Your own pin comes back regardless
+  // of where you've wandered since dropping it.
+  const box = here ? boxAround(here, MAX_PIN_REACH_KM) : null;
+  const inRange = box
+    ? or(
+        eq(pins.userId, opts.viewerId),
+        and(
+          gte(pins.lat, box.minLat),
+          lte(pins.lat, box.maxLat),
+          gte(pins.lng, box.minLng),
+          lte(pins.lng, box.maxLng)
+        )
+      )
+    : eq(pins.userId, opts.viewerId);
 
   const audienceOk = opts.viewerId
     ? or(
@@ -74,6 +153,7 @@ export async function livePinsFor(opts: {
       message: pins.message,
       topic: pins.topic,
       audience: pins.audience,
+      reachKm: pins.reachKm,
       expiresAt: pins.expiresAt,
       userId: users.id,
       name: users.name,
@@ -82,7 +162,7 @@ export async function livePinsFor(opts: {
     })
     .from(pins)
     .innerJoin(users, eq(users.id, pins.userId))
-    .where(and(liveNow(), audienceOk))
+    .where(and(liveNow(), audienceOk, inRange))
     .orderBy(desc(pins.createdAt))
     .limit(80);
 
@@ -114,6 +194,7 @@ export async function livePinsFor(opts: {
         message: r.message,
         topic: r.topic,
         audience: r.audience,
+        reachKm: r.reachKm,
         expiresAt: r.expiresAt.toISOString(),
         minutesLeft: Math.max(0, Math.round((r.expiresAt.getTime() - Date.now()) / 60_000)),
         person: { id: r.userId, name: r.name!, headline: r.headline, photoUrl: r.photoUrl },
@@ -123,7 +204,44 @@ export async function livePinsFor(opts: {
         distanceKm: centre ? distanceKm(centre.lat, centre.lng, r.lat, r.lng) : null,
       };
     })
+    // Two independent limits, and the narrower always wins. The dropper's
+    // reach is measured from where you are; your own radius filter is
+    // measured from where you're looking.
+    .filter((p) => p.mine || reaches(p, here))
     .filter((p) => opts.radiusKm == null || p.distanceKm == null || p.distanceKm <= opts.radiusKm);
+}
+
+/**
+ * Does this pin carry as far as the viewer?
+ *
+ * Fails closed in both directions: no position at all means nothing
+ * reaches you, and a reach tight enough to mean "this building" is refused
+ * to a city-centroid reader rather than guessed at. Showing a 150 m pin to
+ * somebody who merely shares the city would break the one promise the
+ * dropper made when they chose it.
+ */
+function reaches(
+  pin: { lat: number; lng: number; reachKm: number },
+  here: { lat: number; lng: number; precise: boolean } | null
+): boolean {
+  if (!here) return false;
+  if (reachNeedsPrecise(pin.reachKm) && !here.precise) return false;
+  return distanceKm(here.lat, here.lng, pin.lat, pin.lng) <= pin.reachKm;
+}
+
+/** A degree of latitude is ~111 km everywhere; longitude shrinks with it. */
+function boxAround(c: { lat: number; lng: number }, km: number) {
+  const dLat = km / 110.574;
+  // Guard the pole case, where a kilometre of longitude stops being a
+  // meaningful number of degrees at all.
+  const shrink = Math.max(Math.cos((c.lat * Math.PI) / 180), 0.01);
+  const dLng = km / (111.32 * shrink);
+  return {
+    minLat: c.lat - dLat,
+    maxLat: c.lat + dLat,
+    minLng: c.lng - dLng,
+    maxLng: c.lng + dLng,
+  };
 }
 
 /**
@@ -141,6 +259,7 @@ export async function dropPin(input: {
   message: string;
   topic?: string | null;
   audience: string;
+  reachKm: number;
   minutes: number;
 }): Promise<string | null> {
   if (!hasDb || !db) return null;
@@ -160,6 +279,7 @@ export async function dropPin(input: {
       message: input.message,
       topic: input.topic ?? null,
       audience: input.audience,
+      reachKm: input.reachKm,
       expiresAt: new Date(Date.now() + input.minutes * 60_000),
     })
     .returning();

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";
 import { dropPin, livePinsFor } from "@/lib/pins";
-import { MAX_PIN_MESSAGE, PIN_DURATIONS } from "@/lib/rules";
+import { DEFAULT_PIN_REACH_KM, MAX_PIN_MESSAGE, PIN_DURATIONS, PIN_REACH_OPTIONS_KM } from "@/lib/rules";
 import { TOPIC_BY_ID } from "@/lib/intents";
 
 /** Live pins this viewer may see. Open to signed-out visitors, like the map. */
@@ -40,6 +40,11 @@ export async function POST(req: Request) {
   const lng = Number(body?.lng);
   const minutes = PIN_DURATIONS.find((d) => d.minutes === Number(body?.minutes))?.minutes ?? 180;
   const audience = body?.audience === "communities" ? "communities" : "open";
+  // Only a value off the published ladder, so a reach is always something
+  // the UI can name back and the CHECK constraint will accept.
+  const reachKm = PIN_REACH_OPTIONS_KM.includes(Number(body?.reachKm))
+    ? Number(body.reachKm)
+    : DEFAULT_PIN_REACH_KM;
   const topic = TOPIC_BY_ID.has(body?.topic) ? (body.topic as string) : null;
 
   if (!message) return NextResponse.json({ error: "Say what you're up for." }, { status: 400 });
@@ -55,6 +60,7 @@ export async function POST(req: Request) {
     message,
     topic,
     audience,
+    reachKm,
     minutes,
   });
   if (!id) return NextResponse.json({ error: "Couldn't drop that." }, { status: 500 });

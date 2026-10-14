@@ -760,35 +760,106 @@ async function main() {
     assert(nonsense.status === 200, "out-of-range coordinates don't error");
     assert(Array.isArray(nonsense.data.results), "…they just come back empty or best-effort");
 
-    console.log("\nAd-hoc pins expire, and respect their audience");
+    console.log("\nAd-hoc pins: who may drop one");
+    // Every assertion below turns on a distance, so positions are set here
+    // rather than inherited from whatever the visibility tests left behind.
+    const placeA = (pos, visibility = "exact") =>
+      api("/api/profile", { method: "POST", jar: a.jar, body: {
+        name: "Flow Alice", headline: "Founder, test co",
+        lookingFor: ["funding"], canHelpWith: ["product"],
+        lat: pos.lat, lng: pos.lng, locationLabel: "Alice's spot",
+        baseLat: pos.lat, baseLng: pos.lng, baseLabel: CITY.label, visibility } });
+    const placeB = (pos, visibility = "exact") =>
+      api("/api/profile", { method: "POST", jar: b.jar, body: {
+        name: "Flow Bob", headline: "Angel investor",
+        lookingFor: ["product"], canHelpWith: ["funding"],
+        lat: pos.lat, lng: pos.lng, locationLabel: "Bob's spot",
+        baseLat: pos.lat, baseLng: pos.lng, baseLabel: CITY.label, visibility } });
+    // Carol sits exactly where Alice does, but only ever at city resolution —
+    // she is the control for "near, but not precisely known to be near".
+    const placeC = (visibility) =>
+      api("/api/profile", { method: "POST", jar: c.jar, body: {
+        name: "Flow Carol", headline: "Curious stranger",
+        lookingFor: ["peers"], canHelpWith: ["peers"],
+        lat: HERE.lat, lng: HERE.lng, locationLabel: HERE.label,
+        baseLat: HERE.lat, baseLng: HERE.lng, baseLabel: CITY.label, visibility } });
+
+    // Metres, converted to degrees — a degree of latitude is ~111.2 km.
+    const north = (m) => ({ lat: HERE.lat + m / 111_200, lng: HERE.lng });
+    const NEAR = { lat: HERE.lat + 0.004, lng: HERE.lng + 0.004 }; // ~590 m
+
+    const drop = (body, jar = a.jar) =>
+      api("/api/pins", { method: "POST", jar, body: { lat: HERE.lat, lng: HERE.lng, placeLabel: "Roastery", ...body } });
+    const pinsSeenBy = async (jar, at = HERE) =>
+      (await api(`/api/pins?lat=${at.lat}&lng=${at.lng}`, jar ? { jar } : {})).data.pins;
+
+    await placeA(HERE);
+    await placeB(NEAR);
+    await placeC("base");
+
     const anonPin = await api("/api/pins", { method: "POST", body: { message: "hi", lat: HERE.lat, lng: HERE.lng } });
     assert(anonPin.status === 401, "a signed-out visitor can't drop a pin");
-    const noMsg = await api("/api/pins", { method: "POST", jar: a.jar, body: { message: " ", lat: HERE.lat, lng: HERE.lng } });
+    const noMsg = await drop({ message: " " });
     assert(noMsg.status === 400, "a pin with nothing to say is refused");
     const noWhere = await api("/api/pins", { method: "POST", jar: a.jar, body: { message: "in a cafe" } });
     assert(noWhere.status === 400, "a pin with no location is refused — that's the whole point of one");
 
-    const dropped = await api("/api/pins", {
-      method: "POST", jar: a.jar,
-      body: { message: "At the Roastery, happy to talk fundraising", lat: HERE.lat, lng: HERE.lng, placeLabel: "Roastery", minutes: 60, audience: "open" },
-    });
+    const dropped = await drop({ message: "At the Roastery, happy to talk fundraising", minutes: 60, audience: "open" });
     assert(dropped.status === 200, "a member can drop one");
 
-    const seen = await api(`/api/pins?lat=${HERE.lat}&lng=${HERE.lng}`, { jar: b.jar });
-    const theirs = seen.data.pins.find((x) => x.id === dropped.data.id);
-    assert(Boolean(theirs), "an open pin is visible to anyone nearby");
+    const theirs = (await pinsSeenBy(b.jar)).find((x) => x.id === dropped.data.id);
+    assert(Boolean(theirs), "somebody 590 m away sees a 1 km pin");
     assert(theirs.minutesLeft > 0 && theirs.minutesLeft <= 60, "…and carries how long is left");
     assert(theirs.mine === false, "…marked as somebody else's");
+    assert(theirs.reachKm === 1, "…and says how far it was meant to carry");
 
-    // Only one live pin per person: a second is a correction, not a second
-    // invitation, and two places at once is unanswerable.
-    const second = await api("/api/pins", {
-      method: "POST", jar: a.jar,
-      body: { message: "Moved to the window seat", lat: HERE.lat, lng: HERE.lng, minutes: 60 },
-    });
+    console.log("\nA pin only carries as far as it was told to");
+    const far = await drop({ message: "Only for this block", minutes: 60, reachKm: 0.15 });
+    assert(
+      !(await pinsSeenBy(b.jar)).some((x) => x.id === far.data.id),
+      "590 m away is outside a building-level pin, however precise the reader"
+    );
+    await placeB(north(40));
+    assert(
+      (await pinsSeenBy(b.jar)).some((x) => x.id === far.data.id),
+      "…and inside it once they're actually in the building"
+    );
+
+    // The whole reason reach is measured from the reader rather than the map
+    // camera. Bob is 14 km away but asking about the café's coordinates.
+    await placeB(CITY);
+    assert(
+      !(await pinsSeenBy(b.jar, HERE)).some((x) => x.id === far.data.id),
+      "panning the map to a pin doesn't reveal it — reach follows the reader, not the camera"
+    );
+
+    // Carol's row carries an exact coordinate on top of the pin, but she
+    // publishes at city resolution, so the server may only treat her as
+    // somewhere-in-Delhi. A building-level claim can't be checked for her.
+    assert(
+      !(await pinsSeenBy(c.jar)).some((x) => x.id === far.data.id),
+      "a city-level reader can't satisfy a building-level pin, even sitting on top of it"
+    );
+    const wide = await drop({ message: "Anywhere in town", minutes: 60, reachKm: 3 });
+    assert(
+      (await pinsSeenBy(c.jar)).some((x) => x.id === wide.data.id),
+      "…but a 3 km pin reaches her, because 3 km doesn't need precision to be true"
+    );
+
+    const odd = await drop({ message: "Off the ladder", minutes: 60, reachKm: 7.3 });
+    const { rows: oddRow } = await pool.query("select reach_km from pins where id = $1", [odd.data.id]);
+    assert(Number(oddRow[0].reach_km) === 1, "a reach that isn't on the ladder falls back to the default");
+
+    assert(
+      (await pinsSeenBy(null)).length === 0,
+      "a signed-out visitor sees no pins at all — a live location isn't browsable anonymously"
+    );
+
+    console.log("\nOne live pin per person");
+    await placeB(NEAR);
+    const second = await drop({ message: "Moved to the window seat", minutes: 60 });
     assert(second.status === 200, "dropping another works");
-    const afterSecond = await api(`/api/pins?lat=${HERE.lat}&lng=${HERE.lng}`, { jar: b.jar });
-    const fromAlice = afterSecond.data.pins.filter((x) => x.person.name === "Flow Alice");
+    const fromAlice = (await pinsSeenBy(b.jar)).filter((x) => x.person.name === "Flow Alice");
     assert(fromAlice.length === 1, "…and replaces the first rather than stacking");
     assert(fromAlice[0].message === "Moved to the window seat", "the newer one wins");
 
@@ -797,8 +868,7 @@ async function main() {
     assert(anonPinJoin.status === 401, "a signed-out visitor can't join");
     const pinJoined = await api(`/api/pins/${second.data.id}/join`, { method: "POST", jar: b.jar });
     assert(pinJoined.status === 200 && pinJoined.data.state === "joined", "a member can say they're coming");
-    const withJoiner = await api(`/api/pins?lat=${HERE.lat}&lng=${HERE.lng}`, { jar: a.jar });
-    const mine3 = withJoiner.data.pins.find((x) => x.id === second.data.id);
+    const mine3 = (await pinsSeenBy(a.jar)).find((x) => x.id === second.data.id);
     assert(mine3.joined.length === 1, "the dropper sees who's coming");
     assert(mine3.mine === true, "…and that it's theirs");
     const left = await api(`/api/pins/${second.data.id}/join`, { method: "POST", jar: b.jar });
@@ -809,48 +879,43 @@ async function main() {
     assert(notYourPin.status === 403, "somebody else can't take your pin down");
     const removed = await api(`/api/pins/${second.data.id}`, { method: "DELETE", jar: a.jar });
     assert(removed.status === 200, "you can take your own down");
-    const afterEnd = await api(`/api/pins?lat=${HERE.lat}&lng=${HERE.lng}`, { jar: b.jar });
     assert(
-      !afterEnd.data.pins.some((x) => x.id === second.data.id),
+      !(await pinsSeenBy(b.jar)).some((x) => x.id === second.data.id),
       "…and it leaves the map immediately"
     );
     const joinDead = await api(`/api/pins/${second.data.id}/join`, { method: "POST", jar: b.jar });
     assert(joinDead.status === 410, "joining an ended pin is refused — it would promise somebody who left");
 
     // Expiry is a read-time condition, so a pin that ran out is simply gone.
-    const expired = await api("/api/pins", {
-      method: "POST", jar: a.jar,
-      body: { message: "Briefly here", lat: HERE.lat, lng: HERE.lng, minutes: 60 },
-    });
+    const expired = await drop({ message: "Briefly here", minutes: 60 });
     await pool.query("update pins set expires_at = now() - interval '1 minute' where id = $1", [expired.data.id]);
-    const afterExpiry = await api(`/api/pins?lat=${HERE.lat}&lng=${HERE.lng}`, { jar: b.jar });
     assert(
-      !afterExpiry.data.pins.some((x) => x.id === expired.data.id),
+      !(await pinsSeenBy(b.jar)).some((x) => x.id === expired.data.id),
       "an expired pin disappears on its own, with no sweep"
     );
 
     console.log("\nA communities-only pin stays inside them");
-    const privatePin = await api("/api/pins", {
-      method: "POST", jar: a.jar,
-      body: { message: "On the 3rd floor", lat: HERE.lat, lng: HERE.lng, minutes: 60, audience: "communities" },
-    });
+    const privatePin = await drop({ message: "On the 3rd floor", minutes: 60, audience: "communities", reachKm: 3 });
     assert(privatePin.status === 200, "a communities-only pin drops");
-    const anonSees = await api(`/api/pins?lat=${HERE.lat}&lng=${HERE.lng}`);
+    // Carol is in reach of a 3 km pin — proved two blocks up — so audience is
+    // the only thing that can be keeping her out here.
     assert(
-      !anonSees.data.pins.some((x) => x.id === privatePin.data.id),
-      "a signed-out visitor never sees it"
-    );
-    const strangerSees = await api(`/api/pins?lat=${HERE.lat}&lng=${HERE.lng}`, { jar: c.jar });
-    assert(
-      !strangerSees.data.pins.some((x) => x.id === privatePin.data.id),
-      "nor does somebody sharing no community"
+      !(await pinsSeenBy(c.jar)).some((x) => x.id === privatePin.data.id),
+      "somebody in reach but sharing no community still can't see it"
     );
     // Bob joined Alice's community earlier in this run.
-    const memberSees = await api(`/api/pins?lat=${HERE.lat}&lng=${HERE.lng}`, { jar: b.jar });
     assert(
-      memberSees.data.pins.some((x) => x.id === privatePin.data.id),
+      (await pinsSeenBy(b.jar)).some((x) => x.id === privatePin.data.id),
       "somebody who shares a community does"
     );
+
+    // Wherever you wander, your own pin stays yours to see and take down.
+    await placeA(CITY);
+    assert(
+      (await pinsSeenBy(a.jar, CITY)).some((x) => x.mine),
+      "your own pin follows you even once you've left it behind"
+    );
+    await placeA(HERE);
 
     console.log("\nEvery entry point terminates");
     for (const [label, path] of [
