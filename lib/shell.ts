@@ -4,6 +4,7 @@ import { matchesFor, type Surface } from "./matching";
 import { attachConnectionStatus } from "./connections";
 import { waitingCount } from "./messages";
 import { listAcceptedConnections } from "./connections";
+import { livePinsFor, myLivePin, type PinRef } from "./pins";
 import { DEFAULT_RADIUS_KM, MATCHES_SHOWN } from "./rules";
 
 /**
@@ -99,6 +100,9 @@ export type ShellPayload = {
   hasSignals: boolean;
   /** Accepted connections — the product's one real conversion metric. */
   connections: number;
+  /** Ad-hoc "here now" markers, visible in every scope. */
+  pins: PinRef[];
+  myPinId: string | null;
 };
 
 export const OPEN_NETWORK: NetworkOption = {
@@ -143,6 +147,7 @@ export async function shellPayload(opts: {
 
   const waiting = opts.userId ? await waitingCount(opts.userId) : 0;
   const connections = opts.userId ? (await listAcceptedConnections(opts.userId)).length : 0;
+  const mine_pin = opts.userId ? await myLivePin(opts.userId) : null;
 
   // Drawn from the row directly rather than through place(), which exists to
   // decide what *other* people may see. You always get your real position,
@@ -223,6 +228,14 @@ export async function shellPayload(opts: {
         you,
         hasSignals,
         connections,
+        // Pins aren't scoped to the network: somebody in a café two streets
+        // away is worth knowing about whichever community you're looking at.
+        pins: await livePinsFor({
+          viewerId: opts.userId,
+          centerLat: board.lat ?? undefined,
+          centerLng: board.lng ?? undefined,
+        }),
+        myPinId: mine_pin?.id ?? null,
       };
     }
   }
@@ -266,6 +279,13 @@ export async function shellPayload(opts: {
     you,
     hasSignals,
     connections,
+    pins: await livePinsFor({
+      viewerId: opts.userId,
+      centerLat: centre.lat,
+      centerLng: centre.lng,
+      radiusKm: Math.max(radiusKm, 25),
+    }),
+    myPinId: mine_pin?.id ?? null,
   };
 }
 

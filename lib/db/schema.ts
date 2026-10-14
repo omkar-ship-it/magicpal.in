@@ -481,6 +481,87 @@ export const posts = pgTable(
   (t) => [index("posts_board_idx").on(t.boardId, t.createdAt)]
 );
 
+// ------------------------------------------------------------------ pins
+
+/**
+ * "I'm here now, come say hello."
+ *
+ * The counterpart to an event: an event is planned, has a host and a
+ * community behind it, and survives being put in a calendar. A pin is
+ * somebody sitting in a café for the next two hours who would rather not
+ * sit alone — it needs no community, no title, and no future tense. The
+ * two could not share a table without one of them being mostly null.
+ *
+ * Every pin expires. A marker that outlives the coffee is a lie about where
+ * somebody is, and nobody ever remembers to take one down — so `expiresAt`
+ * is required, checked at read time, and the only thing keeping the map
+ * honest.
+ *
+ * Dropping one publishes an exact location regardless of the dropper's
+ * `users.visibility`, which is deliberate and why it takes a conscious act
+ * each time rather than a setting.
+ */
+export const pins = pgTable(
+  "pins",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+
+    lat: doublePrecision("lat").notNull(),
+    lng: doublePrecision("lng").notNull(),
+    /** Where this is, in words — "Roastery, Banjara Hills". */
+    placeLabel: text("place_label"),
+
+    /** The whole point: what you're doing and what you'd talk about. */
+    message: text("message").notNull(),
+    /** Optional topic from the shared vocabulary, so pins are filterable. */
+    topic: text("topic"),
+
+    /**
+     * open — anyone on the public map nearby.
+     * communities — only people who share a community with you.
+     *
+     * Offered rather than assumed: a café in a strange city wants reach, a
+     * desk in your own office might not.
+     */
+    audience: text("audience").notNull().default("open"),
+
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    /** Set when somebody takes it down early. */
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("pins_audience", sql`${t.audience} in ('open','communities')`),
+    index("pins_live_idx").on(t.expiresAt),
+    index("pins_user_idx").on(t.userId),
+  ]
+);
+
+/**
+ * "I'm coming over."
+ *
+ * Makes a pin self-fulfilling: two faces against it is the difference
+ * between a stranger's note and something happening. Also the lightest
+ * possible reply — answering a pin shouldn't require composing a message.
+ */
+export const pinJoins = pgTable(
+  "pin_joins",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    pinId: uuid("pin_id")
+      .notNull()
+      .references(() => pins.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("pin_joins_pin_user_idx").on(t.pinId, t.userId)]
+);
+
 // -------------------------------------------------------------- consents
 
 /**

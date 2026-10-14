@@ -19,6 +19,7 @@ import FeedPanel from "./FeedPanel";
 import EventsPanel from "./EventsPanel";
 import ChatsPanel from "./ChatsPanel";
 import CommunityHome from "./CommunityHome";
+import PinsPanel from "./PinsPanel";
 import SignInPanel from "./SignInPanel";
 import ProfilePanel from "./ProfilePanel";
 import PublicOptIn from "./PublicOptIn";
@@ -79,6 +80,7 @@ export default function MapShell({
     forYou: { ...DEFAULT_WINDOW, open: initialOverlay === null, x: 16, y: 72, z: 2 },
     feed: { ...DEFAULT_WINDOW, x: 56, y: 112 },
     people: { ...DEFAULT_WINDOW, x: 96, y: 152 },
+    pins: { ...DEFAULT_WINDOW, x: 116, y: 172 },
     events: { ...DEFAULT_WINDOW, x: 136, y: 192 },
     chats: { ...DEFAULT_WINDOW, x: 176, y: 232 },
     person: { ...DEFAULT_WINDOW, x: 60, y: 120 },
@@ -223,6 +225,8 @@ export default function MapShell({
           people={shown}
           you={data.you}
           events={data.events}
+          pins={data.pins}
+          onSelectPin={() => openWin("pins")}
           // Opening Events turns the map into a map of events. Asking
           // "what's happening" and "who's nearby" at the same time answers
           // neither: the event pins vanish into the crowd.
@@ -378,6 +382,31 @@ export default function MapShell({
       </FloatWindow>
 
       <FloatWindow
+        title={data.pins.length > 0 ? `Now · ${data.pins.length}` : "Now"}
+        state={visible("pins") ? wins.pins : { ...wins.pins, open: false }}
+        onChange={(n) => win("pins", n)}
+        onClose={() => win("pins", { open: false })}
+        onFocus={() => focus("pins")}
+      >
+        <PinsPanel
+          pins={data.pins}
+          signedIn={signedIn}
+          onboarded={onboarded}
+          myPinId={data.myPinId}
+          onChanged={() => void load({})}
+          onShow={(pin) => {
+            at.current = { lat: pin.lat, lng: pin.lng };
+            void load({ lat: pin.lat, lng: pin.lng });
+          }}
+          onOpenPerson={(id) => {
+            setSelected(id);
+            openWin("person");
+          }}
+          onSignIn={() => openWin("signin")}
+        />
+      </FloatWindow>
+
+      <FloatWindow
         title={`Events · ${data.events.length}`}
         state={visible("events") ? wins.events : { ...wins.events, open: false }}
         onChange={(n) => win("events", n)}
@@ -494,14 +523,15 @@ export default function MapShell({
           // highlight *that* one — or nothing, when the front sheet is the
           // profile. Otherwise it claims you're somewhere you aren't.
           narrow
-            ? ((["home", "forYou", "feed", "people", "events", "chats"] as const).find((k) => k === frontId) ?? null)
-            : ((["home", "forYou", "feed", "people", "events", "chats"] as const).find(
+            ? ((["home", "forYou", "feed", "people", "pins", "events", "chats"] as const).find((k) => k === frontId) ?? null)
+            : ((["home", "forYou", "feed", "people", "pins", "events", "chats"] as const).find(
                 (k) => wins[k].open && !wins[k].min
               ) ?? null)
         }
         counts={{
           forYou: matched.length,
           people: shown.length,
+          pins: data.pins.length,
           events: data.events.length,
           chats: data.waiting,
         }}

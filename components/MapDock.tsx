@@ -1,15 +1,16 @@
 "use client";
 
 import Avatar from "./Avatar";
-import { IconCalendar, IconChat, IconFeed, IconGlobe, IconPeople, IconSparkle, IconUser } from "./Icons";
+import { IconBeacon, IconCalendar, IconChat, IconFeed, IconGlobe, IconPeople, IconSparkle, IconUser } from "./Icons";
 
-export type DockTab = "home" | "forYou" | "feed" | "people" | "events" | "chats" | null;
+export type DockTab = "home" | "forYou" | "feed" | "people" | "pins" | "events" | "chats" | null;
 
 const SLOTS: Array<{ id: Exclude<DockTab, null>; label: string; icon: React.ReactNode }> = [
   { id: "home", label: "Home", icon: <IconGlobe size={17} /> },
   { id: "forYou", label: "For you", icon: <IconSparkle size={17} /> },
   { id: "feed", label: "Feed", icon: <IconFeed size={17} /> },
   { id: "people", label: "People", icon: <IconPeople size={17} /> },
+  { id: "pins", label: "Now", icon: <IconBeacon size={17} /> },
   { id: "events", label: "Events", icon: <IconCalendar size={17} /> },
   { id: "chats", label: "Chats", icon: <IconChat size={17} /> },
 ];
@@ -74,7 +75,7 @@ export default function MapDock({
             type="button"
             onClick={onProfile}
             aria-label="Your profile"
-            className="ml-0.5 flex w-[46px] sm:w-[66px] flex-none flex-col items-center justify-center gap-1 rounded-2xl py-2 tap"
+            className="ml-0.5 flex w-[42px] sm:w-[60px] flex-none flex-col items-center justify-center gap-1 rounded-2xl py-2 tap"
             style={{ background: "color-mix(in srgb, var(--chrome-ink) 10%, transparent)" }}
           >
             <Avatar name={me.name} photoUrl={me.photoUrl} size={21} />
@@ -101,7 +102,7 @@ export default function MapDock({
 }
 
 const SLOT =
-  "flex w-[46px] sm:w-[66px] flex-none flex-col items-center justify-center gap-1 rounded-2xl py-2 transition-colors tap";
+  "flex w-[42px] sm:w-[60px] flex-none flex-col items-center justify-center gap-1 rounded-2xl py-2 transition-colors tap";
 
 function DockButton({
   on,

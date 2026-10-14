@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import MapGL, { Marker, NavigationControl, type ViewStateChangeEvent } from "react-map-gl/mapbox";
 import type { MapProfile } from "@/lib/profiles";
 import type { SelfMarker } from "@/lib/shell";
+import type { PinRef } from "@/lib/pins";
 import Avatar from "./Avatar";
 import { topicById } from "@/lib/intents";
 import { whenLabel } from "@/lib/time";
@@ -57,6 +58,8 @@ export default function MapCanvas({
   people,
   you = null,
   events = [],
+  pins = [],
+  onSelectPin,
   eventsOnly = false,
   activeEventSlug = null,
   initialLat,
@@ -74,6 +77,9 @@ export default function MapCanvas({
   /** The viewer, drawn distinctly so they can verify their own visibility. */
   you?: SelfMarker | null;
   events?: MapEvent[];
+  /** Ad-hoc "I'm here now" markers. Always drawn — they're the live layer. */
+  pins?: PinRef[];
+  onSelectPin?: (id: string) => void;
   /**
    * Events instead of faces.
    *
@@ -240,6 +246,26 @@ export default function MapCanvas({
         ) : null
       )}
 
+      {/* Pins stay visible in every mode. An event map that hid "somebody
+          is in a café two streets away, right now" would be hiding the most
+          time-sensitive thing on the screen. */}
+      {pins.map((pin) => (
+        <Marker key={pin.id} latitude={pin.lat} longitude={pin.lng} anchor="bottom">
+          <span className="hover-host relative">
+            <button
+              type="button"
+              className="pin-drop tap"
+              onClick={() => onSelectPin?.(pin.id)}
+              aria-label={`${pin.person.name}: ${pin.message}`}
+            >
+              <span className="pin-drop-pulse" aria-hidden="true" />
+              <Avatar name={pin.person.name} photoUrl={pin.person.photoUrl} size={30} ring={2} />
+            </button>
+            <PinCardHover pin={pin} />
+          </span>
+        </Marker>
+      ))}
+
       {!eventsOnly && you && (
         <Marker latitude={you.lat} longitude={you.lng} anchor="center">
           <span className="relative flex items-center">
@@ -354,6 +380,25 @@ function EventCard({ event }: { event: MapEvent }) {
           {event.going} going
         </span>
       )}
+    </span>
+  );
+}
+
+/** Hover preview for an ad-hoc pin — the message is the whole point. */
+function PinCardHover({ pin }: { pin: PinRef }) {
+  return (
+    <span
+      className="hover-card pointer-events-none absolute z-50 block w-[230px] rounded-2xl border border-[var(--line)] p-2.5 text-left"
+      style={{ background: "var(--card)", boxShadow: "var(--shadow-lift)" }}
+      aria-hidden="true"
+    >
+      <span className="block truncate text-[12.5px] font-semibold">{pin.person.name}</span>
+      <span className="mt-0.5 block text-[12px] leading-[1.4]">{pin.message}</span>
+      <span className="mt-1 block text-[11px]" style={{ color: "var(--good)" }}>
+        {pin.placeLabel ? `${pin.placeLabel} · ` : ""}
+        {pin.minutesLeft > 60 ? `${Math.round(pin.minutesLeft / 60)}h left` : `${pin.minutesLeft}m left`}
+        {pin.joined.length > 0 ? ` · ${pin.joined.length} coming` : ""}
+      </span>
     </span>
   );
 }

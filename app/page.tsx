@@ -36,7 +36,10 @@ export default async function Home({
   return (
     <MapShell
       initial={initial}
-      initialOverlay={user ? overlay : overlay === "profile" ? "signin" : overlay}
+      // Signing in is meaningless once you have, and asking somebody to
+      // sign in again reads as having been signed out. A stale ?panel=signin
+      // in the URL — after a reload, or a shared link — opens nothing.
+      initialOverlay={user ? (overlay === "signin" ? null : overlay) : overlay === "profile" ? "signin" : overlay}
       pendingJoin={join ?? null}
       initialEvent={event ?? null}
       signedIn={Boolean(user)}

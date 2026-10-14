@@ -760,6 +760,98 @@ async function main() {
     assert(nonsense.status === 200, "out-of-range coordinates don't error");
     assert(Array.isArray(nonsense.data.results), "…they just come back empty or best-effort");
 
+    console.log("\nAd-hoc pins expire, and respect their audience");
+    const anonPin = await api("/api/pins", { method: "POST", body: { message: "hi", lat: HERE.lat, lng: HERE.lng } });
+    assert(anonPin.status === 401, "a signed-out visitor can't drop a pin");
+    const noMsg = await api("/api/pins", { method: "POST", jar: a.jar, body: { message: " ", lat: HERE.lat, lng: HERE.lng } });
+    assert(noMsg.status === 400, "a pin with nothing to say is refused");
+    const noWhere = await api("/api/pins", { method: "POST", jar: a.jar, body: { message: "in a cafe" } });
+    assert(noWhere.status === 400, "a pin with no location is refused — that's the whole point of one");
+
+    const dropped = await api("/api/pins", {
+      method: "POST", jar: a.jar,
+      body: { message: "At the Roastery, happy to talk fundraising", lat: HERE.lat, lng: HERE.lng, placeLabel: "Roastery", minutes: 60, audience: "open" },
+    });
+    assert(dropped.status === 200, "a member can drop one");
+
+    const seen = await api(`/api/pins?lat=${HERE.lat}&lng=${HERE.lng}`, { jar: b.jar });
+    const theirs = seen.data.pins.find((x) => x.id === dropped.data.id);
+    assert(Boolean(theirs), "an open pin is visible to anyone nearby");
+    assert(theirs.minutesLeft > 0 && theirs.minutesLeft <= 60, "…and carries how long is left");
+    assert(theirs.mine === false, "…marked as somebody else's");
+
+    // Only one live pin per person: a second is a correction, not a second
+    // invitation, and two places at once is unanswerable.
+    const second = await api("/api/pins", {
+      method: "POST", jar: a.jar,
+      body: { message: "Moved to the window seat", lat: HERE.lat, lng: HERE.lng, minutes: 60 },
+    });
+    assert(second.status === 200, "dropping another works");
+    const afterSecond = await api(`/api/pins?lat=${HERE.lat}&lng=${HERE.lng}`, { jar: b.jar });
+    const fromAlice = afterSecond.data.pins.filter((x) => x.person.name === "Flow Alice");
+    assert(fromAlice.length === 1, "…and replaces the first rather than stacking");
+    assert(fromAlice[0].message === "Moved to the window seat", "the newer one wins");
+
+    console.log("\nJoining a pin");
+    const anonPinJoin = await api(`/api/pins/${second.data.id}/join`, { method: "POST" });
+    assert(anonPinJoin.status === 401, "a signed-out visitor can't join");
+    const pinJoined = await api(`/api/pins/${second.data.id}/join`, { method: "POST", jar: b.jar });
+    assert(pinJoined.status === 200 && pinJoined.data.state === "joined", "a member can say they're coming");
+    const withJoiner = await api(`/api/pins?lat=${HERE.lat}&lng=${HERE.lng}`, { jar: a.jar });
+    const mine3 = withJoiner.data.pins.find((x) => x.id === second.data.id);
+    assert(mine3.joined.length === 1, "the dropper sees who's coming");
+    assert(mine3.mine === true, "…and that it's theirs");
+    const left = await api(`/api/pins/${second.data.id}/join`, { method: "POST", jar: b.jar });
+    assert(left.data.state === "left", "and can take it back");
+
+    console.log("\nA pin stops existing when it ends");
+    const notYourPin = await api(`/api/pins/${second.data.id}`, { method: "DELETE", jar: b.jar });
+    assert(notYourPin.status === 403, "somebody else can't take your pin down");
+    const removed = await api(`/api/pins/${second.data.id}`, { method: "DELETE", jar: a.jar });
+    assert(removed.status === 200, "you can take your own down");
+    const afterEnd = await api(`/api/pins?lat=${HERE.lat}&lng=${HERE.lng}`, { jar: b.jar });
+    assert(
+      !afterEnd.data.pins.some((x) => x.id === second.data.id),
+      "…and it leaves the map immediately"
+    );
+    const joinDead = await api(`/api/pins/${second.data.id}/join`, { method: "POST", jar: b.jar });
+    assert(joinDead.status === 410, "joining an ended pin is refused — it would promise somebody who left");
+
+    // Expiry is a read-time condition, so a pin that ran out is simply gone.
+    const expired = await api("/api/pins", {
+      method: "POST", jar: a.jar,
+      body: { message: "Briefly here", lat: HERE.lat, lng: HERE.lng, minutes: 60 },
+    });
+    await pool.query("update pins set expires_at = now() - interval '1 minute' where id = $1", [expired.data.id]);
+    const afterExpiry = await api(`/api/pins?lat=${HERE.lat}&lng=${HERE.lng}`, { jar: b.jar });
+    assert(
+      !afterExpiry.data.pins.some((x) => x.id === expired.data.id),
+      "an expired pin disappears on its own, with no sweep"
+    );
+
+    console.log("\nA communities-only pin stays inside them");
+    const privatePin = await api("/api/pins", {
+      method: "POST", jar: a.jar,
+      body: { message: "On the 3rd floor", lat: HERE.lat, lng: HERE.lng, minutes: 60, audience: "communities" },
+    });
+    assert(privatePin.status === 200, "a communities-only pin drops");
+    const anonSees = await api(`/api/pins?lat=${HERE.lat}&lng=${HERE.lng}`);
+    assert(
+      !anonSees.data.pins.some((x) => x.id === privatePin.data.id),
+      "a signed-out visitor never sees it"
+    );
+    const strangerSees = await api(`/api/pins?lat=${HERE.lat}&lng=${HERE.lng}`, { jar: c.jar });
+    assert(
+      !strangerSees.data.pins.some((x) => x.id === privatePin.data.id),
+      "nor does somebody sharing no community"
+    );
+    // Bob joined Alice's community earlier in this run.
+    const memberSees = await api(`/api/pins?lat=${HERE.lat}&lng=${HERE.lng}`, { jar: b.jar });
+    assert(
+      memberSees.data.pins.some((x) => x.id === privatePin.data.id),
+      "somebody who shares a community does"
+    );
+
     console.log("\nEvery entry point terminates");
     for (const [label, path] of [
       ["a QR scan while signed out", `/join/${slug}`],

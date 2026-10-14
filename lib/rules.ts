@@ -61,6 +61,22 @@ export const LIVE_STALE_MINUTES = 12;
 /** How often the browser pushes a new live position while sharing. */
 export const LIVE_PING_MS = 90_000;
 
+/**
+ * Ad-hoc pins: how long one can live, and how much it can say.
+ *
+ * Here rather than in lib/pins.ts because that module imports the database:
+ * a client component importing a *value* from it drags the Postgres driver
+ * into the browser bundle and fails the build. Types are erased and can
+ * come from anywhere; constants cannot.
+ */
+export const PIN_DURATIONS = [
+  { minutes: 60, label: "1 hour" },
+  { minutes: 180, label: "3 hours" },
+  { minutes: 480, label: "Until tonight" },
+] as const;
+
+export const MAX_PIN_MESSAGE = 200;
+
 /** How many recommendations a surface shows at once. */
 export const MATCHES_SHOWN = 3;
 

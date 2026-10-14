@@ -664,3 +664,34 @@ h1, h2, h3 {
   background: color-mix(in srgb, var(--warn) 16%, transparent);
   color: var(--warn);
 }
+
+/* An ad-hoc pin. Pulses because it is the one thing on the map that is
+   true only right now — everything else is still there in an hour. */
+.pin-drop {
+  position: relative;
+  display: block;
+  border-radius: 999px;
+  box-shadow: 0 0 0 2.5px var(--good), var(--shadow);
+  transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.pin-drop:hover,
+.pin-drop:focus-visible {
+  transform: scale(1.08);
+  z-index: 2;
+}
+.pin-drop-pulse {
+  position: absolute;
+  inset: -4px;
+  border-radius: 999px;
+  background: var(--good);
+  opacity: 0.35;
+  animation: pin-drop-pulse 2.2s ease-out infinite;
+}
+@keyframes pin-drop-pulse {
+  0% { transform: scale(0.9); opacity: 0.35; }
+  70% { transform: scale(1.45); opacity: 0; }
+  100% { transform: scale(1.45); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pin-drop-pulse { animation: none; opacity: 0.25; }
+}
