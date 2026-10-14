@@ -59,19 +59,23 @@ export default function MapTopBar({
   return (
     <header className="pointer-events-none absolute inset-x-0 top-0 z-30 p-2.5">
       <div className="pointer-events-auto mx-auto max-w-2xl">
+        {/* Two rows on a phone. One row meant the switcher, a search box and
+            a Filters button sharing 390px, which truncated the search to
+            "Search peo|" — the one control that has to be readable. */}
         <div
-          className="flex items-center gap-2 rounded-full border px-2.5 py-2 backdrop-blur"
+          className="flex flex-col gap-2 rounded-[22px] border px-2.5 py-2 backdrop-blur sm:flex-row sm:items-center sm:rounded-full"
           style={{
             background: "color-mix(in srgb, var(--chrome) 94%, transparent)",
             borderColor: "var(--chrome-line)",
             boxShadow: "var(--shadow-lift)",
           }}
         >
+          <div className="flex items-center gap-2">
           {/* ------------------------------------------- network switcher */}
           <button
             type="button"
             onClick={() => setPicking((v) => !v)}
-            className="flex min-w-0 flex-none items-center gap-1.5 rounded-full py-1 pl-1 pr-2 tap"
+            className="flex min-w-0 flex-1 items-center gap-1.5 rounded-full py-1 pl-1 pr-2 tap sm:flex-none"
             style={{ background: "color-mix(in srgb, var(--chrome-ink) 10%, transparent)" }}
             aria-expanded={picking}
           >
@@ -82,13 +86,27 @@ export default function MapTopBar({
               {isOpen ? <IconGlobe size={13} /> : <IconPeople size={13} />}
             </span>
             <span
-              className="max-w-[140px] truncate text-[12.5px] font-semibold"
+              className="min-w-0 flex-1 truncate text-[12.5px] font-semibold sm:max-w-[140px] sm:flex-none"
               style={{ color: "var(--chrome-ink)" }}
             >
               {active?.name ?? "Open network"}
             </span>
             <IconChevronDown size={13} style={{ color: "var(--chrome-soft)" }} />
           </button>
+
+          <button
+            type="button"
+            onClick={() => setFiltering((v) => !v)}
+            className="flex-none rounded-full border px-2.5 py-1.5 text-[12px] font-semibold tap sm:hidden"
+            style={{
+              borderColor: activeCount > 0 ? "var(--brand)" : "var(--chrome-line)",
+              color: activeCount > 0 ? "var(--brand)" : "var(--chrome-ink)",
+            }}
+            aria-expanded={filtering}
+          >
+            Filters{activeCount > 0 ? ` ${activeCount}` : ""}
+          </button>
+          </div>
 
           {/* -------------------------------------------------- search box */}
           <div className="relative min-w-0 flex-1">
@@ -121,7 +139,7 @@ export default function MapTopBar({
           <button
             type="button"
             onClick={() => setFiltering((v) => !v)}
-            className="flex-none rounded-full border px-2.5 py-1.5 text-[12px] font-semibold tap"
+            className="hidden flex-none rounded-full border px-2.5 py-1.5 text-[12px] font-semibold tap sm:block"
             style={{
               borderColor: activeCount > 0 ? "var(--brand)" : "var(--chrome-line)",
               color: activeCount > 0 ? "var(--brand)" : "var(--chrome-ink)",
@@ -134,7 +152,7 @@ export default function MapTopBar({
 
         {/* ------------------------------------------------ network list */}
         {picking && (
-          <div className="floating-panel panel-enter mt-1.5 overflow-hidden p-1.5">
+          <div className="floating-panel panel-enter mt-1.5 max-h-[60dvh] overflow-y-auto p-1.5">
             {networks.map((n) => (
               <button
                 key={n.slug ?? "open"}
@@ -196,7 +214,7 @@ export default function MapTopBar({
 
         {/* ---------------------------------------------------- filters */}
         {filtering && (
-          <div className="floating-panel panel-enter mt-1.5 p-3.5">
+          <div className="floating-panel panel-enter mt-1.5 max-h-[66dvh] overflow-y-auto p-3.5">
             <p className="label">What they&rsquo;re here for</p>
             <div className="flex flex-wrap gap-1.5">
               {TOPICS.map((t) => (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useIsNarrow } from "@/lib/useIsNarrow";
 import { IconX } from "./Icons";
 
 export type WindowState = {
@@ -79,6 +80,14 @@ export default function FloatWindow({
     y: number;
   } | null>(null);
   const [busy, setBusy] = useState(false);
+  /**
+   * On a phone a window becomes a bottom sheet: full width, anchored above
+   * the dock, one at a time. Dragging a 374px panel around a 390px screen
+   * only ever moves it off the edge, and four of them cascading is four
+   * things covering each other on the one screen small enough that it
+   * matters.
+   */
+  const narrow = useIsNarrow();
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
@@ -182,8 +191,10 @@ export default function FloatWindow({
 
   if (!state.open) return null;
 
-  const maximised = state.max;
-  const resizable = !maximised && !state.min;
+  // Maximise and resize are desktop gestures; a sheet is already as wide as
+  // the screen and as tall as it should be.
+  const maximised = state.max && !narrow;
+  const resizable = !narrow && !maximised && !state.min;
 
   return (
     // Two elements on purpose. The panel's 18px border-radius plus
@@ -199,7 +210,19 @@ export default function FloatWindow({
       aria-label={typeof title === "string" ? title : undefined}
       onMouseDown={onFocus}
       style={
-        maximised
+        narrow
+          ? {
+              left: 0,
+              right: 0,
+              // Stops *above* the dock rather than running to the bottom
+              // edge with padding behind it: an element that merely looks
+              // clear of the dock still covers it for hit-testing, and the
+              // dock's buttons stopped responding.
+              bottom: "calc(72px + env(safe-area-inset-bottom))",
+              maxHeight: state.min ? undefined : "72dvh",
+              zIndex: 30 + state.z,
+            }
+          : maximised
           ? { left: 8, right: 8, top: 60, bottom: 86, zIndex: 30 + state.z }
           : {
               left: state.x,
@@ -216,17 +239,29 @@ export default function FloatWindow({
             }
       }
     >
-      <div className="floating-panel flex min-h-0 w-full flex-1 flex-col overflow-hidden">
       <div
-        className="flex flex-none cursor-grab items-center gap-2 border-b border-[var(--line)] px-2.5 py-2 active:cursor-grabbing"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-        style={{ touchAction: "none" }}
+        className="floating-panel flex min-h-0 w-full flex-1 flex-col overflow-hidden"
+      >
+      {narrow && (
+        // A grabber, because a sheet that appeared from the bottom should
+        // look like something you can push back down.
+        <div className="flex flex-none justify-center pt-2" aria-hidden="true">
+          <span className="h-1 w-9 rounded-full" style={{ background: "var(--line)" }} />
+        </div>
+      )}
+      <div
+        className={`flex flex-none items-center gap-2 border-b border-[var(--line)] px-2.5 py-2 ${
+          narrow ? "" : "cursor-grab active:cursor-grabbing"
+        }`}
+        onPointerDown={narrow ? undefined : onPointerDown}
+        onPointerMove={narrow ? undefined : onPointerMove}
+        onPointerUp={narrow ? undefined : endDrag}
+        onPointerCancel={narrow ? undefined : endDrag}
+        style={narrow ? undefined : { touchAction: "none" }}
       >
         <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold">{title}</span>
 
+        {!narrow && (
         <button
           type="button"
           className="win-dot"
@@ -236,6 +271,8 @@ export default function FloatWindow({
         >
           <span className="block h-[2px] w-[9px] rounded-full" style={{ background: "currentColor" }} />
         </button>
+        )}
+        {!narrow && (
         <button
           type="button"
           className="win-dot"
@@ -245,9 +282,10 @@ export default function FloatWindow({
         >
           <span className="block h-[9px] w-[9px] rounded-[2px]" style={{ border: "1.5px solid currentColor" }} />
         </button>
+        )}
         {/* Only offered once a size has been chosen — "reset" is meaningless
             against a window that has never been resized. */}
-        {(state.w != null || state.h != null) && !maximised && (
+        {!narrow && (state.w != null || state.h != null) && !maximised && (
           <button
             type="button"
             className="win-dot"

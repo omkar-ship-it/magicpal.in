@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
+import { useIsNarrow } from "@/lib/useIsNarrow";
 import Link from "next/link";
 import type { MapProfile } from "@/lib/profiles";
 import type { FeedItem } from "@/lib/feed";
@@ -21,7 +22,7 @@ import CommunityHome from "./CommunityHome";
 import SignInPanel from "./SignInPanel";
 import ProfilePanel from "./ProfilePanel";
 import PublicOptIn from "./PublicOptIn";
-import { IconHidden, IconSparkle } from "./Icons";
+import { IconHidden } from "./Icons";
 
 export type Overlay = "signin" | "profile" | null;
 
@@ -94,6 +95,8 @@ export default function MapShell({
    * else — the map is the app's background, not a component inside it, so
    * nothing in this product is ever shown without it.
    */
+  const narrow = useIsNarrow();
+
   const win = useCallback(
     (id: string, next: Partial<WindowState>) => setWins((w) => ({ ...w, [id]: { ...w[id], ...next } })),
     []
@@ -158,7 +161,13 @@ export default function MapShell({
     // Tapping an already-focused window closes it; tapping a buried or
     // minimised one raises it instead of hiding it, which is what people
     // actually mean when they press a taskbar button.
-    if (current.open && !current.min) {
+    //
+    // On a phone "focused" means *on screen*: only the front sheet is
+    // visible, so a window that's open behind another has, as far as the
+    // person tapping is concerned, never been opened. Closing it then would
+    // answer a request to see something by hiding it.
+    const onScreen = narrow ? frontId === next : current.open && !current.min;
+    if (onScreen) {
       win(next, { open: false });
       return;
     }
@@ -187,6 +196,24 @@ export default function MapShell({
     });
 
   const isOpenNet = data.scope.slug === null;
+
+  /**
+   * On a phone, only the front window is on screen.
+   *
+   * Four sheets stacked on a 390px screen is four things covering each
+   * other, and the one underneath can't be reached without closing the one
+   * on top anyway. The others stay open in state — switching back to one
+   * from the dock finds it where you left it.
+   */
+  // Computed plainly rather than memoised: it's a scan of seven entries,
+  // and the hand-written useMemo was one the React Compiler refused to
+  // preserve — which turns off its own optimisation for the whole component.
+  const frontId = narrow
+    ? (Object.entries(wins)
+        .filter(([, w]) => w.open && !w.min)
+        .sort((a, b) => b[1].z - a[1].z)[0]?.[0] ?? null)
+    : null;
+  const visible = (id: string) => !narrow || frontId === id;
 
   return (
     <div className="relative h-dvh w-full overflow-hidden">
@@ -250,7 +277,7 @@ export default function MapShell({
       {/* ------------------------------------------------ the windows */}
       <FloatWindow
         title={data.scope.slug ? data.scope.name : "Open network"}
-        state={wins.home}
+        state={visible("home") ? wins.home : { ...wins.home, open: false }}
         onChange={(n) => win("home", n)}
         onClose={() => win("home", { open: false })}
         onFocus={() => focus("home")}
@@ -266,8 +293,8 @@ export default function MapShell({
       </FloatWindow>
 
       <FloatWindow
-        title={<><IconSparkle size={12} className="mr-1 inline" />For you</>}
-        state={wins.forYou}
+        title="For you"
+        state={visible("forYou") ? wins.forYou : { ...wins.forYou, open: false }}
         onChange={(n) => win("forYou", n)}
         onClose={() => win("forYou", { open: false })}
         onFocus={() => focus("forYou")}
@@ -291,7 +318,7 @@ export default function MapShell({
 
       <FloatWindow
         title="Feed"
-        state={wins.feed}
+        state={visible("feed") ? wins.feed : { ...wins.feed, open: false }}
         onChange={(n) => win("feed", n)}
         onClose={() => win("feed", { open: false })}
         onFocus={() => focus("feed")}
@@ -318,7 +345,7 @@ export default function MapShell({
 
       <FloatWindow
         title={`People · ${shown.length}`}
-        state={wins.people}
+        state={visible("people") ? wins.people : { ...wins.people, open: false }}
         onChange={(n) => win("people", n)}
         onClose={() => win("people", { open: false })}
         onFocus={() => focus("people")}
@@ -352,7 +379,7 @@ export default function MapShell({
 
       <FloatWindow
         title={`Events · ${data.events.length}`}
-        state={wins.events}
+        state={visible("events") ? wins.events : { ...wins.events, open: false }}
         onChange={(n) => win("events", n)}
         onClose={() => win("events", { open: false })}
         onFocus={() => focus("events")}
@@ -377,7 +404,7 @@ export default function MapShell({
 
       <FloatWindow
         title={data.waiting > 0 ? `Chats · ${data.waiting} waiting` : "Chats"}
-        state={wins.chats}
+        state={visible("chats") ? wins.chats : { ...wins.chats, open: false }}
         onChange={(n) => win("chats", n)}
         onClose={() => win("chats", { open: false })}
         onFocus={() => focus("chats")}
@@ -388,7 +415,7 @@ export default function MapShell({
       {selectedPerson && (
         <FloatWindow
           title={selectedPerson.name}
-          state={wins.person}
+          state={visible("person") ? wins.person : { ...wins.person, open: false }}
           onChange={(n) => win("person", n)}
           onClose={() => {
             win("person", { open: false });
@@ -415,7 +442,7 @@ export default function MapShell({
 
       <FloatWindow
         title="Your profile"
-        state={wins.profile}
+        state={visible("profile") ? wins.profile : { ...wins.profile, open: false }}
         onChange={(n) => win("profile", n)}
         onClose={() => win("profile", { open: false })}
         onFocus={() => focus("profile")}
@@ -434,7 +461,7 @@ export default function MapShell({
 
       <FloatWindow
         title="Sign in"
-        state={wins.signin}
+        state={visible("signin") ? wins.signin : { ...wins.signin, open: false }}
         onChange={(n) => win("signin", n)}
         onClose={() => win("signin", { open: false })}
         onFocus={() => focus("signin")}
@@ -462,9 +489,16 @@ export default function MapShell({
       </FloatWindow>
 
       <MapDock
-        active={(["home", "forYou", "feed", "people", "events", "chats"] as const).find(
-          (k) => wins[k].open && !wins[k].min
-        ) ?? null}
+        active={
+          // On a phone only one sheet is on screen, so the dock should
+          // highlight *that* one — or nothing, when the front sheet is the
+          // profile. Otherwise it claims you're somewhere you aren't.
+          narrow
+            ? ((["home", "forYou", "feed", "people", "events", "chats"] as const).find((k) => k === frontId) ?? null)
+            : ((["home", "forYou", "feed", "people", "events", "chats"] as const).find(
+                (k) => wins[k].open && !wins[k].min
+              ) ?? null)
+        }
         counts={{
           forYou: matched.length,
           people: shown.length,
