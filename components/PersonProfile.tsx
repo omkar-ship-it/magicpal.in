@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { sectorById, stageById, topicById } from "@/lib/intents";
 import Avatar from "./Avatar";
 import VerifiedBadge from "./VerifiedBadge";
+import { Hero, Page, Section } from "./Panel";
 import PanelNote from "./PanelNote";
 import {
   IconBriefcase,
@@ -13,6 +14,7 @@ import {
   IconPeople,
   IconPin,
   IconSparkle,
+  IconUser,
 } from "./Icons";
 
 type Person = {
@@ -110,24 +112,14 @@ export default function PersonProfile({
   const vouchers = data.shared.filter((b) => b.verified);
 
   return (
-    <div className="flex flex-col gap-4">
+    <Page>
       {/* ----------------------------------------------------- identity */}
-      <div className="flex items-start gap-3.5">
-        <Avatar name={p.name} photoUrl={p.photoUrl} size={76} ring={3} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <h3 className="min-w-0 text-[17px] font-semibold leading-tight">{p.name}</h3>
-            {vouchers.length > 0 && (
-              <VerifiedBadge size={16} label={`Verified by ${vouchers.map((v) => v.name).join(", ")}`} />
-            )}
-          </div>
-          {p.headline && <p className="mt-0.5 text-[13px] leading-[1.4]">{p.headline}</p>}
-          {p.company && (
-            <p className="mt-0.5 flex items-center gap-1.5 text-[12.5px] text-[var(--ink-soft)]">
-              <IconBriefcase size={12} /> {p.company}
-            </p>
-          )}
-          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+      <Hero
+        avatar={<Avatar name={p.name} photoUrl={p.photoUrl} size={76} ring={3} />}
+        title={p.name}
+        subtitle={p.headline}
+        eyebrow={
+          <>
             {stage && (
               <span className="pill" style={{ background: "var(--sunk)", color: "var(--ink-soft)" }}>
                 {stage.label}
@@ -141,31 +133,51 @@ export default function PersonProfile({
                 <IconCheck size={10} /> Connected
               </span>
             )}
-          </div>
-          {p.locationLabel && (
-            <p className="mt-1.5 flex items-center gap-1.5 text-[12px] text-[var(--ink-soft)]">
-              {p.placed === "base" ? <IconCity size={11} /> : <IconPin size={11} />}
-              {p.locationLabel}
-              {p.placed === "base" ? " · city only" : p.placed === "live" ? " · live" : ""}
-            </p>
-          )}
-        </div>
-      </div>
+            {vouchers.length > 0 && (
+              <span
+                className="pill"
+                style={{ background: "color-mix(in srgb, var(--brand) 12%, transparent)", color: "var(--brand)" }}
+              >
+                <VerifiedBadge size={11} label={`Verified by ${vouchers.map((v) => v.name).join(", ")}`} />
+                Verified
+              </span>
+            )}
+          </>
+        }
+        meta={
+          <>
+            {p.company && (
+              <span className="flex items-center gap-1.5 text-[12px] text-[var(--ink-soft)]">
+                <IconBriefcase size={11} /> {p.company}
+              </span>
+            )}
+            {p.locationLabel && (
+              <span className="flex items-center gap-1.5 text-[12px] text-[var(--ink-soft)]">
+                {p.placed === "base" ? <IconCity size={11} /> : <IconPin size={11} />}
+                {p.locationLabel}
+                {p.placed === "base" ? " · city only" : p.placed === "live" ? " · live" : ""}
+              </span>
+            )}
+          </>
+        }
+      />
 
+      {/* The reason this person is in front of you, first — everything
+          below is the evidence for it. */}
       {reason && (
-        <div className="rounded-xl p-2.5" style={{ background: "var(--sunk)" }}>
+        <div className="reveal rounded-2xl p-3" style={{ background: "var(--sunk)" }}>
           <p className="label label-icon mb-1">
             <IconSparkle size={12} />
             {twoWay ? "You can help each other" : "Why them"}
           </p>
-          <p className="text-[12.5px] leading-[1.45]">{reason}</p>
+          <p className="text-[12.5px] leading-[1.5]">{reason}</p>
         </div>
       )}
 
       {/* The strongest thing a stranger can read: somebody already vouched
           for both of you. */}
       {data.shared.length > 0 && (
-        <Section title="You're both in">
+        <Section title="You're both in" icon={<IconPeople size={12} />}>
           <div className="flex flex-wrap gap-1.5">
             {data.shared.map((b) => (
               <span
@@ -182,57 +194,60 @@ export default function PersonProfile({
               </span>
             ))}
           </div>
+          {vouchers.length > 0 && (
+            <p className="mt-1.5 text-[12px] leading-[1.45]" style={{ color: "var(--brand)" }}>
+              {vouchers.length === 1 ? vouchers[0].name : `${vouchers.length} of your communities`} confirmed{" "}
+              {p.name.split(" ")[0]} really is who they say.
+            </p>
+          )}
         </Section>
       )}
 
-      {vouchers.length > 0 && (
-        <p className="flex items-start gap-2 text-[12.5px] leading-[1.45]" style={{ color: "var(--brand)" }}>
-          <VerifiedBadge size={13} label="Verified" />
-          <span>
-            {vouchers.length === 1 ? vouchers[0].name : `${vouchers.length} of your communities`} confirmed{" "}
-            {p.name.split(" ")[0]} really is who they say.
-          </span>
-        </p>
-      )}
-
       {p.workingOn && (
-        <Section title="Working on">
+        <Section title="Working on" icon={<IconSparkle size={12} />}>
           <p className="text-[12.5px] leading-[1.5]">{p.workingOn}</p>
         </Section>
       )}
 
       {p.bio && (
-        <Section title="About">
+        <Section title="About" icon={<IconUser size={12} />}>
           <p className="whitespace-pre-line text-[12.5px] leading-[1.55]">{p.bio}</p>
         </Section>
       )}
 
-      {wants.length > 0 && (
-        <Section title="Looking for">
-          <Chips items={wants.map((t) => t!.need)} tone="brand" />
+      {/* Wants and offers side by side: the pair is the point, and stacked
+          they read as two unrelated lists. */}
+      {(wants.length > 0 || offers.length > 0) && (
+        <Section title="What they're here for" icon={<IconSparkle size={12} />}>
+          <div className="flex flex-col gap-2.5">
+            {wants.length > 0 && (
+              <div>
+                <p className="mb-1 text-[10.5px] font-semibold uppercase tracking-wide text-[var(--ink-soft)]">
+                  Looking for
+                </p>
+                <Chips items={wants.map((t) => t!.need)} tone="brand" />
+              </div>
+            )}
+            {offers.length > 0 && (
+              <div>
+                <p className="mb-1 text-[10.5px] font-semibold uppercase tracking-wide text-[var(--ink-soft)]">
+                  Can help with
+                </p>
+                <Chips items={offers.map((t) => t!.offer)} tone="good" />
+              </div>
+            )}
+          </div>
         </Section>
       )}
 
-      {offers.length > 0 && (
-        <Section title="Can help with">
-          <Chips items={offers.map((t) => t!.offer)} tone="good" />
-        </Section>
-      )}
-
-      {sectors.length > 0 && (
-        <Section title="Interested in">
-          <Chips items={sectors.map((s) => s!.label)} tone="muted" />
-        </Section>
-      )}
-
-      {p.skills.length > 0 && (
-        <Section title="Skills">
-          <Chips items={p.skills} tone="muted" />
+      {(sectors.length > 0 || p.skills.length > 0) && (
+        <Section title="Into" icon={<IconSparkle size={12} />}>
+          <Chips items={[...sectors.map((s) => s!.label), ...p.skills]} tone="muted" />
         </Section>
       )}
 
       {(p.openToMentor || p.seekingMentor) && (
-        <Section title="Mentoring">
+        <Section title="Mentoring" icon={<IconPeople size={12} />}>
           <Chips
             items={[p.openToMentor ? "Open to mentoring" : null, p.seekingMentor ? "Looking for a mentor" : null].filter(
               (x): x is string => Boolean(x)
@@ -243,7 +258,7 @@ export default function PersonProfile({
       )}
 
       {/* ------------------------------------------------------ contact */}
-      <Section title="Reach them">
+      <Section title="Reach them" icon={<IconBriefcase size={12} />}>
         <div className="flex flex-col gap-1.5">
           {p.linkedinUrl && <LinkRow href={p.linkedinUrl} label="LinkedIn" />}
           {p.websiteUrl && <LinkRow href={p.websiteUrl} label="Website" />}
@@ -269,17 +284,8 @@ export default function PersonProfile({
         </div>
       </Section>
 
-      {children}
-    </div>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <p className="label">{title}</p>
-      {children}
-    </div>
+      <div className="reveal">{children}</div>
+    </Page>
   );
 }
 

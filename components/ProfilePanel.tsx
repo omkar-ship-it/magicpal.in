@@ -199,6 +199,23 @@ export default function ProfilePanel({
           ? "Sharing live location"
           : `Pinned at ${d.locationLabel ?? "your location"}`;
 
+  // What's actually missing, named rather than scored. A bare percentage
+  // tells somebody they're incomplete without telling them what to do; the
+  // first unfilled item is the only useful part of the number, so that is
+  // the part this shows.
+  const steps: Array<{ done: boolean; label: string }> = [
+    { done: Boolean(d.name && d.headline), label: "your name and a line about you" },
+    { done: d.lookingFor.length > 0, label: "what you're looking for" },
+    { done: d.canHelpWith.length > 0, label: "what you can help with" },
+    { done: d.interests.length > 0, label: "what you're into" },
+    { done: Boolean(d.workingOn), label: "what you're working on" },
+    { done: Boolean(d.photoUrl || d.avatarStyle), label: "a picture" },
+    { done: d.visibility !== "off", label: "where you appear" },
+  ];
+  const doneCount = steps.filter((x) => x.done).length;
+  const nextUp = steps.find((x) => !x.done);
+  const pct = Math.round((doneCount / steps.length) * 100);
+
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
       {/* A standing summary, so the long form below is something you scroll
@@ -224,6 +241,33 @@ export default function ProfilePanel({
           </p>
         </div>
       </div>
+
+      {/* The bar exists to answer "why bother" — every unfilled line is a
+          recommendation that can't be made, in either direction. It
+          disappears entirely once there's nothing left to say. */}
+      {nextUp && (
+        <div className="mb-4 rounded-2xl p-3" style={{ background: "var(--sunk)" }}>
+          <div className="flex items-baseline justify-between gap-2">
+            <p className="text-[12.5px] font-semibold">Your profile is {pct}% there</p>
+            <p className="mono text-[11.5px] text-[var(--ink-soft)]">
+              {doneCount}/{steps.length}
+            </p>
+          </div>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full" style={{ background: "var(--line)" }}>
+            <div
+              className="h-full rounded-full"
+              style={{
+                width: `${pct}%`,
+                background: "linear-gradient(90deg, var(--brand), var(--brand-deep))",
+                transition: "width 420ms cubic-bezier(0.22, 1, 0.36, 1)",
+              }}
+            />
+          </div>
+          <p className="mt-1.5 text-[12px] leading-[1.45] text-[var(--ink-soft)]">
+            Next: add {nextUp.label}.
+          </p>
+        </div>
+      )}
 
       <form onSubmit={save} className="flex flex-col gap-5 pb-2">
         {/* ------------------------------------------------- who you are */}

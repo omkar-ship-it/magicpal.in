@@ -7,6 +7,7 @@ import Avatar from "./Avatar";
 import BoardQR from "./BoardQR";
 import VerifiedBadge from "./VerifiedBadge";
 import EventDiscussion from "./EventDiscussion";
+import { Fact, Facts, Hero, Page, Row, Section } from "./Panel";
 import { IconBeacon, IconCalendar, IconCheck, IconClock, IconPeople, IconPin, IconSparkle } from "./Icons";
 
 /**
@@ -95,67 +96,78 @@ export default function EventPage({
   const full = event.capacity != null && event.going >= event.capacity;
   const onMap = event.lat != null && event.lng != null;
   const hereNow = extra?.attendees.filter((a) => a.hereNow).length ?? 0;
+  // The counts live on the section heading rather than under the chips, so
+  // the answer and the tally aren't two separate things to read.
+  const rsvpLine = `${event.going} going${event.capacity != null ? ` of ${event.capacity}` : ""}${
+    full && mine !== "going" ? " · full" : ""
+  }`;
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* ------------------------------------------------------ the what */}
-      <div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {event.live ? (
-            <span
-              className="pill"
-              style={{ background: "color-mix(in srgb, var(--good) 14%, transparent)", color: "var(--good)" }}
-            >
-              <IconBeacon size={10} /> Happening now
-            </span>
-          ) : (
-            <span className="pill" style={{ background: "var(--sunk)", color: "var(--layer-event)" }}>
-              <IconCalendar size={10} /> Event
-            </span>
-          )}
-          {extra?.parent && (
-            <span className="pill" style={{ background: "var(--sunk)", color: "var(--ink-soft)" }}>
-              <IconPeople size={10} /> {extra.parent.name}
-            </span>
-          )}
-        </div>
-        <h2 className="mt-1.5 text-[18px] font-semibold leading-tight">{event.name}</h2>
-        {event.blurb && <p className="mt-1 text-[13px] leading-[1.5]">{event.blurb}</p>}
-      </div>
-
-      {/* ------------------------------------------------- when and where */}
-      <div className="flex flex-col gap-2 rounded-xl p-3" style={{ background: "var(--sunk)" }}>
-        {event.startsAt && (
-          <Row icon={<IconClock size={13} />} label={whenLabel(event.startsAt)}>
-            {event.endsAt && (
-              <span className="text-[11.5px] text-[var(--ink-soft)]">
-                until {new Date(event.endsAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+    <Page>
+      <Hero
+        eyebrow={
+          <>
+            {event.live ? (
+              <span
+                className="pill"
+                style={{ background: "color-mix(in srgb, var(--good) 14%, transparent)", color: "var(--good)" }}
+              >
+                <IconBeacon size={10} /> Happening now
+              </span>
+            ) : (
+              <span className="pill" style={{ background: "var(--sunk)", color: "var(--layer-event)" }}>
+                <IconCalendar size={10} /> Event
               </span>
             )}
-          </Row>
-        )}
-        <Row icon={<IconPin size={13} />} label={event.place ?? "Venue to be announced"}>
-          {event.address && <span className="text-[11.5px] text-[var(--ink-soft)]">{event.address}</span>}
-          {!onMap && (
-            <span className="text-[11.5px] font-semibold" style={{ color: "var(--warn)" }}>
-              Not on the map{event.isHost ? " — add a venue so people can find it" : ""}
-            </span>
+            {extra?.parent && (
+              <span className="pill" style={{ background: "var(--sunk)", color: "var(--ink-soft)" }}>
+                <IconPeople size={10} /> {extra.parent.name}
+              </span>
+            )}
+          </>
+        }
+        title={event.name}
+        subtitle={event.blurb}
+        action={
+          event.isHost ? (
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onEdit}>
+              Edit
+            </button>
+          ) : null
+        }
+      />
+
+      {/* ------------------------------------------------- when and where */}
+      <div className="reveal">
+        <Facts>
+          {event.startsAt && (
+            <Fact icon={<IconClock size={13} />} label={whenLabel(event.startsAt)}>
+              {event.endsAt && (
+                <span className="text-[11.5px] text-[var(--ink-soft)]">
+                  until{" "}
+                  {new Date(event.endsAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+                </span>
+              )}
+            </Fact>
           )}
-        </Row>
-        {onMap && (
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm self-start"
-            onClick={onShow}
-          >
-            <IconPin size={12} /> Show it on the map
-          </button>
-        )}
+          <Fact icon={<IconPin size={13} />} label={event.place ?? "Venue to be announced"}>
+            {event.address && <span className="text-[11.5px] text-[var(--ink-soft)]">{event.address}</span>}
+            {!onMap && (
+              <span className="text-[11.5px] font-semibold" style={{ color: "var(--warn)" }}>
+                Not on the map{event.isHost ? " — add a venue so people can find it" : ""}
+              </span>
+            )}
+          </Fact>
+          {onMap && (
+            <button type="button" className="btn btn-ghost btn-sm self-start" onClick={onShow}>
+              <IconPin size={12} /> Show it on the map
+            </button>
+          )}
+        </Facts>
       </div>
 
-      {/* ------------------------------------------------------- the ask */}
-      <div>
-        <p className="label">Are you coming?</p>
+      {/* --------------------------------------------------------- the ask */}
+      <Section title="Are you coming?" icon={<IconCheck size={12} />} aside={rsvpLine}>
         <div className="flex flex-wrap gap-1.5">
           {(
             [
@@ -178,24 +190,12 @@ export default function EventPage({
             </button>
           ))}
         </div>
-        <p className="mt-1.5 text-[12px] text-[var(--ink-soft)]">
-          {event.going} going
-          {event.capacity != null ? ` of ${event.capacity}` : ""}
-          {full && mine !== "going" ? " · full" : ""}
-          {hereNow > 0 ? ` · ${hereNow} here now` : ""}
-        </p>
         {error && <p className="mt-1.5 text-[12px] font-medium text-[var(--warn)]">{error}</p>}
-      </div>
+      </Section>
 
-      {/* --------------------------------------------------------- host */}
       {extra?.host && (
-        <div>
-          <p className="label">Hosted by</p>
-          <button
-            type="button"
-            onClick={() => onOpenPerson(extra.host!.id)}
-            className="flex w-full items-center gap-2.5 rounded-xl p-2 text-left tap hover:bg-[var(--sunk)]"
-          >
+        <Section title="Hosted by" icon={<IconSparkle size={12} />}>
+          <Row onClick={() => onOpenPerson(extra.host!.id)}>
             <Avatar name={extra.host.name} photoUrl={extra.host.photoUrl} size={40} />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[13px] font-semibold">{extra.host.name}</span>
@@ -203,18 +203,14 @@ export default function EventPage({
                 <span className="block truncate text-[11.5px] text-[var(--ink-soft)]">{extra.host.headline}</span>
               )}
             </span>
-          </button>
-        </div>
+          </Row>
+        </Section>
       )}
 
-      {/* ------------------------------------------------ what to expect */}
       {event.details && (
-        <div>
-          <p className="label label-icon">
-            <IconSparkle size={12} /> What to expect
-          </p>
+        <Section title="What to expect" icon={<IconSparkle size={12} />}>
           <p className="whitespace-pre-line text-[12.5px] leading-[1.55]">{event.details}</p>
-        </div>
+        </Section>
       )}
 
       {event.url && (
@@ -222,28 +218,24 @@ export default function EventPage({
           href={event.url}
           target="_blank"
           rel="noreferrer noopener"
-          className="truncate text-[12.5px] font-semibold"
+          className="reveal truncate text-[12.5px] font-semibold"
           style={{ color: "var(--brand)" }}
         >
           Tickets and more →
         </a>
       )}
 
-      {/* ------------------------------------------------------- who else */}
       {extra && extra.attendees.length > 0 && (
-        <div>
-          <p className="label label-icon">
-            <IconPeople size={12} /> Who&rsquo;s coming · {extra.attendees.length}
-          </p>
-          <ul className="flex flex-col">
+        <Section
+          title="Who's coming"
+          icon={<IconPeople size={12} />}
+          aside={`${extra.attendees.length}${hereNow > 0 ? ` · ${hereNow} here` : ""}`}
+        >
+          <ul className="stagger flex flex-col">
             {extra.attendees.slice(0, 12).map((a) => (
               <li key={a.id}>
-                <button
-                  type="button"
-                  onClick={() => onOpenPerson(a.id)}
-                  className="flex w-full items-center gap-2.5 rounded-xl px-1.5 py-1.5 text-left tap hover:bg-[var(--sunk)]"
-                >
-                  <Avatar name={a.name} photoUrl={a.photoUrl} size={30} />
+                <Row onClick={() => onOpenPerson(a.id)}>
+                  <Avatar name={a.name} photoUrl={a.photoUrl} size={32} />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-1.5">
                       <span className="min-w-0 truncate text-[12.5px] font-semibold">{a.name}</span>
@@ -266,7 +258,7 @@ export default function EventPage({
                       Here
                     </span>
                   )}
-                </button>
+                </Row>
               </li>
             ))}
           </ul>
@@ -275,49 +267,22 @@ export default function EventPage({
               and {extra.attendees.length - 12} more
             </p>
           )}
-        </div>
+        </Section>
       )}
 
-      {/* ----------------------------------------------------- discussion */}
-      <EventDiscussion slug={event.slug} onOpenPerson={onOpenPerson} />
+      <div className="reveal">
+        <EventDiscussion slug={event.slug} onOpenPerson={onOpenPerson} />
+      </div>
 
-      {/* -------------------------------------------------------- share */}
-      <div>
-        <p className="label">Invite someone</p>
+      <Section title="Invite someone" icon={<IconPeople size={12} />}>
         {sharing ? (
           <BoardQR slug={event.slug} name={event.name} />
         ) : (
           <button type="button" className="btn btn-ghost btn-sm w-full" onClick={onShare}>
-            <IconPeople size={13} /> Show the QR code and link
+            Show the QR code and link
           </button>
         )}
-      </div>
-
-      {event.isHost && (
-        <button type="button" className="btn btn-ghost btn-sm w-full" onClick={onEdit}>
-          Edit this event
-        </button>
-      )}
-    </div>
-  );
-}
-
-function Row({
-  icon,
-  label,
-  children,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  children?: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-start gap-2">
-      <span className="mt-0.5 flex-none text-[var(--ink-soft)]">{icon}</span>
-      <div className="min-w-0 flex-1">
-        <p className="text-[12.5px] font-semibold leading-[1.4]">{label}</p>
-        {children && <div className="mt-0.5 flex flex-col">{children}</div>}
-      </div>
-    </div>
+      </Section>
+    </Page>
   );
 }

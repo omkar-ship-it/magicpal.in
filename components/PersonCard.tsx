@@ -20,6 +20,7 @@ export default function PersonCard({
   twoWay,
   onOpen,
   compact = false,
+  badge,
   children,
 }: {
   person: MapProfile & { hereNow?: boolean; unplaced?: boolean; verified?: boolean };
@@ -28,6 +29,8 @@ export default function PersonCard({
   twoWay?: boolean;
   onOpen?: () => void;
   compact?: boolean;
+  /** A rank or a label above the card — "Best match", and nothing else. */
+  badge?: React.ReactNode;
   /** Owner-only controls, hung under the card by the People window. */
   children?: React.ReactNode;
 }) {
@@ -35,7 +38,8 @@ export default function PersonCard({
   const offers = person.canHelpWith.map(topicById).filter(Boolean);
 
   return (
-    <article className="card p-3.5">
+    <article className="card lift p-3.5">
+      {badge && <div className="mb-2">{badge}</div>}
       <button type="button" onClick={onOpen} className="flex w-full items-start gap-3 text-left tap">
         <Avatar name={person.name} photoUrl={person.photoUrl} size={compact ? 46 : 56} />
         <div className="min-w-0 flex-1">

@@ -25,7 +25,7 @@ import PinsPanel from "./PinsPanel";
 import SignInPanel from "./SignInPanel";
 import ProfilePanel from "./ProfilePanel";
 import PublicOptIn from "./PublicOptIn";
-import { IconChat, IconHidden } from "./Icons";
+import { IconChat, IconHidden, IconSparkle } from "./Icons";
 
 export type Overlay = "signin" | "profile" | null;
 
@@ -653,15 +653,44 @@ function ForYou({
       </PanelNote>
     );
   }
+  // Somebody standing in the room right now outranks a better-stated match
+  // three suburbs away — proximity is the only thing this product has that
+  // a directory doesn't, and a recommendation you can act on in the next
+  // ten minutes is worth more than one you'll forget by tomorrow.
+  const ordered = [...matched].sort(
+    (a, b) => Number(Boolean(b.person.hereNow)) - Number(Boolean(a.person.hereNow))
+  );
+  const hereCount = ordered.filter((m) => m.person.hereNow).length;
+
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="flex flex-col gap-2.5">
-        {matched.map(({ match, person }) => (
+      <p className="mb-2.5 text-[12px] leading-[1.45] text-[var(--ink-soft)]">
+        {ordered.length} {ordered.length === 1 ? "person" : "people"} worth your time on{" "}
+        <span className="font-semibold text-[var(--ink)]">{scopeName}</span>
+        {hereCount > 0 ? ` · ${hereCount} here right now` : ""}.
+      </p>
+      <div className="stagger flex flex-col gap-2.5">
+        {ordered.map(({ match, person }, i) => (
           <PersonCard
             key={person.id}
             person={person}
             reason={match.reason}
             twoWay={match.twoWay}
+            badge={
+              // A list with no point of view is a list. One label, on the
+              // one the matcher actually ranked first.
+              i === 0 ? (
+                <span
+                  className="pill"
+                  style={{
+                    background: "color-mix(in srgb, var(--brand) 13%, transparent)",
+                    color: "var(--brand)",
+                  }}
+                >
+                  <IconSparkle size={10} /> {person.hereNow ? "Here now — start with them" : "Start with them"}
+                </span>
+              ) : undefined
+            }
             onOpen={() => onOpen(person.id)}
           />
         ))}

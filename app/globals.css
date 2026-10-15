@@ -631,6 +631,60 @@ h1, h2, h3 {
   transform: scale(0.985);
 }
 
+/* ------------------------------------------------------ micro-motion
+
+   Four things, and deliberately only four. Motion earns its place when it
+   tells you something — that a surface arrived, that a thing is reachable,
+   that a tap registered, that a number changed. Past that it is latency
+   somebody added on purpose, so none of these runs longer than 260ms and
+   all of them are transform or opacity only. */
+
+/* Reachable: a card or row rises very slightly under the pointer. */
+.lift {
+  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 160ms ease,
+    background-color 160ms ease;
+}
+.lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+.lift:active { transform: translateY(0) scale(0.99); }
+
+/* A row that highlights rather than lifts — for lists, where a dozen
+   rising cards would be a wave. */
+.row-hit { transition: background-color 140ms ease; }
+.row-hit:hover { background: var(--sunk); }
+
+/* Blocks of a page arrive in order, top to bottom. Short, and capped: past
+   eight the delay is just somebody waiting. */
+@keyframes reveal-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.reveal { animation: reveal-up 260ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.reveal-seq > .reveal:nth-child(1) { animation-delay: 0ms; }
+.reveal-seq > .reveal:nth-child(2) { animation-delay: 40ms; }
+.reveal-seq > .reveal:nth-child(3) { animation-delay: 80ms; }
+.reveal-seq > .reveal:nth-child(4) { animation-delay: 120ms; }
+.reveal-seq > .reveal:nth-child(5) { animation-delay: 160ms; }
+.reveal-seq > .reveal:nth-child(6) { animation-delay: 200ms; }
+.reveal-seq > .reveal:nth-child(7) { animation-delay: 230ms; }
+.reveal-seq > .reveal:nth-child(n + 8) { animation-delay: 260ms; }
+
+/* A tally that just changed. One beat, so a reaction count feels answered
+   rather than silently different. */
+@keyframes pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+.pop { animation: pop 220ms cubic-bezier(0.22, 1, 0.36, 1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal, .pop { animation: none !important; }
+  .lift:hover, .lift:active { transform: none; }
+}
+
 /* Panels arrive from the edge they belong to — the sheet from the bottom on
    a phone, the card from the right on a desktop. */
 @keyframes sheet-up {

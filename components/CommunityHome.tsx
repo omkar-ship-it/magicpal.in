@@ -5,6 +5,7 @@ import type { EventRef, ShellPayload } from "@/lib/shell";
 import { whenLabel } from "@/lib/time";
 import BoardQR from "./BoardQR";
 import PanelNote from "./PanelNote";
+import { Hero, Page, Row, Section, Stat, Stats } from "./Panel";
 import EditCommunity from "./EditCommunity";
 import LeaveCommunity from "./LeaveCommunity";
 import { IconBeacon, IconCalendar, IconCheck, IconPeople, IconPin, IconSparkle } from "./Icons";
@@ -72,171 +73,144 @@ export default function CommunityHome({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
-      <div>
-        <div className="flex items-start gap-2">
-          <h2 className="min-w-0 flex-1 text-[17px] font-semibold leading-tight">{scope.name}</h2>
-          {home.isHost && (
-            <button type="button" className="btn btn-ghost btn-sm flex-none" onClick={() => setEditing(true)}>
-              Edit
-            </button>
-          )}
-        </div>
-        {scope.blurb && <p className="mt-1 text-[13px] leading-[1.5]">{scope.blurb}</p>}
-        <p className="mt-1.5 text-[12px] text-[var(--ink-soft)]">
-          Run by {home.hostName} · since {new Date(home.createdAt).toLocaleDateString(undefined, { month: "long", year: "numeric" })}
-        </p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Stat icon={<IconPeople size={14} />} value={memberCount} label="members" onClick={onOpenPeople} />
-        {/* The number that answers "do I know who these people are?" — the
-            whole reason verification exists, so it sits beside the headcount
-            rather than being something you'd have to go counting. */}
-        <Stat
-          icon={<IconCheck size={14} />}
-          value={home.verifiedCount}
-          label="verified"
-          tone={home.verifiedCount > 0 ? "good" : undefined}
-          onClick={onOpenPeople}
+    <div className="min-h-0 flex-1 overflow-y-auto">
+      <Page>
+        <Hero
+          eyebrow={
+            <span className="pill" style={{ background: "var(--sunk)", color: "var(--ink-soft)" }}>
+              <IconPeople size={10} /> Community
+            </span>
+          }
+          title={scope.name}
+          subtitle={scope.blurb}
+          action={
+            home.isHost ? (
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}>
+                Edit
+              </button>
+            ) : null
+          }
+          meta={
+            <>
+              <span className="text-[12px] text-[var(--ink-soft)]">
+                Run by {home.hostName} · since{" "}
+                {new Date(home.createdAt).toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+              </span>
+              {home.place && (
+                <span className="flex items-center gap-1 text-[12px] text-[var(--ink-soft)]">
+                  <IconPin size={11} /> {home.place}
+                </span>
+              )}
+            </>
+          }
         />
-        <Stat icon={<IconCalendar size={14} />} value={home.eventCount} label="events" onClick={onOpenEvents} />
-        <Stat
-          icon={<IconBeacon size={14} />}
-          value={home.hereNow}
-          label="here now"
-          tone={home.hereNow > 0 ? "good" : undefined}
-        />
-      </div>
 
-      {home.place && (
-        <p className="flex items-center gap-1.5 text-[12.5px] text-[var(--ink-soft)]">
-          <IconPin size={12} /> {home.place}
-        </p>
-      )}
-
-      {home.details && (
-        <div>
-          <p className="label label-icon">
-            <IconSparkle size={12} /> What this community is for
-          </p>
-          <p className="whitespace-pre-line text-[12.5px] leading-[1.55]">{home.details}</p>
+        <div className="reveal">
+          <Stats>
+            <Stat icon={<IconPeople size={14} />} value={memberCount} label="members" onClick={onOpenPeople} />
+            {/* The number that answers "do I know who these people are?" —
+                the whole reason verification exists, so it sits beside the
+                headcount rather than being something you'd go counting. */}
+            <Stat
+              icon={<IconCheck size={14} />}
+              value={home.verifiedCount}
+              label="verified"
+              tone={home.verifiedCount > 0 ? "good" : undefined}
+              onClick={onOpenPeople}
+            />
+            <Stat icon={<IconCalendar size={14} />} value={home.eventCount} label="events" onClick={onOpenEvents} />
+            <Stat
+              icon={<IconBeacon size={14} />}
+              value={home.hereNow}
+              label="here now"
+              tone={home.hereNow > 0 ? "good" : undefined}
+            />
+          </Stats>
         </div>
-      )}
 
-      {/* House rules get their own block with a border rather than reading as
-          another paragraph: they're the terms of being here, and the thing
-          the owner points at when they remove somebody. */}
-      {home.guidelines ? (
-        <div className="rounded-xl border p-3" style={{ borderColor: "var(--line)", background: "var(--sunk)" }}>
-          <p className="label label-icon">
-            <IconCheck size={12} /> House rules
-          </p>
-          <p className="whitespace-pre-line text-[12.5px] leading-[1.55]">{home.guidelines}</p>
-        </div>
-      ) : home.isHost ? (
-        <button
-          type="button"
-          onClick={() => setEditing(true)}
-          className="rounded-xl border border-dashed p-3 text-left tap"
-          style={{ borderColor: "var(--line)" }}
-        >
-          <p className="text-[12.5px] font-semibold">Add house rules →</p>
-          <p className="mt-0.5 text-[11.5px] leading-[1.45] text-[var(--ink-soft)]">
-            What&rsquo;s welcome here and what isn&rsquo;t. Everyone sees them, and they&rsquo;re what you point at if
-            you ever have to remove somebody.
-          </p>
-        </button>
-      ) : null}
-
-      <div>
-        <p className="label label-icon">
-          <IconCalendar size={12} /> Coming up
-        </p>
-        {upcoming.length === 0 ? (
-          <p className="text-[12.5px] leading-[1.5] text-[var(--ink-soft)]">
-            Nothing scheduled. {home.isHost ? "Create an event and everyone here sees it." : "The host hasn't posted one yet."}
-          </p>
-        ) : (
-          <ul className="flex flex-col gap-1.5">
-            {upcoming.map((e) => (
-              <li key={e.slug}>
-                <button
-                  type="button"
-                  onClick={onOpenEvents}
-                  className="flex w-full items-center gap-2.5 rounded-xl p-2 text-left tap hover:bg-[var(--sunk)]"
-                >
-                  <span
-                    className="grid h-8 w-8 flex-none place-items-center rounded-xl"
-                    style={{ background: "var(--sunk)", color: "var(--layer-event)" }}
-                  >
-                    <IconCalendar size={14} />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[12.5px] font-semibold">{e.name}</span>
-                    <span className="block truncate text-[11.5px] text-[var(--ink-soft)]">
-                      {e.startsAt ? whenLabel(e.startsAt) : ""}
-                      {e.going > 0 ? ` · ${e.going} going` : ""}
-                    </span>
-                  </span>
-                  {e.live && (
-                    <span
-                      className="pill flex-none"
-                      style={{ background: "color-mix(in srgb, var(--good) 14%, transparent)", color: "var(--good)" }}
-                    >
-                      Live
-                    </span>
-                  )}
-                </button>
-              </li>
-            ))}
-          </ul>
+        {home.details && (
+          <Section title="What this community is for" icon={<IconSparkle size={12} />}>
+            <p className="whitespace-pre-line text-[12.5px] leading-[1.55]">{home.details}</p>
+          </Section>
         )}
-      </div>
 
-      <div>
-        <p className="label label-icon">
-          <IconSparkle size={12} /> Invite someone
-        </p>
-        <BoardQR slug={scope.slug} name={scope.name} />
-      </div>
+        {/* House rules get a bordered block rather than another paragraph:
+            they're the terms of being here, and the thing the owner points
+            at when they remove somebody. */}
+        {home.guidelines ? (
+          <Section title="House rules" icon={<IconCheck size={12} />}>
+            <div className="rounded-2xl border p-3.5" style={{ borderColor: "var(--line)", background: "var(--sunk)" }}>
+              <p className="whitespace-pre-line text-[12.5px] leading-[1.55]">{home.guidelines}</p>
+            </div>
+          </Section>
+        ) : home.isHost ? (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="reveal lift rounded-2xl border border-dashed p-3.5 text-left tap"
+            style={{ borderColor: "var(--line)" }}
+          >
+            <p className="text-[12.5px] font-semibold">Add house rules →</p>
+            <p className="mt-0.5 text-[11.5px] leading-[1.45] text-[var(--ink-soft)]">
+              What&rsquo;s welcome here and what isn&rsquo;t. Everyone sees them, and they&rsquo;re what you point at
+              if you ever have to remove somebody.
+            </p>
+          </button>
+        ) : null}
 
-      {home.canLeave && <LeaveCommunity slug={scope.slug} name={scope.name} onLeft={onChanged} />}
-    </div>
-  );
-}
+        <Section
+          title="Coming up"
+          icon={<IconCalendar size={12} />}
+          aside={home.eventCount > upcoming.length ? `${home.eventCount} in all` : undefined}
+        >
+          {upcoming.length === 0 ? (
+            <p className="text-[12.5px] leading-[1.5] text-[var(--ink-soft)]">
+              Nothing scheduled.{" "}
+              {home.isHost ? "Create an event and everyone here sees it." : "The host hasn't posted one yet."}
+            </p>
+          ) : (
+            <ul className="stagger flex flex-col">
+              {upcoming.map((e) => (
+                <li key={e.slug}>
+                  <Row onClick={onOpenEvents}>
+                    <span
+                      className="grid h-9 w-9 flex-none place-items-center rounded-xl"
+                      style={{ background: "var(--sunk)", color: "var(--layer-event)" }}
+                    >
+                      <IconCalendar size={15} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[12.5px] font-semibold">{e.name}</span>
+                      <span className="block truncate text-[11.5px] text-[var(--ink-soft)]">
+                        {e.startsAt ? whenLabel(e.startsAt) : ""}
+                        {e.going > 0 ? ` · ${e.going} going` : ""}
+                      </span>
+                    </span>
+                    {e.live && (
+                      <span
+                        className="pill flex-none"
+                        style={{ background: "color-mix(in srgb, var(--good) 14%, transparent)", color: "var(--good)" }}
+                      >
+                        <IconBeacon size={10} /> Live
+                      </span>
+                    )}
+                  </Row>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
 
-function Stat({
-  icon,
-  value,
-  label,
-  tone,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  value: number;
-  label: string;
-  tone?: "good";
-  onClick?: () => void;
-}) {
-  const color = tone === "good" ? "var(--good)" : "var(--ink)";
-  const inner = (
-    <>
-      <span className="flex items-center justify-center gap-1" style={{ color }}>
-        {icon}
-        <span className="text-[16px] font-bold">{value}</span>
-      </span>
-      <span className="mt-0.5 block text-[11px] text-[var(--ink-soft)]">{label}</span>
-    </>
-  );
-  const cls = "rounded-xl p-2.5 text-center";
-  return onClick ? (
-    <button type="button" onClick={onClick} className={`${cls} tap`} style={{ background: "var(--sunk)" }}>
-      {inner}
-    </button>
-  ) : (
-    <div className={cls} style={{ background: "var(--sunk)" }}>
-      {inner}
+        <Section title="Invite someone" icon={<IconSparkle size={12} />}>
+          <BoardQR slug={scope.slug} name={scope.name} />
+        </Section>
+
+        {home.canLeave && (
+          <div className="reveal">
+            <LeaveCommunity slug={scope.slug} name={scope.name} onLeft={onChanged} />
+          </div>
+        )}
+      </Page>
     </div>
   );
 }
