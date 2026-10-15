@@ -11,6 +11,7 @@ import TopicPicker from "./TopicPicker";
 import VisibilityPicker, { type Visibility } from "./VisibilityPicker";
 import CreateBoard from "./CreateBoard";
 import BoardQR from "./BoardQR";
+import SignOut from "./SignOut";
 import PanelNote from "./PanelNote";
 import Avatar from "./Avatar";
 import { IconCheck, IconPeople, IconPin, IconPlus, IconSparkle, IconUser } from "./Icons";
@@ -83,6 +84,7 @@ export default function ProfilePanel({
   const [photoError, setPhotoError] = useState("");
   const [creating, setCreating] = useState(false);
   const [shareSlug, setShareSlug] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -91,6 +93,7 @@ export default function ProfilePanel({
       .then((json) => {
         if (!alive || !json.profile) return;
         const p = json.profile;
+        setEmail(p.email ?? "");
         setD({
           name: p.name,
           headline: p.headline,
@@ -518,6 +521,8 @@ export default function ProfilePanel({
           )}
         </div>
       </section>
+
+      <SignOut email={email} live={d.visibility === "live"} />
     </div>
   );
 }

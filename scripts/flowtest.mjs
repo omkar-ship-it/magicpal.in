@@ -1260,6 +1260,42 @@ async function main() {
     });
     assert(notOwnerEdit.status === 403, "a non-owner can't rewrite the rules");
 
+    console.log("\nSigning out revokes the session, not just the cookie");
+    // A spareCookie session for Carol, minted directly — this is about what
+    // logout does to a session, not about how one is obtained.
+    const { rows: extra } = await pool.query(
+      `insert into sessions (user_id, expires_at)
+       select id, now() + interval '1 day' from users where email = $1 returning id`,
+      [emailC]
+    );
+    const spareCookie = `mp_session=${extra[0].id}`;
+    const asSecond = (path, init = {}) =>
+      fetch(BASE + path, { ...init, headers: { ...(init.headers ?? {}), Cookie: spareCookie } });
+
+    assert((await asSecond("/api/profile")).status === 200, "a second session works while signed in");
+
+    const signedOut = await asSecond("/api/auth/logout", { method: "POST" });
+    assert(signedOut.status === 200, "signing out answers cleanly");
+
+    const { rows: goneRows } = await pool.query("select count(*)::int n from sessions where id = $1", [
+      extra[0].id,
+    ]);
+    assert(goneRows[0].n === 0, "…and deletes the session row rather than only clearing the cookie");
+
+    // The part a cookie-only sign-out gets wrong: anybody still holding the
+    // old value — a shared machine, a copied header, a stale tab — would
+    // keep full access for the rest of the session's lifetime.
+    assert(
+      (await asSecond("/api/profile")).status === 401,
+      "a captured cookie is dead the moment its owner signs out"
+    );
+
+    const otherStillIn = await api("/api/profile", { jar: c.jar });
+    assert(otherStillIn.status === 200, "signing out on one device leaves that person's other sessions alone");
+
+    const outTwice = await asSecond("/api/auth/logout", { method: "POST" });
+    assert(outTwice.status === 200, "signing out twice is not an error");
+
     console.log("\nEvery entry point terminates");
     for (const [label, path] of [
       ["a QR scan while signed out", `/join/${slug}`],

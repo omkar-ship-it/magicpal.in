@@ -56,6 +56,29 @@ export async function clearSessionCookie() {
   store.delete(SESSION_COOKIE);
 }
 
+/**
+ * Sign out properly: revoke the session, then drop the cookie.
+ *
+ * Deleting the cookie alone is not signing out. The session id stays valid
+ * in the database, so anything that captured it — a shared machine with a
+ * saved cookie, a copied header, a stale tab — keeps full access to the
+ * account for the next thirty days. Clearing the browser's copy of a key
+ * while leaving the lock unchanged is a convenience feature pretending to
+ * be a security one.
+ *
+ * Only this one session is revoked. Signing out on a laptop shouldn't log
+ * you out of your phone — that's a "sign out everywhere" control, and it
+ * belongs next to a password change, which this product doesn't have.
+ */
+export async function destroySession(): Promise<void> {
+  const store = await cookies();
+  const sid = store.get(SESSION_COOKIE)?.value;
+  if (sid && UUID.test(sid) && hasDb && db) {
+    await db.delete(sessions).where(eq(sessions.id, sid));
+  }
+  store.delete(SESSION_COOKIE);
+}
+
 export async function getSessionUser(): Promise<SessionUser | null> {
   if (!hasDb || !db) return null;
   const store = await cookies();

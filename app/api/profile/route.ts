@@ -30,6 +30,9 @@ export async function GET() {
   if (!row) return NextResponse.json({ error: "No profile." }, { status: 404 });
   return NextResponse.json({
     profile: {
+      // Shown on the sign-out confirmation, so somebody can see which
+      // account they're about to leave before they leave it.
+      email: row.email,
       name: row.name ?? "",
       headline: row.headline ?? "",
       company: row.company ?? "",
