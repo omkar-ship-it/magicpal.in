@@ -106,7 +106,7 @@ export default function EventsPanel({
 
   if (open) {
     return (
-      <div className="scroll-clean min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         <button type="button" className="btn btn-ghost btn-sm mb-2" onClick={() => onOpenSlug(null)}>
           <IconChevronLeft size={13} /> All events
         </button>

@@ -56,7 +56,7 @@ export default function MapDock({
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-2 pb-[max(10px,env(safe-area-inset-bottom))]">
       <div
-        className="pointer-events-auto flex max-w-full items-center gap-0.5 overflow-x-auto rounded-[24px] border p-1.5"
+        className="scroll-none pointer-events-auto flex max-w-full items-center gap-0.5 overflow-x-auto rounded-[24px] border p-1.5"
         style={{
           background: "color-mix(in srgb, var(--chrome) 94%, transparent)",
           borderColor: "var(--chrome-line)",

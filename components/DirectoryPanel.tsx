@@ -84,7 +84,7 @@ export default function DirectoryPanel({
         )}
       </div>
 
-      <div className="scroll-clean min-h-0 flex-1 overflow-y-auto">{children}</div>
+      <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
 
       {footer && <div className="flex-none pt-2.5">{footer}</div>}
     </div>

@@ -175,45 +175,66 @@ h1, h2, h3 {
 .btn-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--warn) 10%, transparent); }
 .btn-sm { padding: 7px 14px; font-size: 12.5px; }
 
-/* Scroll areas inside floating windows hide their bar entirely.
-   A panel 320px wide loses real content to a scrollbar gutter, and the
-   track sitting against a rounded glass edge reads as a rendering bug
-   rather than an affordance. The content still scrolls by wheel, trackpad,
-   touch and keyboard — only the chrome is gone. */
-/* Dock slots answer the press. Small, fast, and on transform only, so it
-   costs nothing and never reflows the row. */
-.dock-slot {
-  transition: background 160ms ease, box-shadow 160ms ease, transform 140ms cubic-bezier(0.22, 1, 0.36, 1);
+/* ------------------------------------------------------- scrollbars
+
+   Every scroll area inside the floating chrome gets the same slim, themed
+   bar. Scoped in CSS rather than applied class-by-class because there are
+   ten of them and the eleventh — written next week — would be the one that
+   shipped with the default again.
+
+   Not hidden: a panel that scrolls should look like it scrolls, and a
+   surface with no affordance at all is its own bug. What was wrong was the
+   platform default — a wide, opaque, light-grey track that ignores the
+   theme and sits against a rounded glass edge looking like a rendering
+   fault. This one is the page's own ink at low alpha, inset off the edge by
+   a transparent border, over no track at all. */
+.floating-panel,
+.floating-panel *,
+.sheet,
+.floating-list {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--ink) 20%, transparent) transparent;
 }
-.dock-slot:hover { transform: translateY(-2px); }
-.dock-slot:active { transform: translateY(0) scale(0.95); }
-@media (prefers-reduced-motion: reduce) {
-  .dock-slot:hover, .dock-slot:active { transform: none; }
+.floating-panel::-webkit-scrollbar,
+.floating-panel *::-webkit-scrollbar,
+.sheet::-webkit-scrollbar,
+.floating-list::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.floating-panel::-webkit-scrollbar-track,
+.floating-panel *::-webkit-scrollbar-track,
+.sheet::-webkit-scrollbar-track,
+.floating-list::-webkit-scrollbar-track,
+.floating-panel *::-webkit-scrollbar-corner,
+.sheet::-webkit-scrollbar-corner,
+.floating-list::-webkit-scrollbar-corner {
+  background: transparent;
+}
+.floating-panel::-webkit-scrollbar-thumb,
+.floating-panel *::-webkit-scrollbar-thumb,
+.sheet::-webkit-scrollbar-thumb,
+.floating-list::-webkit-scrollbar-thumb {
+  /* The transparent border plus padding-box clip is what insets the thumb:
+     it draws ~4px wide with breathing room instead of filling the gutter. */
+  background: color-mix(in srgb, var(--ink) 18%, transparent);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+.floating-panel::-webkit-scrollbar-thumb:hover,
+.floating-panel *::-webkit-scrollbar-thumb:hover,
+.sheet::-webkit-scrollbar-thumb:hover,
+.floating-list::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--ink) 38%, transparent);
+  background-clip: padding-box;
 }
 
-/* The chat composer's three actions. Square, quiet, and the same height as
-   the field they sit beside, so the row reads as one control. */
-.composer-btn {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 34px;
-  height: 34px;
-  border-radius: 11px;
-  border: 1px solid var(--line);
-  background: var(--card);
-  color: var(--ink-soft);
-  transition: border-color 140ms ease, color 140ms ease, background 140ms ease;
-}
-.composer-btn:hover { border-color: var(--brand); color: var(--brand); }
-.composer-btn[data-on="true"] {
-  border-color: var(--brand);
-  background: color-mix(in srgb, var(--brand) 12%, var(--card));
-  color: var(--brand);
-}
-
-.scroll-clean { scrollbar-width: none; -ms-overflow-style: none; }
-.scroll-clean::-webkit-scrollbar { width: 0; height: 0; display: none; }
+/* The dock is the exception: it scrolls sideways on a narrow phone, and a
+   horizontal bar across the one piece of navigation would be noise under
+   something you are meant to tap, not read. */
+.scroll-none { scrollbar-width: none; -ms-overflow-style: none; }
+.scroll-none::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
 .input {
   width: 100%;
