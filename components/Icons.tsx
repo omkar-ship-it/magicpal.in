@@ -145,19 +145,25 @@ export function IconBeacon(p: Props) {
 }
 
 /**
- * An ad-hoc meet-up: two people in conversation.
+ * Dropping a pin: a marker, and the ground it lands on.
  *
- * Purpose-built rather than borrowed, and used in exactly two places — the
- * "Now" slot in the dock and the pin on the map — so the marker and the
- * module that lists it are visibly the same thing. A beacon would have read
- * as "live location", which is what every other person on this map already
- * has; two bubbles say somebody wants to *talk*.
+ * It was two speech bubbles, which sat two slots away from Chats in the
+ * dock and read as a second chat icon — the glyph was describing what
+ * happens *after* somebody walks over rather than the thing you actually
+ * do. A pin says it directly.
+ *
+ * The ellipse underneath is what keeps it from being `IconPin`, which means
+ * "a location" wherever it appears. This one means "put one here".
+ *
+ * Used in exactly two places — the dock's Now slot and the map marker — so
+ * the module and the thing it lists are visibly one feature.
  */
 export function IconMeetup(p: Props) {
   return (
     <Svg {...p}>
-      <path d="M4.4 3.6h7.2A2.4 2.4 0 0 1 14 6v3.2a2.4 2.4 0 0 1-2.4 2.4H8.2L5.4 13.8v-2.2h-1A2.4 2.4 0 0 1 2 9.2V6a2.4 2.4 0 0 1 2.4-2.4Z" />
-      <path d="M19.6 20.4h-7.2A2.4 2.4 0 0 1 10 18v-3.2a2.4 2.4 0 0 1 2.4-2.4h3.4l2.8-2.2v2.2h1A2.4 2.4 0 0 1 22 14.8V18a2.4 2.4 0 0 1-2.4 2.4Z" />
+      <path d="M17 8.8c0 4.2-5 8.5-5 8.5S7 13 7 8.8a5 5 0 0 1 10 0Z" />
+      <circle cx="12" cy="8.8" r="1.9" />
+      <path d="M8.3 16.6C5.7 17.1 4 18 4 19.1c0 1.4 3.6 2.4 8 2.4s8-1 8-2.4c0-1.1-1.7-2-4.3-2.5" />
     </Svg>
   );
 }
