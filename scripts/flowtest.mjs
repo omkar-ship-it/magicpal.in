@@ -1062,6 +1062,27 @@ async function main() {
       !otherBoard || otherBoard.verified === false,
       "…and a community that hasn't vouched isn't credited with it"
     );
+    // The badge is viewer-relative: it means "a community you're BOTH in
+    // says so". A tick visible to somebody with no shared community would
+    // be an assertion from nobody — and would make the badge farmable by
+    // spinning up a community and verifying yourself.
+    const insiderMap = await api(`/api/map?net=${comm.data.slug}`, { jar: a.jar });
+    const bobInside = insiderMap.data.people.find((p) => p.name === "Flow Bob");
+    assert(bobInside?.verified === true, "a shared community's vouch reaches the map payload");
+    assert(bobInside?.verifiedHere === true, "…and the board's own claim is carried separately for the owner");
+
+    // Same person, seen from the open map rather than inside the community.
+    const openView = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}&radiusKm=50`, { jar: a.jar });
+    const bobOutside = openView.data.people.find((p) => p.name === "Flow Bob");
+    assert(bobOutside?.verified === true, "the badge follows them onto the open map, for people who share the community");
+
+    const strangerMap = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}&radiusKm=50`, { jar: c.jar });
+    const bobToStranger = strangerMap.data.people.find((p) => p.name === "Flow Bob");
+    assert(
+      !bobToStranger || bobToStranger.verified === false,
+      "…but shows nothing to somebody who shares no community with them"
+    );
+
     const strangerView = await api(`/api/person/${bId}`, { jar: c.jar });
     assert(
       strangerView.data.shared.every((x) => x.slug !== comm.data.slug),

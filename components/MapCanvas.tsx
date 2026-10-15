@@ -12,6 +12,7 @@ import Avatar from "./Avatar";
 import { topicById } from "@/lib/intents";
 import { whenLabel } from "@/lib/time";
 import { IconCalendar, IconCity, IconPin } from "./Icons";
+import VerifiedBadge from "./VerifiedBadge";
 
 /**
  * Which Mapbox style to draw, following the viewer's theme.
@@ -73,7 +74,7 @@ export default function MapCanvas({
   onSelectEvent,
   onMoveEnd,
 }: {
-  people: Array<MapProfile & { hereNow?: boolean }>;
+  people: Array<MapProfile & { hereNow?: boolean; verified?: boolean }>;
   /** The viewer, drawn distinctly so they can verify their own visibility. */
   you?: SelfMarker | null;
   events?: MapEvent[];
@@ -328,7 +329,7 @@ export default function MapCanvas({
  * revealed by CSS (.hover-host) rather than by React state, so moving the
  * pointer across a crowded stack doesn't re-render the whole map.
  */
-function PinCard({ person }: { person: MapProfile & { hereNow?: boolean } }) {
+function PinCard({ person }: { person: MapProfile & { hereNow?: boolean; verified?: boolean } }) {
   const wants = person.lookingFor.map(topicById).filter(Boolean).slice(0, 2);
   return (
     <span
@@ -336,7 +337,12 @@ function PinCard({ person }: { person: MapProfile & { hereNow?: boolean } }) {
       style={{ background: "var(--card)", boxShadow: "var(--shadow-lift)" }}
       aria-hidden="true"
     >
-      <span className="block truncate text-[12.5px] font-semibold">{person.name}</span>
+      {/* The badge belongs here as much as on the profile: this card is
+          where somebody decides whether the face is worth a click. */}
+      <span className="flex items-center gap-1.5">
+        <span className="min-w-0 truncate text-[12.5px] font-semibold">{person.name}</span>
+        {person.verified && <VerifiedBadge size={12} label="Verified by a community you're both in" />}
+      </span>
       {person.headline && (
         <span className="block truncate text-[11.5px] text-[var(--ink-soft)]">
           {person.headline}
@@ -413,7 +419,7 @@ function FaceStack({
   highlighted,
   onSelect,
 }: {
-  group: Array<MapProfile & { hereNow?: boolean }>;
+  group: Array<MapProfile & { hereNow?: boolean; verified?: boolean }>;
   highlighted: Set<string>;
   onSelect?: (id: string) => void;
 }) {
@@ -443,6 +449,12 @@ function FaceStack({
             }
           >
             <Avatar name={p.name} photoUrl={p.photoUrl} size={40} ring={2.5} />
+            {/* Bottom-right, so it never collides with the live dot above. */}
+            {p.verified && (
+              <span className="absolute -bottom-0.5 -right-0.5">
+                <VerifiedBadge size={14} label="Verified by a community you're both in" />
+              </span>
+            )}
             {p.placed === "live" && (
               <span
                 className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full"

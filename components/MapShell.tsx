@@ -190,7 +190,7 @@ export default function MapShell({
   // comparing ids in the client: the server already decided, and two places
   // deciding "am I the owner" is two places to get it wrong.
   const ownsScope = Boolean(data.scope.home?.isHost);
-  const unverified = ownsScope ? data.people.filter((p) => !p.verified).length : 0;
+  const unverified = ownsScope ? data.people.filter((p) => !p.verifiedHere).length : 0;
 
   const shown = useMemo(() => applyFacets(data.people, facets), [data.people, facets]);
   const byId = useMemo(() => new Map(data.people.map((p) => [p.id, p])), [data.people]);

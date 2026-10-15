@@ -21,7 +21,7 @@ export default function MemberControls({
   onChanged,
 }: {
   slug: string;
-  person: { id: string; name: string; verified?: boolean };
+  person: { id: string; name: string; verifiedHere?: boolean };
   /** Told which action landed: a vouch leaves you on the profile, a removal
       has nothing left to show you. */
   onChanged: (action: "verify" | "unverify" | "remove") => void;
@@ -79,18 +79,18 @@ export default function MemberControls({
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          className={person.verified ? "btn btn-ghost btn-sm" : "btn btn-primary btn-sm"}
+          className={person.verifiedHere ? "btn btn-ghost btn-sm" : "btn btn-primary btn-sm"}
           disabled={busy}
-          onClick={() => act(person.verified ? "unverify" : "verify")}
+          onClick={() => act(person.verifiedHere ? "unverify" : "verify")}
         >
-          {person.verified ? <IconX size={12} /> : <IconCheck size={12} />}
-          {person.verified ? "Remove verification" : `Verify ${first}`}
+          {person.verifiedHere ? <IconX size={12} /> : <IconCheck size={12} />}
+          {person.verifiedHere ? "Remove verification" : `Verify ${first}`}
         </button>
         <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setConfirming(true)}>
           Remove from community
         </button>
       </div>
-      {!person.verified && (
+      {!person.verifiedHere && (
         <p className="mt-1.5 text-[11.5px] leading-[1.45] text-[var(--ink-soft)]">
           Verifying says you know {first} really is who they say. Everyone here sees the badge.
         </p>

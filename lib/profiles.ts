@@ -272,7 +272,7 @@ export async function getBoardMembers(
   boardId: string,
   opts: { excludeUserId?: string; centerLat?: number; centerLng?: number } = {}
 ): Promise<
-  Array<MapProfile & { hereNow: boolean; role: string; unplaced: boolean; verified: boolean; joinedAt: string }>
+  Array<MapProfile & { hereNow: boolean; role: string; unplaced: boolean; verifiedHere: boolean; joinedAt: string }>
 > {
   if (!hasDb || !db) return [];
 
@@ -305,7 +305,10 @@ export async function getBoardMembers(
   return rows.map((r) => {
     const mapped = toMapProfile(r, centre);
     const hereNow = Boolean(r.checkedInAt && new Date(r.checkedInAt) > checkedInSince);
-    const vouched = { verified: r.verifiedAt != null, joinedAt: r.joinedAt.toISOString() };
+    // This board's own claim about them, which is what the owner manages.
+    // The badge other members see is `verified`, decided per viewer in
+    // lib/vouch — a board can only vouch to people who are actually in it.
+    const vouched = { verifiedHere: r.verifiedAt != null, joinedAt: r.joinedAt.toISOString() };
     if (mapped) return { ...mapped, hereNow, role: r.role, unplaced: false, ...vouched };
     // Set to `off`, or no coordinates yet. They are a real member and must
     // still be listed and matchable — they simply have no pin. The board UI

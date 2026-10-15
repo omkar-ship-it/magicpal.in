@@ -1,5 +1,6 @@
 import { boardById, boardBySlug, boardsForUser, childEvents, isLive, membershipOf, publicEvents, rsvpSummary, type Board } from "./boards";
 import { isActive } from "./membership";
+import { attachVouches } from "./vouch";
 import { getBoardMembers, getOpenMapProfiles, getProfileById, touchActivity, type MapProfile } from "./profiles";
 import { matchesFor, type Surface } from "./matching";
 import { attachConnectionStatus } from "./connections";
@@ -82,7 +83,16 @@ export type SelfMarker = {
 export type ShellPerson = MapProfile & {
   hereNow?: boolean;
   unplaced?: boolean;
+  /**
+   * A community you *both* belong to has vouched for them.
+   *
+   * Viewer-relative on purpose, and the same meaning on every surface: a
+   * tick from a group you've never heard of would be an assertion from
+   * nobody, and would make the badge farmable. See lib/vouch.
+   */
   verified?: boolean;
+  /** This board's own claim — what the owner manages, not what others see. */
+  verifiedHere?: boolean;
   role?: string;
 };
 
@@ -214,7 +224,8 @@ export async function shellPayload(opts: {
       // inside a community offered "Ask to connect" however long ago you
       // actually connected — the request had already been sent and accepted
       // and the UI had no idea.
-      const members = (await attachConnectionStatus(rawMembers, opts.userId)) as typeof rawMembers;
+      const withStatusHere = (await attachConnectionStatus(rawMembers, opts.userId)) as typeof rawMembers;
+      const members = await attachVouches(withStatusHere, opts.userId);
       const surface = board.type as Surface;
       const matches =
         me?.name
@@ -242,7 +253,7 @@ export async function shellPayload(opts: {
             hereNow: members.filter((m) => m.hereNow).length,
             details: board.details,
             guidelines: board.guidelines,
-            verifiedCount: members.filter((m) => m.verified).length + (board.hostUserId ? 1 : 0),
+            verifiedCount: members.filter((m) => m.verifiedHere).length,
             canLeave: Boolean(opts.userId) && board.hostUserId !== opts.userId,
           },
         },
@@ -292,7 +303,10 @@ export async function shellPayload(opts: {
       }).map((m) => ({ id: m.other.id, reason: m.reason, twoWay: m.twoWay }))
     : [];
 
-  const withStatus = (await attachConnectionStatus(people, opts.userId)) as MapProfile[];
+  const withStatus = await attachVouches(
+    (await attachConnectionStatus(people, opts.userId)) as MapProfile[],
+    opts.userId
+  );
   const events = await publicEvents();
 
   return {
