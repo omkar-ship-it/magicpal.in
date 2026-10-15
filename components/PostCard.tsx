@@ -129,11 +129,36 @@ export default function PostCard({
 
       {post.body && <p className="mt-2.5 whitespace-pre-line text-[13px] leading-[1.55]">{post.body}</p>}
 
+      {/* Whole image, never a crop.
+          `object-cover` in a fixed-height band meant a wide screenshot — the
+          most common thing anybody posts here — showed as a strip of its
+          middle, and widening the window just showed a bigger strip. The cap
+          is on height only, so the picture scales with the panel and a very
+          tall one still can't push the rest of the feed off the screen.
+          Tapping opens the original, which is what you want for a slide. */}
       {post.images.length > 0 && (
         <div className={`mt-2 grid gap-1 ${post.images.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
           {post.images.map((src) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img key={src} src={src} alt="" className="max-h-52 w-full rounded-xl object-cover" loading="lazy" />
+            <a
+              key={src}
+              href={src}
+              target="_blank"
+              rel="noreferrer noopener"
+              // Hugs the picture rather than the column, so the click target
+              // is the image and not the empty space beside a portrait shot.
+              className="mx-auto block w-fit overflow-hidden rounded-xl"
+            >
+              {/* Only maxima, no width: the browser keeps the ratio on its
+                  own, so there is nothing to crop, nothing to stretch, and
+                  no letterbox bars around a portrait shot in a wide panel. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={src}
+                alt=""
+                loading="lazy"
+                className="mx-auto block max-h-[70vh] max-w-full rounded-xl"
+              />
+            </a>
           ))}
         </div>
       )}

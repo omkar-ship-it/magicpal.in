@@ -227,13 +227,24 @@ export function MessageAttachments({ items, mine }: { items: ChatAttachment[]; m
       {images.length > 0 && (
         <div className={`grid gap-1 ${images.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
           {images.map((a) => (
-            <a key={a.url} href={a.url} target="_blank" rel="noreferrer noopener">
+            <a
+              key={a.url}
+              href={a.url}
+              target="_blank"
+              rel="noreferrer noopener"
+              // Hugs the picture rather than the column, so the click target
+              // is the image and not the empty space beside a portrait shot.
+              className="mx-auto block w-fit overflow-hidden rounded-xl"
+            >
+              {/* Contained, not cropped — same reasoning as the feed: a
+                  screenshot is the usual thing people send, and half of one
+                  is worse than a small whole one. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={a.url}
                 alt={a.name}
                 loading="lazy"
-                className="max-h-48 w-full rounded-xl object-cover"
+                className="mx-auto block max-h-[50vh] max-w-full rounded-xl"
               />
             </a>
           ))}
