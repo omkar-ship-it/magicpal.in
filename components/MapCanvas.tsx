@@ -11,7 +11,7 @@ import type { PinRef } from "@/lib/pins";
 import Avatar from "./Avatar";
 import { topicById } from "@/lib/intents";
 import { whenLabel } from "@/lib/time";
-import { IconCalendar, IconCity, IconPin } from "./Icons";
+import { IconCalendar, IconCity, IconMeetup, IconPin } from "./Icons";
 import VerifiedBadge from "./VerifiedBadge";
 
 /**
@@ -251,7 +251,7 @@ export default function MapCanvas({
           is in a café two streets away, right now" would be hiding the most
           time-sensitive thing on the screen. */}
       {pins.map((pin) => (
-        <Marker key={pin.id} latitude={pin.lat} longitude={pin.lng} anchor="bottom">
+        <Marker key={pin.id} latitude={pin.lat} longitude={pin.lng} anchor="bottom" style={{ zIndex: 6 }}>
           <span className="hover-host relative">
             <button
               type="button"
@@ -259,13 +259,15 @@ export default function MapCanvas({
               onClick={() => onSelectPin?.(pin.id)}
               aria-label={`${pin.person.name}: ${pin.message}`}
             >
-              <span className="pin-drop-body">
+              <span className="pin-drop-glow" aria-hidden="true" />
+              <span className="pin-drop-pill">
+                <IconMeetup size={14} strokeWidth={2.1} />
+                Meet up
                 <span className="pin-drop-face">
-                  <Avatar name={pin.person.name} photoUrl={pin.person.photoUrl} size={30} />
+                  <Avatar name={pin.person.name} photoUrl={pin.person.photoUrl} size={18} />
                 </span>
               </span>
-              <span className="pin-drop-pulse" aria-hidden="true" />
-              <span className="pin-drop-dot" aria-hidden="true" />
+              <span className="pin-drop-tail" aria-hidden="true" />
             </button>
             <PinCardHover pin={pin} />
           </span>

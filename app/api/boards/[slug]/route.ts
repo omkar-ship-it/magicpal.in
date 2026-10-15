@@ -3,7 +3,10 @@ import { eq } from "drizzle-orm";
 import { db, hasDb } from "@/lib/db";
 import { boards } from "@/lib/db/schema";
 import { getSessionUser } from "@/lib/session";
-import { boardBySlug } from "@/lib/boards";
+import { boardById, boardBySlug, membershipOf } from "@/lib/boards";
+import { isActive } from "@/lib/membership";
+import { getBoardMembers, getProfileById } from "@/lib/profiles";
+import { attachVouches } from "@/lib/vouch";
 
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
@@ -25,6 +28,58 @@ function normalizeUrl(v: unknown): string {
  * Fields are applied only when present, so a form that submits a subset
  * can't blank the rest.
  */
+/**
+ * Everything an event page shows that the map payload shouldn't carry.
+ *
+ * Same split as /api/person: the shell's event list is a dozen events and
+ * stays lean, this is one event and can afford the host, the full roster and
+ * who has actually turned up. Members only — who else is coming is exactly
+ * what a private event is keeping private.
+ */
+export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }> }) {
+  const { slug } = await ctx.params;
+
+  const board = await boardBySlug(slug);
+  if (!board || board.archivedAt) return NextResponse.json({ error: "No such event." }, { status: 404 });
+
+  // Checked before the membership lookup rather than folded into it: an
+  // empty string reaching a uuid column is a 500, not a 403, and "who else
+  // is coming" must fail closed with the same answer either way.
+  const user = await getSessionUser();
+  if (!user || !isActive(await membershipOf(board.id, user.id))) {
+    return NextResponse.json({ error: "Join first." }, { status: 403 });
+  }
+
+  const host = await getProfileById(board.hostUserId);
+  const roster = await getBoardMembers(board.id, {});
+  const vouched = await attachVouches(roster, user?.id);
+
+  return NextResponse.json({
+    host: host?.name
+      ? { id: host.id, name: host.name, headline: host.headline, photoUrl: host.photoUrl }
+      : null,
+    parent: board.parentBoardId
+      ? await (async () => {
+          const p = await boardById(board.parentBoardId!);
+          return p ? { slug: p.slug, name: p.name } : null;
+        })()
+      : null,
+    attendees: vouched
+      // Whoever said yes first, then everyone else — the page answers "who
+      // will actually be in the room", not "who is on a list".
+      .sort((a, b) => Number(Boolean(b.hereNow)) - Number(Boolean(a.hereNow)))
+      .map((m) => ({
+        id: m.id,
+        name: m.name,
+        headline: m.headline,
+        photoUrl: m.photoUrl,
+        hereNow: Boolean(m.hereNow),
+        verified: Boolean(m.verified),
+        isHost: m.id === board.hostUserId,
+      })),
+  });
+}
+
 export async function PATCH(req: Request, ctx: { params: Promise<{ slug: string }> }) {
   if (!hasDb || !db) return NextResponse.json({ error: "Not available." }, { status: 503 });
   const { slug } = await ctx.params;

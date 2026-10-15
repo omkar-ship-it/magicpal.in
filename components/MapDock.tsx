@@ -1,7 +1,16 @@
 "use client";
 
 import Avatar from "./Avatar";
-import { IconBeacon, IconCalendar, IconChat, IconFeed, IconGlobe, IconPeople, IconSparkle, IconUser } from "./Icons";
+import {
+  IconCalendar,
+  IconChat,
+  IconFeed,
+  IconGlobe,
+  IconMeetup,
+  IconPeople,
+  IconSparkle,
+  IconUser,
+} from "./Icons";
 
 export type DockTab = "home" | "forYou" | "feed" | "people" | "pins" | "events" | "chats" | null;
 
@@ -10,7 +19,7 @@ const SLOTS: Array<{ id: Exclude<DockTab, null>; label: string; icon: React.Reac
   { id: "forYou", label: "For you", icon: <IconSparkle size={17} /> },
   { id: "feed", label: "Feed", icon: <IconFeed size={17} /> },
   { id: "people", label: "People", icon: <IconPeople size={17} /> },
-  { id: "pins", label: "Now", icon: <IconBeacon size={17} /> },
+  { id: "pins", label: "Now", icon: <IconMeetup size={17} /> },
   { id: "events", label: "Events", icon: <IconCalendar size={17} /> },
   { id: "chats", label: "Chats", icon: <IconChat size={17} /> },
 ];
@@ -102,7 +111,7 @@ export default function MapDock({
 }
 
 const SLOT =
-  "flex w-[42px] sm:w-[60px] flex-none flex-col items-center justify-center gap-1 rounded-2xl py-2 transition-colors tap";
+  "dock-slot flex w-[42px] sm:w-[60px] flex-none flex-col items-center justify-center gap-1 rounded-2xl py-2 tap";
 
 function DockButton({
   on,
@@ -126,7 +135,14 @@ function DockButton({
       onClick={onClick}
       aria-pressed={on}
       className={SLOT}
-      style={on ? { background: "color-mix(in srgb, var(--brand) 20%, transparent)" } : undefined}
+      style={
+        on
+          ? {
+              background: "color-mix(in srgb, var(--brand) 13%, var(--chrome))",
+              boxShadow: "inset 0 0 0 1px color-mix(in srgb, var(--brand) 26%, transparent)",
+            }
+          : undefined
+      }
     >
       <span className="relative" style={{ color: tint }}>
         {children}

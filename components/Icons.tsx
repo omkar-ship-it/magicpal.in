@@ -144,6 +144,24 @@ export function IconBeacon(p: Props) {
   );
 }
 
+/**
+ * An ad-hoc meet-up: two people in conversation.
+ *
+ * Purpose-built rather than borrowed, and used in exactly two places — the
+ * "Now" slot in the dock and the pin on the map — so the marker and the
+ * module that lists it are visibly the same thing. A beacon would have read
+ * as "live location", which is what every other person on this map already
+ * has; two bubbles say somebody wants to *talk*.
+ */
+export function IconMeetup(p: Props) {
+  return (
+    <Svg {...p}>
+      <path d="M4.4 3.6h7.2A2.4 2.4 0 0 1 14 6v3.2a2.4 2.4 0 0 1-2.4 2.4H8.2L5.4 13.8v-2.2h-1A2.4 2.4 0 0 1 2 9.2V6a2.4 2.4 0 0 1 2.4-2.4Z" />
+      <path d="M19.6 20.4h-7.2A2.4 2.4 0 0 1 10 18v-3.2a2.4 2.4 0 0 1 2.4-2.4h3.4l2.8-2.2v2.2h1A2.4 2.4 0 0 1 22 14.8V18a2.4 2.4 0 0 1-2.4 2.4Z" />
+    </Svg>
+  );
+}
+
 export function IconCheck(p: Props) {
   return (
     <Svg {...p}>

@@ -732,6 +732,21 @@ async function main() {
       "a phone number never appears in the map payload, whatever the UI renders"
     );
 
+    console.log("\nAn event page carries who's hosting and who's coming");
+    const anonDetail = await api(`/api/boards/${inner.data.slug}`);
+    assert(anonDetail.status === 403, "a signed-out visitor can't read an event's roster");
+    const outsiderDetail = await api(`/api/boards/${inner.data.slug}`, { jar: c.jar });
+    assert(outsiderDetail.status === 403, "nor can somebody who isn't on it — that's what a private event is");
+    const detail = await api(`/api/boards/${inner.data.slug}`, { jar: a.jar });
+    assert(detail.status === 200, "a member can");
+    assert(detail.data.host?.name === "Flow Alice", "…and it names who is running it");
+    assert(Array.isArray(detail.data.attendees), "…with the roster");
+    assert(
+      detail.data.attendees.some((x) => x.isHost),
+      "…marking which of them is the host"
+    );
+    assert(detail.data.parent?.slug === comm.data.slug, "…and which community it belongs to");
+
     console.log("\nA community has a home of its own");
     const withHome = await api(`/api/map?net=${comm.data.slug}`, { jar: a.jar });
     assert(withHome.data.scope.home !== null, "a community scope carries its home data");

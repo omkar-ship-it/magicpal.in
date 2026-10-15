@@ -422,6 +422,10 @@ export default function MapShell({
           canCreate={signedIn && onboarded}
           openSlug={activeEvent}
           onOpenSlug={setActiveEvent}
+          onOpenPerson={(id) => {
+            setSelected(id);
+            openWin("person");
+          }}
           onChanged={() => void load({})}
           onShow={(e: EventRef) => {
             if (e.lat != null && e.lng != null) {

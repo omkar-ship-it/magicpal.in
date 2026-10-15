@@ -20,14 +20,19 @@
   --layer-event: #7c5cff;
   --layer-company: #0ea5b8;
   --layer-institution: #2a5db0;
+  /* Ad-hoc meet-up pins get their own hue — not the brand orange every
+     person already wears, and not the event purple. */
+  --meetup: #e0266b;
   /* Floating map chrome — the dock and the top pill.
-     Deliberately dark in *both* themes rather than following --card: on a
-     light Mapbox style a white dock dissolves into the map, and the one
-     piece of UI that must always be findable is the navigation. */
-  --chrome: #241a16;
-  --chrome-ink: #f7ede8;
-  --chrome-soft: #b9a79e;
-  --chrome-line: rgba(247, 237, 232, 0.14);
+     Light, and findable by edge and shadow rather than by mass: a dark slab
+     across the bottom of a light map reads as a different application
+     sitting on top of it. Blur, a real border and a lifted shadow keep it
+     legible, and the active slot carries a brand wash so the thing you're
+     looking at is named in the product's own colour. */
+  --chrome: #ffffff;
+  --chrome-ink: #241a16;
+  --chrome-soft: #8d7b72;
+  --chrome-line: #ece2dc;
   --shadow: 0 16px 36px -22px rgba(90, 40, 20, 0.35);
   --shadow-lift: 0 24px 54px -26px rgba(90, 40, 20, 0.5);
 }
@@ -50,11 +55,14 @@
     --layer-event: #a996ff;
     --layer-company: #4fd4e6;
     --layer-institution: #7fa8f0;
+    /* Ad-hoc meet-up pins get their own hue — not the brand orange every
+       person already wears, and not the event purple. */
+    --meetup: #ff6aa8;
     /* Lifted off the near-black ground so it still reads as floating. */
-    --chrome: #31241e;
+    --chrome: #2b1f1a;
     --chrome-ink: #f7ede8;
     --chrome-soft: #c2aea4;
-    --chrome-line: rgba(247, 237, 232, 0.12);
+    --chrome-line: #3c2c24;
     --shadow: 0 16px 36px -20px rgba(0, 0, 0, 0.7);
     --shadow-lift: 0 26px 60px -26px rgba(0, 0, 0, 0.85);
   }
@@ -76,10 +84,13 @@
   --layer-event: #a996ff;
   --layer-company: #4fd4e6;
   --layer-institution: #7fa8f0;
-  --chrome: #31241e;
+  /* Ad-hoc meet-up pins get their own hue — not the brand orange every
+     person already wears, and not the event purple. */
+  --meetup: #ff6aa8;
+  --chrome: #2b1f1a;
   --chrome-ink: #f7ede8;
   --chrome-soft: #c2aea4;
-  --chrome-line: rgba(247, 237, 232, 0.12);
+  --chrome-line: #3c2c24;
   --shadow: 0 16px 36px -20px rgba(0, 0, 0, 0.7);
   --shadow-lift: 0 26px 60px -26px rgba(0, 0, 0, 0.85);
 }
@@ -101,6 +112,7 @@
   --color-layer-event: var(--layer-event);
   --color-layer-company: var(--layer-company);
   --color-layer-institution: var(--layer-institution);
+  --color-meetup: var(--meetup);
   --font-sans: var(--font-inter);
 }
 
@@ -168,6 +180,17 @@ h1, h2, h3 {
    track sitting against a rounded glass edge reads as a rendering bug
    rather than an affordance. The content still scrolls by wheel, trackpad,
    touch and keyboard — only the chrome is gone. */
+/* Dock slots answer the press. Small, fast, and on transform only, so it
+   costs nothing and never reflows the row. */
+.dock-slot {
+  transition: background 160ms ease, box-shadow 160ms ease, transform 140ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.dock-slot:hover { transform: translateY(-2px); }
+.dock-slot:active { transform: translateY(0) scale(0.95); }
+@media (prefers-reduced-motion: reduce) {
+  .dock-slot:hover, .dock-slot:active { transform: none; }
+}
+
 .scroll-clean { scrollbar-width: none; -ms-overflow-style: none; }
 .scroll-clean::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
@@ -678,84 +701,93 @@ h1, h2, h3 {
   color: var(--warn);
 }
 
-/* An ad-hoc pin.
-   Shaped like a map pin rather than ringed like a face, because a circular
-   avatar with a coloured border is what *every* person on this map already
-   is — a glow alone left the one marker that means "a place, right now"
-   reading as just another profile. The teardrop says place; the face inside
-   says whose; the pulse at the tip says now. */
+/* An ad-hoc meet-up pin — a labelled marker, not a face.
+   It took all four: a shape nothing else on this map has, a glyph built for
+   this one feature (the same two bubbles the dock's "Now" slot wears, so the
+   marker and the module that lists it are visibly one thing), a hue that is
+   neither the brand orange every *person* wears nor the purple that means
+   event — and, decisively, the words. A glyph alone still asks somebody to
+   guess; "Meet up" does not. The dropper's face rides on the end as a badge:
+   whose invitation it is still matters, it just isn't the headline. */
 .pin-drop {
   position: relative;
   display: block;
-  width: 40px;
-  /* 40 for the head, plus the ~8.3px the rotated corner hangs below it, so
-     the point itself lands on the coordinate under `anchor="bottom"`. */
-  height: 49px;
-  transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1);
+  /* Room for the tail, so the point lands on the coordinate under
+     `anchor="bottom"`. */
+  padding-bottom: 9px;
+  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .pin-drop:hover,
-.pin-drop:focus-visible { transform: translateY(-2px) scale(1.06); z-index: 2; }
+.pin-drop:focus-visible { transform: translateY(-3px) scale(1.05); }
 
-.pin-drop-body {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 40px;
-  height: 40px;
-  /* Three round corners and one sharp one, turned so the sharp one points
-     down. The classic marker silhouette, with no image to load. */
-  border-radius: 50% 50% 50% 2px;
-  transform: rotate(-45deg);
-  background: linear-gradient(135deg, var(--brand), var(--brand-deep));
+.pin-drop-pill {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 7px 5px 9px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--meetup), color-mix(in srgb, var(--meetup) 74%, #000));
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
   border: 2px solid var(--card);
-  box-shadow: 0 10px 20px -8px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 10px 22px -8px rgba(0, 0, 0, 0.5);
 }
 .pin-drop-face {
-  position: absolute;
-  inset: 3px;
   border-radius: 999px;
   overflow: hidden;
-  /* Counter-rotated so the face sits upright inside a tilted pin. */
-  transform: rotate(45deg);
-  display: grid;
-  place-items: center;
-  background: var(--card);
+  line-height: 0;
+  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.9);
 }
-.pin-drop-face img { width: 100%; height: 100%; object-fit: cover; }
 
-/* The ring breathes out of the point, not the head: what is "live" about a
-   pin is the spot on the ground, not the person's picture. */
-.pin-drop-pulse {
+/* The tail, drawn with borders so it needs no extra element to clip. */
+.pin-drop-tail {
   position: absolute;
   left: 50%;
   bottom: 0;
-  width: 16px;
-  height: 16px;
-  margin-left: -8px;
-  margin-bottom: -8px;
-  border-radius: 999px;
-  background: var(--brand);
-  opacity: 0.4;
-  animation: pin-drop-pulse 2.2s ease-out infinite;
+  margin-left: -7px;
+  width: 0;
+  height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-top: 10px solid var(--card);
 }
-/* A solid dot under the pulse so the exact spot stays readable between beats. */
-.pin-drop-dot {
+.pin-drop-tail::after {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: -10px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 8px solid color-mix(in srgb, var(--meetup) 74%, #000);
+}
+
+/* The glow breathes out of the point rather than the label: a pin is the one
+   thing on this map that is true only right now, and what's live about it is
+   the spot on the ground. */
+.pin-drop-glow {
   position: absolute;
   left: 50%;
-  bottom: 0;
-  width: 7px;
-  height: 7px;
-  margin-left: -3.5px;
-  margin-bottom: -3.5px;
+  bottom: -5px;
+  width: 18px;
+  height: 18px;
+  margin-left: -9px;
   border-radius: 999px;
-  background: var(--brand);
-  box-shadow: 0 0 0 2px var(--card);
+  background: var(--meetup);
+  opacity: 0.45;
+  animation: meetup-glow 1.9s ease-out infinite;
 }
-@keyframes pin-drop-pulse {
-  0% { transform: scale(0.6); opacity: 0.45; }
-  70% { transform: scale(2.4); opacity: 0; }
-  100% { transform: scale(2.4); opacity: 0; }
+@keyframes meetup-glow {
+  0% { transform: scale(0.5); opacity: 0.5; }
+  70% { transform: scale(2.6); opacity: 0; }
+  100% { transform: scale(2.6); opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .pin-drop-pulse { animation: none; opacity: 0.22; }
+  .pin-drop-glow { animation: none; opacity: 0.28; }
 }
