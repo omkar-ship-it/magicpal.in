@@ -312,6 +312,15 @@ export const boards = pgTable(
 
     /** The longer description — agenda, what to expect, how to find the room. */
     details: text("details"),
+    /**
+     * House rules, kept apart from `details` rather than folded into it.
+     *
+     * Two different jobs: `details` sells the place, this one sets the terms
+     * of being in it. Separate so the home page can show them as rules and
+     * so removing somebody can point at the thing they agreed to, which a
+     * paragraph buried in an about-section can't do.
+     */
+    guidelines: text("guidelines"),
     /** Street address, kept apart from `place` so the map label stays short. */
     address: text("address"),
     /** Null means no limit. Shown as "N of M going" once set. */
@@ -362,6 +371,32 @@ export const memberships = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     role: text("role").notNull().default("member"), // host | member
+
+    /**
+     * active | left | removed — and never a deleted row.
+     *
+     * Deleting the row would make removal theatre: the same invite link is
+     * still in the WhatsApp group, so the person is back in five seconds.
+     * The tombstone is what makes "removed" mean anything, and it's also
+     * what lets the owner see that somebody was removed rather than simply
+     * never having joined.
+     *
+     * `left` is the person's own decision and carries no stigma — they can
+     * walk back in through the same link whenever they like.
+     */
+    status: text("status").notNull().default("active"),
+    statusAt: timestamp("status_at", { withTimezone: true }),
+
+    /**
+     * The owner vouching that this person is who they claim to be.
+     *
+     * The community is the only thing that can do this — nobody at MagicPal
+     * knows who really graduated from a given college in 2014. It is a
+     * positive claim only: no badge means nobody has got to them yet, which
+     * is a queue position and not an accusation.
+     */
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    verifiedBy: uuid("verified_by").references((): AnyPgColumn => users.id, { onDelete: "set null" }),
     /**
      * Set while the person is physically at the event, cleared when they
      * leave. Powers "here now", which is the difference between a directory
@@ -385,6 +420,7 @@ export const memberships = pgTable(
   (t) => [
     uniqueIndex("memberships_board_user_idx").on(t.boardId, t.userId),
     check("memberships_role", sql`${t.role} in ('host','member')`),
+    check("memberships_status", sql`${t.status} in ('active','left','removed')`),
     check("memberships_rsvp", sql`${t.rsvp} is null or ${t.rsvp} in ('going','maybe','no')`),
   ]
 );
@@ -475,10 +511,71 @@ export const posts = pgTable(
     }),
     /** Blob URLs. Photos from the last meetup are what bring people back. */
     images: text("images").array().notNull().default(sql`'{}'::text[]`),
+    /**
+     * Held at the top of the feed by the community's owner.
+     *
+     * One per board in practice — pinning a second clears the first — because
+     * a list of pinned things is just the feed again. This is where the
+     * welcome post and the thing everyone keeps asking about live, which is
+     * the difference between house rules people read and rules they don't.
+     */
+    pinnedAt: timestamp("pinned_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (t) => [index("posts_board_idx").on(t.boardId, t.createdAt)]
+);
+
+/**
+ * One tap, to say a post was worth posting.
+ *
+ * The cheapest possible signal that anybody read the thing — and in a group
+ * that is still small, the difference between posting into a void and
+ * posting to people. A closed set of four, not free emoji: the point is a
+ * countable signal, and an open set turns into noise nobody can summarise.
+ */
+export const postReactions = pgTable(
+  "post_reactions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    postId: uuid("post_id")
+      .notNull()
+      .references(() => posts.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("post_reactions_unique_idx").on(t.postId, t.userId, t.kind),
+    check("post_reactions_kind", sql`${t.kind} in ('clap','useful','congrats','love')`),
+    index("post_reactions_post_idx").on(t.postId),
+  ]
+);
+
+/**
+ * A reply under a post. One level, never a thread of threads.
+ *
+ * Nesting is what turns a small group's conversation into a forum nobody
+ * reads to the bottom of. Soft-deleted like posts, and removable by the
+ * author or the community's owner for the same reason.
+ */
+export const comments = pgTable(
+  "comments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    postId: uuid("post_id")
+      .notNull()
+      .references(() => posts.id, { onDelete: "cascade" }),
+    authorId: uuid("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => [index("comments_post_idx").on(t.postId, t.createdAt)]
 );
 
 // ------------------------------------------------------------------ pins

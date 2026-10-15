@@ -47,6 +47,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ slug: string 
   if (typeof body.name === "string" && body.name.trim().length >= 3) patch.name = str(body.name, 80);
   if ("blurb" in body) patch.blurb = str(body.blurb, 280) || null;
   if ("details" in body) patch.details = str(body.details, 2000) || null;
+  if ("guidelines" in body) patch.guidelines = str(body.guidelines, 2000) || null;
   if ("address" in body) patch.address = str(body.address, 240) || null;
   if ("url" in body) patch.url = normalizeUrl(body.url) || null;
   if ("place" in body) patch.place = str(body.place, 160) || null;

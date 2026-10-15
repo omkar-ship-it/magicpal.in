@@ -23,6 +23,12 @@ export async function POST(_req: Request, ctx: { params: Promise<{ slug: string 
     return NextResponse.json({ error: "That board doesn't exist." }, { status: 404 });
   }
 
-  await joinBoard(board.id, user.id);
+  // Refused for somebody the owner removed. The link they were given is
+  // still in the group chat they were removed from, so without this the
+  // removal would undo itself on the next tap.
+  const joined = await joinBoard(board.id, user.id);
+  if (!joined) {
+    return NextResponse.json({ error: "You can't rejoin this community." }, { status: 403 });
+  }
   return NextResponse.json({ ok: true, slug: board.slug });
 }

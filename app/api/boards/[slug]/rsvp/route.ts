@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { db, hasDb } from "@/lib/db";
 import { memberships } from "@/lib/db/schema";
+import { isActiveMember } from "@/lib/membership";
 import { getSessionUser } from "@/lib/session";
-import { boardBySlug, joinBoard, membershipOf } from "@/lib/boards";
+import { boardBySlug, joinBoard } from "@/lib/boards";
 
 const ANSWERS = ["going", "maybe", "no"] as const;
 
@@ -33,14 +34,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ slug: string }
   const answer = ANSWERS.includes(body?.rsvp) ? (body.rsvp as string) : null;
   if (!answer) return NextResponse.json({ error: "Going, maybe, or no." }, { status: 400 });
 
-  if (!(await membershipOf(board.id, user.id))) {
-    await joinBoard(board.id, user.id);
+  if (!(await joinBoard(board.id, user.id))) {
+    return NextResponse.json({ error: "You're not in this community." }, { status: 403 });
   }
 
   await db
     .update(memberships)
     .set({ rsvp: answer, rsvpAt: new Date() })
-    .where(and(eq(memberships.boardId, board.id), eq(memberships.userId, user.id)));
+    .where(and(eq(memberships.boardId, board.id), eq(memberships.userId, user.id), isActiveMember()));
 
   return NextResponse.json({ ok: true, rsvp: answer });
 }

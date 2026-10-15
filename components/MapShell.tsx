@@ -13,6 +13,7 @@ import FloatWindow, { DEFAULT_WINDOW, type WindowState } from "./FloatWindow";
 import LiveLocation from "./LiveLocation";
 import MapTopBar from "./MapTopBar";
 import PersonCard from "./PersonCard";
+import MemberControls from "./MemberControls";
 import PersonProfile from "./PersonProfile";
 import PanelNote from "./PanelNote";
 import FeedPanel from "./FeedPanel";
@@ -184,6 +185,12 @@ export default function MapShell({
     if (wins.feed.open) void loadFeed(slug);
   }
 
+  // Owner-only affordances key off the scope's own flag rather than
+  // comparing ids in the client: the server already decided, and two places
+  // deciding "am I the owner" is two places to get it wrong.
+  const ownsScope = Boolean(data.scope.home?.isHost);
+  const unverified = ownsScope ? data.people.filter((p) => !p.verified).length : 0;
+
   const shown = useMemo(() => applyFacets(data.people, facets), [data.people, facets]);
   const byId = useMemo(() => new Map(data.people.map((p) => [p.id, p])), [data.people]);
   const selectedPerson = selected ? byId.get(selected) : null;
@@ -293,6 +300,7 @@ export default function MapShell({
           memberCount={data.people.length + 1}
           onOpenEvents={() => openWin("events")}
           onOpenPeople={() => openWin("people")}
+          onChanged={() => void load({})}
         />
       </FloatWindow>
 
@@ -327,24 +335,29 @@ export default function MapShell({
         onClose={() => win("feed", { open: false })}
         onFocus={() => focus("feed")}
       >
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <FeedPanel
-            items={feed}
-            loading={feedLoading}
-            signedIn={signedIn}
-            scopeName={data.scope.name}
-            scopeSlug={data.scope.slug}
-            events={data.events}
-            canPost={signedIn && onboarded}
-            onChanged={() => void loadFeed(data.scope.slug)}
-            onOpenPerson={(id) => {
-              if (byId.has(id)) {
-                setSelected(id);
-                openWin("person");
-              }
-            }}
-          />
-        </div>
+        <FeedPanel
+          items={feed}
+          loading={feedLoading}
+          signedIn={signedIn}
+          scopeName={data.scope.name}
+          scopeSlug={data.scope.slug}
+          events={data.events}
+          pins={data.pins}
+          canPost={signedIn && onboarded}
+          onChanged={() => {
+            void loadFeed(data.scope.slug);
+            void load({});
+          }}
+          onOpenPins={() => openWin("pins")}
+          onOpenEvents={() => openWin("events")}
+          onSignIn={() => openWin("signin")}
+          onOpenPerson={(id) => {
+            if (byId.has(id)) {
+              setSelected(id);
+              openWin("person");
+            }
+          }}
+        />
       </FloatWindow>
 
       <FloatWindow
@@ -365,6 +378,16 @@ export default function MapShell({
             </PanelNote>
           ) : (
             <div className="flex flex-col gap-2.5">
+              {/* The owner's running count of who's still unvouched. Shown
+                  here rather than on the home page because this is the
+                  window where the work actually gets done. */}
+              {ownsScope && unverified > 0 && (
+                <p className="rounded-xl p-2.5 text-[12px] leading-[1.45]" style={{ background: "var(--sunk)" }}>
+                  <span className="font-semibold">{unverified}</span>{" "}
+                  {unverified === 1 ? "person hasn't" : "people haven't"} been verified yet. Verifying tells everyone
+                  else they really are who they say.
+                </p>
+              )}
               {shown.map((p) => (
                 <PersonCard
                   key={p.id}
@@ -374,7 +397,11 @@ export default function MapShell({
                     setSelected(p.id);
                     openWin("person");
                   }}
-                />
+                >
+                  {ownsScope && data.scope.slug && (
+                    <MemberControls slug={data.scope.slug} person={p} onChanged={() => void load({})} />
+                  )}
+                </PersonCard>
               ))}
             </div>
           )}

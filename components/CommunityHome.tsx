@@ -5,7 +5,9 @@ import type { EventRef, ShellPayload } from "@/lib/shell";
 import { whenLabel } from "@/lib/time";
 import BoardQR from "./BoardQR";
 import PanelNote from "./PanelNote";
-import { IconBeacon, IconCalendar, IconPeople, IconPin, IconSparkle } from "./Icons";
+import EditCommunity from "./EditCommunity";
+import LeaveCommunity from "./LeaveCommunity";
+import { IconBeacon, IconCalendar, IconCheck, IconPeople, IconPin, IconSparkle } from "./Icons";
 
 /**
  * A community's own front page.
@@ -22,15 +24,19 @@ export default function CommunityHome({
   memberCount,
   onOpenEvents,
   onOpenPeople,
+  onChanged,
 }: {
   scope: ShellPayload["scope"];
   events: EventRef[];
   memberCount: number;
   onOpenEvents: () => void;
   onOpenPeople: () => void;
+  /** Reload the shell after an edit or a departure. */
+  onChanged: () => void;
 }) {
   // Above the early return: hooks must run in the same order every render.
   const [now] = useState(() => Date.now());
+  const [editing, setEditing] = useState(false);
 
   const home = scope.home;
   if (!home || !scope.slug) {
@@ -49,18 +55,51 @@ export default function CommunityHome({
     .sort((a, b) => (a.startsAt ?? "").localeCompare(b.startsAt ?? ""))
     .slice(0, 3);
 
+  if (editing) {
+    return (
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <EditCommunity
+          slug={scope.slug}
+          initial={{ name: scope.name, blurb: scope.blurb, details: home.details, guidelines: home.guidelines, place: home.place }}
+          onCancel={() => setEditing(false)}
+          onSaved={() => {
+            setEditing(false);
+            onChanged();
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
       <div>
-        <h2 className="text-[17px] font-semibold leading-tight">{scope.name}</h2>
+        <div className="flex items-start gap-2">
+          <h2 className="min-w-0 flex-1 text-[17px] font-semibold leading-tight">{scope.name}</h2>
+          {home.isHost && (
+            <button type="button" className="btn btn-ghost btn-sm flex-none" onClick={() => setEditing(true)}>
+              Edit
+            </button>
+          )}
+        </div>
         {scope.blurb && <p className="mt-1 text-[13px] leading-[1.5]">{scope.blurb}</p>}
         <p className="mt-1.5 text-[12px] text-[var(--ink-soft)]">
           Run by {home.hostName} · since {new Date(home.createdAt).toLocaleDateString(undefined, { month: "long", year: "numeric" })}
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Stat icon={<IconPeople size={14} />} value={memberCount} label="members" onClick={onOpenPeople} />
+        {/* The number that answers "do I know who these people are?" — the
+            whole reason verification exists, so it sits beside the headcount
+            rather than being something you'd have to go counting. */}
+        <Stat
+          icon={<IconCheck size={14} />}
+          value={home.verifiedCount}
+          label="verified"
+          tone={home.verifiedCount > 0 ? "good" : undefined}
+          onClick={onOpenPeople}
+        />
         <Stat icon={<IconCalendar size={14} />} value={home.eventCount} label="events" onClick={onOpenEvents} />
         <Stat
           icon={<IconBeacon size={14} />}
@@ -75,6 +114,40 @@ export default function CommunityHome({
           <IconPin size={12} /> {home.place}
         </p>
       )}
+
+      {home.details && (
+        <div>
+          <p className="label label-icon">
+            <IconSparkle size={12} /> What this community is for
+          </p>
+          <p className="whitespace-pre-line text-[12.5px] leading-[1.55]">{home.details}</p>
+        </div>
+      )}
+
+      {/* House rules get their own block with a border rather than reading as
+          another paragraph: they're the terms of being here, and the thing
+          the owner points at when they remove somebody. */}
+      {home.guidelines ? (
+        <div className="rounded-xl border p-3" style={{ borderColor: "var(--line)", background: "var(--sunk)" }}>
+          <p className="label label-icon">
+            <IconCheck size={12} /> House rules
+          </p>
+          <p className="whitespace-pre-line text-[12.5px] leading-[1.55]">{home.guidelines}</p>
+        </div>
+      ) : home.isHost ? (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="rounded-xl border border-dashed p-3 text-left tap"
+          style={{ borderColor: "var(--line)" }}
+        >
+          <p className="text-[12.5px] font-semibold">Add house rules →</p>
+          <p className="mt-0.5 text-[11.5px] leading-[1.45] text-[var(--ink-soft)]">
+            What&rsquo;s welcome here and what isn&rsquo;t. Everyone sees them, and they&rsquo;re what you point at if
+            you ever have to remove somebody.
+          </p>
+        </button>
+      ) : null}
 
       <div>
         <p className="label label-icon">
@@ -127,6 +200,8 @@ export default function CommunityHome({
         </p>
         <BoardQR slug={scope.slug} name={scope.name} />
       </div>
+
+      {home.canLeave && <LeaveCommunity slug={scope.slug} name={scope.name} onLeft={onChanged} />}
     </div>
   );
 }

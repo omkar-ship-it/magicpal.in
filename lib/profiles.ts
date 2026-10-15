@@ -1,6 +1,7 @@
 import { and, eq, inArray, isNotNull, isNull, lt, ne, or } from "drizzle-orm";
 import { db, hasDb } from "./db";
 import { memberships, users } from "./db/schema";
+import { isActiveMember } from "./membership";
 import { distanceKm } from "./geo";
 import { ACTIVE_WINDOW_MINUTES, LIVE_STALE_MINUTES, MAX_MAP_RESULTS } from "./rules";
 
@@ -270,16 +271,25 @@ export async function getOpenMapProfiles(opts: {
 export async function getBoardMembers(
   boardId: string,
   opts: { excludeUserId?: string; centerLat?: number; centerLng?: number } = {}
-): Promise<Array<MapProfile & { hereNow: boolean; role: string; unplaced: boolean }>> {
+): Promise<
+  Array<MapProfile & { hereNow: boolean; role: string; unplaced: boolean; verified: boolean; joinedAt: string }>
+> {
   if (!hasDb || !db) return [];
 
   const rows = await db
-    .select({ ...PROFILE_COLUMNS, role: memberships.role, checkedInAt: memberships.checkedInAt })
+    .select({
+      ...PROFILE_COLUMNS,
+      role: memberships.role,
+      checkedInAt: memberships.checkedInAt,
+      verifiedAt: memberships.verifiedAt,
+      joinedAt: memberships.joinedAt,
+    })
     .from(memberships)
     .innerJoin(users, eq(users.id, memberships.userId))
     .where(
       and(
         eq(memberships.boardId, boardId),
+        isActiveMember(),
         isNotNull(users.name),
         opts.excludeUserId ? ne(users.id, opts.excludeUserId) : undefined
       )
@@ -295,7 +305,8 @@ export async function getBoardMembers(
   return rows.map((r) => {
     const mapped = toMapProfile(r, centre);
     const hereNow = Boolean(r.checkedInAt && new Date(r.checkedInAt) > checkedInSince);
-    if (mapped) return { ...mapped, hereNow, role: r.role, unplaced: false };
+    const vouched = { verified: r.verifiedAt != null, joinedAt: r.joinedAt.toISOString() };
+    if (mapped) return { ...mapped, hereNow, role: r.role, unplaced: false, ...vouched };
     // Set to `off`, or no coordinates yet. They are a real member and must
     // still be listed and matchable — they simply have no pin. The board UI
     // shows them in the list with no marker rather than dropping them, and
@@ -326,6 +337,7 @@ export async function getBoardMembers(
       hereNow,
       role: r.role,
       unplaced: true,
+      ...vouched,
     };
   });
 }

@@ -119,6 +119,31 @@ export function reachNeedsPrecise(km: number): boolean {
   return PIN_REACHES.some((r) => r.km === km && "needsPrecise" in r && r.needsPrecise);
 }
 
+/**
+ * The four things you can say about a post without writing anything.
+ *
+ * Closed, and deliberately not a generic "like": each one says something
+ * different about *why* a post mattered, which is information a founder
+ * reading their own community's feed can actually act on. Free-form emoji
+ * would be friendlier and would tell them nothing.
+ */
+export const REACTIONS = [
+  { id: "clap", emoji: "👏", label: "Nice one" },
+  { id: "useful", emoji: "💡", label: "Useful" },
+  { id: "congrats", emoji: "🎉", label: "Congrats" },
+  { id: "love", emoji: "❤️", label: "Love this" },
+] as const;
+
+export type ReactionId = (typeof REACTIONS)[number]["id"];
+
+/** Widened for validating request input against the closed set. */
+export const REACTION_IDS: readonly string[] = REACTIONS.map((r) => r.id);
+
+export const MAX_COMMENT_LENGTH = 600;
+
+/** Replies shown under a post before it asks you to open the rest. */
+export const COMMENTS_PREVIEWED = 2;
+
 /** How many recommendations a surface shows at once. */
 export const MATCHES_SHOWN = 3;
 

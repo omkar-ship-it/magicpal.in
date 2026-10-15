@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { boardById, boardBySlug, joinBoard, membershipOf, setRsvp } from "@/lib/boards";
+import { boardById, boardBySlug, joinBoard, setRsvp } from "@/lib/boards";
 import { getSessionUser } from "@/lib/session";
 
 /**
@@ -34,8 +34,11 @@ export default async function JoinPage({ params }: { params: Promise<{ slug: str
     redirect(`/?panel=signin&join=${encodeURIComponent(board.slug)}`);
   }
 
-  if (!(await membershipOf(board.id, user.id))) {
-    await joinBoard(board.id, user.id);
+  // Refused for somebody the owner removed — send them to the board's own
+  // landing, which is the one place that explains why rather than dropping
+  // them on an open map with no account of what happened.
+  if (!(await joinBoard(board.id, user.id))) {
+    redirect(`/b/${encodeURIComponent(board.slug)}`);
   }
 
   // Scanning an event's code at the door means three things at once: I'm

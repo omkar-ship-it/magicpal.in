@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { boardBySlug, memberCount, membershipOf } from "@/lib/boards";
+import { isActive, MEMBER_REMOVED } from "@/lib/membership";
 import { getProfileById } from "@/lib/profiles";
 import { getSessionUser } from "@/lib/session";
 import JoinButton from "@/components/JoinButton";
@@ -21,9 +22,13 @@ export default async function BoardPage({ params }: { params: Promise<{ slug: st
   if (!board || board.archivedAt) notFound();
 
   const user = await getSessionUser();
-  if (user && (await membershipOf(board.id, user.id))) {
+  const membership = user ? await membershipOf(board.id, user.id) : null;
+  if (isActive(membership)) {
     redirect(`/?net=${encodeURIComponent(board.slug)}`);
   }
+  // A removed person still holds the link — it's in the group chat they
+  // were removed from. Saying so plainly beats a Join button that 403s.
+  const removed = membership?.status === MEMBER_REMOVED;
 
   const count = await memberCount(board.id);
   const host = await getProfileById(board.hostUserId);
@@ -54,7 +59,12 @@ export default async function BoardPage({ params }: { params: Promise<{ slug: st
         </p>
 
         <div className="mt-4">
-          {user ? (
+          {removed ? (
+            <p className="text-[13px] leading-[1.5] font-medium" style={{ color: "var(--warn)" }}>
+              You&rsquo;re no longer a member of this community. Ask whoever runs it if you think that&rsquo;s a
+              mistake.
+            </p>
+          ) : user ? (
             <JoinButton slug={board.slug} />
           ) : (
             // Straight to /join, which signs them in and joins in one hop —

@@ -1,7 +1,8 @@
 import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import { db, hasDb } from "./db";
 import { boards, consents, memberships, users } from "./db/schema";
-import { postsFor } from "./posts";
+import { isActiveMember } from "./membership";
+import { postsFor, type CommentRow } from "./posts";
 
 /**
  * What has actually happened lately, derived rather than recorded.
@@ -31,6 +32,12 @@ export type FeedItem = {
     images: string[];
     event: { slug: string; name: string } | null;
     canDelete: boolean;
+    pinned: boolean;
+    canPin: boolean;
+    reactions: Record<string, number>;
+    myReactions: string[];
+    comments: CommentRow[];
+    commentCount: number;
   };
   /** Who it happened to. Null when the person has since been deleted. */
   person: { id: string; name: string; headline: string | null; photoUrl: string | null } | null;
@@ -77,6 +84,12 @@ export async function feedFor(opts: {
           images: p.images,
           event: p.event,
           canDelete: p.canDelete,
+          pinned: p.pinned,
+          canPin: p.canPin,
+          reactions: p.reactions,
+          myReactions: p.myReactions,
+          comments: p.comments,
+          commentCount: p.commentCount,
         },
       });
     }
@@ -102,6 +115,8 @@ export async function feedFor(opts: {
     .where(
       and(
         gt(memberships.joinedAt, since),
+        // Somebody who left or was removed is not news about who's here.
+        isActiveMember(),
         isNull(boards.archivedAt),
         opts.boardId ? eq(memberships.boardId, opts.boardId) : undefined,
         // Unscoped, a feed of every join across every board would leak who
@@ -205,6 +220,12 @@ export async function feedFor(opts: {
     // Your own arrival isn't news to you, but your own post is — it's the
     // confirmation that it went through.
     .filter((i) => i.kind === "post" || i.person?.id !== opts.viewerId)
-    .sort((a, b) => b.at.localeCompare(a.at))
+    // Newest first, except the pinned post, which floats regardless of age —
+    // that is the entire point of pinning it. Applied here rather than in the
+    // client so every reader of this feed gets the same order.
+    .sort((a, b) => {
+      if (Boolean(a.post?.pinned) !== Boolean(b.post?.pinned)) return a.post?.pinned ? -1 : 1;
+      return b.at.localeCompare(a.at);
+    })
     .slice(0, limit);
 }

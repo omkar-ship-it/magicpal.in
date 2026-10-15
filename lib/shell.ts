@@ -1,4 +1,5 @@
 import { boardById, boardBySlug, boardsForUser, childEvents, isLive, membershipOf, publicEvents, rsvpSummary, type Board } from "./boards";
+import { isActive } from "./membership";
 import { getBoardMembers, getOpenMapProfiles, getProfileById, touchActivity, type MapProfile } from "./profiles";
 import { matchesFor, type Surface } from "./matching";
 import { attachConnectionStatus } from "./connections";
@@ -71,6 +72,20 @@ export type SelfMarker = {
   visibility: "off" | "base" | "exact" | "live";
 };
 
+/**
+ * A person as the shell hands them out.
+ *
+ * `verified` is the community owner's vouch and only means anything inside
+ * a community — on the open map nobody is in a position to make the claim,
+ * so it is simply absent there rather than false.
+ */
+export type ShellPerson = MapProfile & {
+  hereNow?: boolean;
+  unplaced?: boolean;
+  verified?: boolean;
+  role?: string;
+};
+
 export type ShellPayload = {
   scope: {
     kind: "open" | "event" | "community";
@@ -86,9 +101,16 @@ export type ShellPayload = {
       createdAt: string;
       isHost: boolean;
       hereNow: number;
+      /** What the community is for. */
+      details: string | null;
+      /** The terms of being in it. */
+      guidelines: string | null;
+      verifiedCount: number;
+      /** The owner can't leave — there'd be nobody left to run it. */
+      canLeave: boolean;
     } | null;
   };
-  people: MapProfile[];
+  people: ShellPerson[];
   matches: Array<{ id: string; reason: string; twoWay: boolean }>;
   events: EventRef[];
   networks: NetworkOption[];
@@ -178,9 +200,11 @@ export async function shellPayload(opts: {
       board = (await boardById(board.parentBoardId)) ?? board;
     }
     const membership = board && opts.userId ? await membershipOf(board.id, opts.userId) : null;
-    // Falling back rather than erroring: a stale `?net=` from a bookmark or
-    // a board you left should land you on the open map, not a dead screen.
-    if (board && membership) {
+    // Falling back rather than erroring: a stale `?net=` from a bookmark, a
+    // board you left, or one you were removed from should land you on the
+    // open map rather than a dead screen — and, for the removal case, must
+    // not hand back the community's people either.
+    if (board && isActive(membership)) {
       const rawMembers = await getBoardMembers(board.id, {
         excludeUserId: opts.userId,
         centerLat: board.lat ?? undefined,
@@ -216,6 +240,10 @@ export async function shellPayload(opts: {
             createdAt: board.createdAt.toISOString(),
             isHost: board.hostUserId === opts.userId,
             hereNow: members.filter((m) => m.hereNow).length,
+            details: board.details,
+            guidelines: board.guidelines,
+            verifiedCount: members.filter((m) => m.verified).length + (board.hostUserId ? 1 : 0),
+            canLeave: Boolean(opts.userId) && board.hostUserId !== opts.userId,
           },
         },
         people: members,

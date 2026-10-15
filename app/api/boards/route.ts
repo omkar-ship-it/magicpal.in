@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";
 import { boardBySlug, createBoard, membershipOf } from "@/lib/boards";
+import { isActive } from "@/lib/membership";
 
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
@@ -72,7 +73,7 @@ export async function POST(req: Request) {
     if (!parent || parent.type !== "community") {
       return NextResponse.json({ error: "That community doesn't exist." }, { status: 404 });
     }
-    if (!(await membershipOf(parent.id, user.id))) {
+    if (!isActive(await membershipOf(parent.id, user.id))) {
       return NextResponse.json({ error: "You're not a member of that community." }, { status: 403 });
     }
     parentBoardId = parent.id;

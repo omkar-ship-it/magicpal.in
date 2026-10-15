@@ -1,6 +1,7 @@
 import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
 import { db, hasDb } from "./db";
 import { boards, memberships } from "./db/schema";
+import { isActiveMember, MEMBER_ACTIVE, MEMBER_LEFT, MEMBER_REMOVED } from "./membership";
 
 export type BoardType = "event" | "community";
 
@@ -82,7 +83,13 @@ export async function createBoard(input: {
       // to the people they invited.
       await db
         .insert(memberships)
-        .values({ boardId: row.id, userId: input.hostUserId, role: "host" })
+        .values({
+          boardId: row.id,
+          userId: input.hostUserId,
+          role: "host",
+          status: MEMBER_ACTIVE,
+          statusAt: new Date(),
+        })
         .onConflictDoNothing();
 
       return row;
@@ -107,17 +114,97 @@ export async function boardById(id: string): Promise<Board | null> {
 }
 
 /**
- * Join a board, or do nothing if already on it.
+ * Join, or walk back in after leaving.
  *
  * Idempotent on purpose: the join link gets opened repeatedly — scanned
  * twice, reopened from WhatsApp, revisited after signing in — and every one
  * of those is the same person arriving, not a new member.
+ *
+ * Returns false for somebody the owner removed. Without that check the
+ * invite link — which is still sitting in the group chat they were removed
+ * from — would undo the removal on the next tap, and "remove" would mean
+ * nothing at all. Rejoining after you *left* is fine and deliberately
+ * frictionless: that was your own decision, not a judgement.
  */
-export async function joinBoard(boardId: string, userId: string): Promise<void> {
-  if (!hasDb || !db) return;
-  await db.insert(memberships).values({ boardId, userId, role: "member" }).onConflictDoNothing();
+export async function joinBoard(boardId: string, userId: string): Promise<boolean> {
+  if (!hasDb || !db) return false;
+
+  const existing = await membershipOf(boardId, userId);
+  if (existing?.status === MEMBER_REMOVED) return false;
+  if (existing) {
+    if (existing.status !== MEMBER_ACTIVE) {
+      await db
+        .update(memberships)
+        .set({ status: MEMBER_ACTIVE, statusAt: new Date() })
+        .where(eq(memberships.id, existing.id));
+    }
+    return true;
+  }
+
+  await db
+    .insert(memberships)
+    .values({ boardId, userId, role: "member", status: MEMBER_ACTIVE, statusAt: new Date() })
+    .onConflictDoNothing();
+  return true;
 }
 
+/**
+ * Leave, or be removed — the same tombstone, different authorship.
+ *
+ * The owner can't leave their own community: there would be nobody left
+ * who can verify anyone or take a post down, and an ownerless group is
+ * worse than a closed one. Transferring first is the honest path, and it
+ * isn't built yet, so this refuses rather than orphaning the board.
+ */
+export async function setMemberStatus(
+  boardId: string,
+  userId: string,
+  status: typeof MEMBER_LEFT | typeof MEMBER_REMOVED
+): Promise<boolean> {
+  if (!hasDb || !db) return false;
+  const board = await boardById(boardId);
+  if (!board || board.hostUserId === userId) return false;
+
+  const row = await membershipOf(boardId, userId);
+  if (!row) return false;
+
+  await db
+    .update(memberships)
+    .set({
+      status,
+      statusAt: new Date(),
+      // A removal also drops the vouch. Keeping a verified badge on
+      // somebody the owner just threw out would be the badge lying.
+      ...(status === MEMBER_REMOVED ? { verifiedAt: null, verifiedBy: null } : {}),
+      checkedInAt: null,
+      rsvp: null,
+    })
+    .where(eq(memberships.id, row.id));
+  return true;
+}
+
+/** The owner vouching for a member, or taking the vouch back. */
+export async function setMemberVerified(
+  boardId: string,
+  userId: string,
+  by: string,
+  verified: boolean
+): Promise<boolean> {
+  if (!hasDb || !db) return false;
+  const row = await membershipOf(boardId, userId);
+  if (!row || row.status !== MEMBER_ACTIVE) return false;
+
+  await db
+    .update(memberships)
+    .set(verified ? { verifiedAt: new Date(), verifiedBy: by } : { verifiedAt: null, verifiedBy: null })
+    .where(eq(memberships.id, row.id));
+  return true;
+}
+
+/**
+ * The raw row, whatever its status — callers that mean "is a member" must
+ * test it with `isActive`, because a removed person still has a row here.
+ */
 export async function membershipOf(boardId: string, userId: string) {
   if (!hasDb || !db) return null;
   const [row] = await db
@@ -150,11 +237,11 @@ export async function boardsForUser(userId: string): Promise<Array<Board & { rol
     .select({
       board: boards,
       role: memberships.role,
-      memberCount: sql<number>`(select count(*) from ${memberships} m where m.board_id = ${boards.id})::int`,
+      memberCount: sql<number>`(select count(*) from ${memberships} m where m.board_id = ${boards.id} and m.status = '${sql.raw(MEMBER_ACTIVE)}')::int`,
     })
     .from(memberships)
     .innerJoin(boards, eq(boards.id, memberships.boardId))
-    .where(and(eq(memberships.userId, userId), isNull(boards.archivedAt)))
+    .where(and(eq(memberships.userId, userId), isActiveMember(), isNull(boards.archivedAt)))
     .orderBy(desc(memberships.role), desc(boards.createdAt));
   return rows.map((r) => ({ ...r.board, role: r.role, memberCount: r.memberCount }));
 }
@@ -177,7 +264,7 @@ export async function rsvpSummary(
   const rows = await db
     .select({ rsvp: memberships.rsvp, userId: memberships.userId })
     .from(memberships)
-    .where(eq(memberships.boardId, boardId));
+    .where(and(eq(memberships.boardId, boardId), isActiveMember()));
   return {
     going: rows.filter((r) => r.rsvp === "going").length,
     maybe: rows.filter((r) => r.rsvp === "maybe").length,
@@ -204,8 +291,9 @@ export async function sharedBoardsBetween(
     .where(
       and(
         eq(memberships.userId, aId),
+        isActiveMember(),
         isNull(boards.archivedAt),
-        sql`exists (select 1 from ${memberships} m2 where m2.board_id = ${boards.id} and m2.user_id = ${bId})`
+        sql`exists (select 1 from ${memberships} m2 where m2.board_id = ${boards.id} and m2.user_id = ${bId} and m2.status = '${sql.raw(MEMBER_ACTIVE)}')`
       )
     );
   return rows;
@@ -216,7 +304,7 @@ export async function memberCount(boardId: string): Promise<number> {
   const [row] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(memberships)
-    .where(eq(memberships.boardId, boardId));
+    .where(and(eq(memberships.boardId, boardId), isActiveMember()));
   return row?.n ?? 0;
 }
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";
 import { boardBySlug, membershipOf, setCheckedIn } from "@/lib/boards";
+import { isActive } from "@/lib/membership";
 
 /**
  * "I'm here" / "I've left" at an event.
@@ -23,7 +24,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ slug: string }
   if (board.type !== "event") {
     return NextResponse.json({ error: "Only events have a here-now." }, { status: 400 });
   }
-  if (!(await membershipOf(board.id, user.id))) {
+  if (!isActive(await membershipOf(board.id, user.id))) {
     return NextResponse.json({ error: "Join the event first." }, { status: 403 });
   }
 

@@ -3,6 +3,7 @@ import { db, hasDb } from "./db";
 import { memberships, pinJoins, pins, users } from "./db/schema";
 import { distanceKm } from "./geo";
 
+import { activeAliasSql } from "./membership";
 import { LIVE_STALE_MINUTES, MAX_PIN_REACH_KM, reachNeedsPrecise } from "./rules";
 
 // Re-exported for server callers; the constants themselves live in rules.ts
@@ -140,6 +141,7 @@ export async function livePinsFor(opts: {
           select 1 from ${memberships} mine
           join ${memberships} theirs on theirs.board_id = mine.board_id
           where mine.user_id = ${opts.viewerId} and theirs.user_id = ${pins.userId}
+            and ${activeAliasSql("mine")} and ${activeAliasSql("theirs")}
         )`
       )
     : eq(pins.audience, "open");

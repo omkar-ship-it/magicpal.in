@@ -4,6 +4,7 @@ import { topicById } from "@/lib/intents";
 import type { MapProfile } from "@/lib/profiles";
 import Avatar from "./Avatar";
 import { IconCity, IconPin, IconSparkle } from "./Icons";
+import VerifiedBadge from "./VerifiedBadge";
 
 /**
  * One person, everywhere.
@@ -19,13 +20,16 @@ export default function PersonCard({
   twoWay,
   onOpen,
   compact = false,
+  children,
 }: {
-  person: MapProfile & { hereNow?: boolean; unplaced?: boolean };
+  person: MapProfile & { hereNow?: boolean; unplaced?: boolean; verified?: boolean };
   /** The matcher's sentence. Omitted on surfaces that just list people. */
   reason?: string;
   twoWay?: boolean;
   onOpen?: () => void;
   compact?: boolean;
+  /** Owner-only controls, hung under the card by the People window. */
+  children?: React.ReactNode;
 }) {
   const needs = person.lookingFor.map(topicById).filter(Boolean);
   const offers = person.canHelpWith.map(topicById).filter(Boolean);
@@ -37,6 +41,7 @@ export default function PersonCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <h3 className="min-w-0 truncate text-[14px] font-semibold">{person.name}</h3>
+            {person.verified && <VerifiedBadge size={14} label={`Verified by this community`} />}
             {person.hereNow && (
               <span className="pill" style={{ background: "color-mix(in srgb, var(--good) 14%, transparent)", color: "var(--good)" }}>
                 Here now
@@ -77,6 +82,8 @@ export default function PersonCard({
           )}
         </div>
       )}
+
+      {children}
     </article>
   );
 }

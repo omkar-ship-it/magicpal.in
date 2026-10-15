@@ -917,6 +917,235 @@ async function main() {
     );
     await placeA(HERE);
 
+    const { rows: idRows } = await pool.query("select email, id from users where email = any($1)", [
+      [emailA, emailB, emailC],
+    ]);
+    const idOf = (e) => idRows.find((r) => r.email === e).id;
+    const aId = idOf(emailA);
+    const bId = idOf(emailB);
+
+    console.log("\nA feed you can answer, not just read");
+    const answerPost = await api("/api/posts", {
+      method: "POST", jar: a.jar, body: { boardSlug: comm.data.slug, body: "Anyone hiring Android folks?" },
+    });
+    assert(answerPost.status === 200, "a member posts something answerable");
+    const talkId = answerPost.data.id;
+
+    const anonReact = await api(`/api/posts/${talkId}/react`, { method: "POST", body: { kind: "clap" } });
+    assert(anonReact.status === 401, "a signed-out visitor can't react");
+    const strangerReact = await api(`/api/posts/${talkId}/react`, {
+      method: "POST", jar: c.jar, body: { kind: "clap" },
+    });
+    assert(strangerReact.status === 403, "neither can somebody outside the community");
+    const madeUp = await api(`/api/posts/${talkId}/react`, {
+      method: "POST", jar: b.jar, body: { kind: "shrug" },
+    });
+    assert(madeUp.status === 400, "reactions are a closed set — an invented one is refused");
+
+    const reacted = await api(`/api/posts/${talkId}/react`, {
+      method: "POST", jar: b.jar, body: { kind: "useful" },
+    });
+    assert(reacted.status === 200 && reacted.data.on === true, "a member can react");
+    const withReaction = await api(`/api/feed?net=${comm.data.slug}`, { jar: b.jar });
+    const talkSeen = withReaction.data.items.find((i) => i.post?.id === talkId);
+    assert(talkSeen.post.reactions.useful === 1, "…and it's counted");
+    assert(talkSeen.post.myReactions.includes("useful"), "…and marked as yours, so the control can show it");
+
+    // Tapping twice is taking it back, not reacting twice.
+    const reactAgain = await api(`/api/posts/${talkId}/react`, {
+      method: "POST", jar: b.jar, body: { kind: "useful" },
+    });
+    assert(reactAgain.data.on === false, "tapping the same reaction reactAgain removes it");
+    const { rows: reactRows } = await pool.query("select count(*)::int n from post_reactions where post_id = $1", [talkId]);
+    assert(reactRows[0].n === 0, "…and leaves nothing behind to double-count");
+    await api(`/api/posts/${talkId}/react`, { method: "POST", jar: b.jar, body: { kind: "useful" } });
+
+    console.log("\nReplies");
+    const strangerReply = await api(`/api/posts/${talkId}/comments`, {
+      method: "POST", jar: c.jar, body: { body: "me!" },
+    });
+    assert(strangerReply.status === 403, "somebody outside the community can't reply");
+    const emptyReply = await api(`/api/posts/${talkId}/comments`, {
+      method: "POST", jar: b.jar, body: { body: "   " },
+    });
+    assert(emptyReply.status === 400, "an empty reply is refused");
+    const repliedOk = await api(`/api/posts/${talkId}/comments`, {
+      method: "POST", jar: b.jar, body: { body: "We are — I'll introduce you." },
+    });
+    assert(repliedOk.status === 200, "a member can reply");
+
+    const withReply = await api(`/api/feed?net=${comm.data.slug}`, { jar: a.jar });
+    const talkWithReply = withReply.data.items.find((i) => i.post?.id === talkId);
+    assert(talkWithReply.post.commentCount === 1, "the reply is carried with the post, not fetched separately");
+    assert(talkWithReply.post.comments[0].body.startsWith("We are"), "…with what was actually said");
+    assert(
+      talkWithReply.post.comments[0].canDelete === true,
+      "the community's owner can remove any reply"
+    );
+
+    const replyId = talkWithReply.post.comments[0].id;
+    const notYourReply = await api(`/api/comments/${replyId}`, { method: "DELETE", jar: c.jar });
+    assert(notYourReply.status === 403, "a stranger can't remove a reply");
+    const removedReply = await api(`/api/comments/${replyId}`, { method: "DELETE", jar: b.jar });
+    assert(removedReply.status === 200, "its author can");
+    const afterReplyGone = await api(`/api/feed?net=${comm.data.slug}`, { jar: a.jar });
+    assert(
+      afterReplyGone.data.items.find((i) => i.post?.id === talkId).post.commentCount === 0,
+      "…and it leaves the post"
+    );
+
+    console.log("\nOne pinned post, held above everything else");
+    const memberPin = await api(`/api/posts/${talkId}/pin`, { method: "POST", jar: b.jar, body: { pinned: true } });
+    assert(memberPin.status === 403, "a member can't pin");
+    const pinnedOk = await api(`/api/posts/${talkId}/pin`, { method: "POST", jar: a.jar, body: { pinned: true } });
+    assert(pinnedOk.status === 200, "the owner can");
+
+    // Something newerPost, to prove the pin actually overrides recency.
+    const newerPost = await api("/api/posts", {
+      method: "POST", jar: a.jar, body: { boardSlug: comm.data.slug, body: "Posted after the pinned one" },
+    });
+    assert(newerPost.status === 200, "and posts something newerPost afterwards");
+    const orderedFeed = await api(`/api/feed?net=${comm.data.slug}`, { jar: a.jar });
+    assert(orderedFeed.data.items[0].post?.id === talkId, "the pinned post sits above a newerPost one");
+    assert(orderedFeed.data.items[0].post.pinned === true, "…and says that it's pinned");
+
+    // A second pin replaces the first: a list of pinned things is just the
+    // feed reactAgain.
+    await api(`/api/posts/${newerPost.data.id}/pin`, { method: "POST", jar: a.jar, body: { pinned: true } });
+    const { rows: pinRows } = await pool.query(
+      "select count(*)::int n from posts p join boards bd on bd.id = p.board_id where bd.slug = $1 and p.pinned_at is not null",
+      [comm.data.slug]
+    );
+    assert(pinRows[0].n === 1, "pinning a second post unpins the first");
+    await api(`/api/posts/${newerPost.data.id}/pin`, { method: "POST", jar: a.jar, body: { pinned: false } });
+
+    console.log("\nThe owner vouches for who's really here");
+    const notOwnerVerify = await api(`/api/boards/${comm.data.slug}/members/${bId}`, {
+      method: "PATCH", jar: b.jar, body: { action: "verify" },
+    });
+    assert(notOwnerVerify.status === 403, "a member can't hand out verification");
+
+    const selfVerify = await api(`/api/boards/${comm.data.slug}/members/${aId}`, {
+      method: "PATCH", jar: a.jar, body: { action: "verify" },
+    });
+    assert(selfVerify.status === 400, "the owner can't verify themselves — a vouch has to come from somebody else");
+
+    const verified = await api(`/api/boards/${comm.data.slug}/members/${bId}`, {
+      method: "PATCH", jar: a.jar, body: { action: "verify" },
+    });
+    assert(verified.status === 200, "the owner can verify a member");
+    const seenVerified = await api(`/api/map?net=${comm.data.slug}`, { jar: a.jar });
+    assert(
+      seenVerified.data.people.find((p) => p.name === "Flow Bob")?.verified === true,
+      "…and the badge reaches everyone's copy of that person"
+    );
+    const unverified = await api(`/api/boards/${comm.data.slug}/members/${bId}`, {
+      method: "PATCH", jar: a.jar, body: { action: "unverify" },
+    });
+    assert(unverified.status === 200, "a vouch can be taken back");
+    const afterUnverify = await api(`/api/map?net=${comm.data.slug}`, { jar: a.jar });
+    assert(
+      afterUnverify.data.people.find((p) => p.name === "Flow Bob")?.verified === false,
+      "…and the badge goes with it"
+    );
+    await api(`/api/boards/${comm.data.slug}/members/${bId}`, { method: "PATCH", jar: a.jar, body: { action: "verify" } });
+
+    console.log("\nLeaving is reversible; being removed is not");
+    const joinedC = await api(`/api/boards/${comm.data.slug}/join`, { method: "POST", jar: c.jar });
+    assert(joinedC.status === 200, "a stranger with the link can join");
+    const leftC = await api(`/api/boards/${comm.data.slug}/leave`, { method: "POST", jar: c.jar });
+    assert(leftC.status === 200, "and can leave again");
+    const goneFromScope = await api(`/api/map?net=${comm.data.slug}`, { jar: c.jar });
+    assert(goneFromScope.data.scope.kind === "open", "after leaving, that community's scope falls back to the open map");
+    const rejoined = await api(`/api/boards/${comm.data.slug}/join`, { method: "POST", jar: c.jar });
+    assert(rejoined.status === 200, "leaving is not a door locking behind you — the same link works again");
+    await api(`/api/boards/${comm.data.slug}/leave`, { method: "POST", jar: c.jar });
+
+    const ownerLeaves = await api(`/api/boards/${comm.data.slug}/leave`, { method: "POST", jar: a.jar });
+    assert(ownerLeaves.status === 400, "the owner can't walk out and leave nobody running it");
+
+    console.log("\nRemoval takes everything with it");
+    // Carol, not Bob: Bob also shares the meetup board with Alice, so a
+    // community-scoped pin would still legitimately reach him and the
+    // assertion would prove nothing. Carol shares exactly one thing.
+    const cId = idOf(emailC);
+    await api(`/api/boards/${comm.data.slug}/join`, { method: "POST", jar: c.jar });
+    await api(`/api/boards/${comm.data.slug}/members/${cId}`, {
+      method: "PATCH", jar: a.jar, body: { action: "verify" },
+    });
+
+    await placeA(HERE);
+    await placeC("base");
+    const insidePin = await drop({ message: "Members only, 3rd floor", minutes: 60, audience: "communities", reachKm: 3 });
+    assert(
+      (await pinsSeenBy(c.jar)).some((x) => x.id === insidePin.data.id),
+      "while a member, Carol sees the community's private pins"
+    );
+
+    const notOwnerRemove = await api(`/api/boards/${comm.data.slug}/members/${aId}`, {
+      method: "PATCH", jar: c.jar, body: { action: "remove" },
+    });
+    assert(notOwnerRemove.status === 403, "a member can't remove anyone");
+
+    const removedCarol = await api(`/api/boards/${comm.data.slug}/members/${cId}`, {
+      method: "PATCH", jar: a.jar, body: { action: "remove" },
+    });
+    assert(removedCarol.status === 200, "the owner can remove a member");
+
+    const carolNets = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}`, { jar: c.jar });
+    assert(
+      !carolNets.data.networks.some((n) => n.slug === comm.data.slug),
+      "the community disappears from the removed member's switcher"
+    );
+    const carolScope = await api(`/api/map?net=${comm.data.slug}`, { jar: c.jar });
+    assert(carolScope.data.scope.kind === "open", "…and asking for it by name doesn't hand back its people");
+    const carolPost = await api("/api/posts", {
+      method: "POST", jar: c.jar, body: { boardSlug: comm.data.slug, body: "still here?" },
+    });
+    assert(carolPost.status === 403, "…they can't post to it");
+    const carolFeed = await api(`/api/feed?net=${comm.data.slug}`, { jar: c.jar });
+    assert(carolFeed.status === 403, "…and the feed is closed to them");
+
+    // The one a careless gate would leak: a removed member keeping sight of
+    // other members' live locations.
+    assert(
+      !(await pinsSeenBy(c.jar)).some((x) => x.id === insidePin.data.id),
+      "…and the community's private pins go dark immediately"
+    );
+
+    const rejoinBlocked = await api(`/api/boards/${comm.data.slug}/join`, { method: "POST", jar: c.jar });
+    assert(rejoinBlocked.status === 403, "the invite link can't undo a removal");
+
+    const { rows: tomb } = await pool.query(
+      `select m.status, m.verified_at from memberships m
+         join boards bd on bd.id = m.board_id
+        where bd.slug = $1 and m.user_id = $2`,
+      [comm.data.slug, cId]
+    );
+    assert(tomb[0]?.status === "removed", "removal leaves a tombstone rather than deleting the row");
+    assert(tomb[0]?.verified_at === null, "…and drops the vouch, so the badge can't outlive the membership");
+
+    const countAfter = await api(`/api/map?net=${comm.data.slug}`, { jar: a.jar });
+    assert(
+      !countAfter.data.people.some((p) => p.name === "Flow Carol"),
+      "a removed member is gone from the member list the owner sees too"
+    );
+
+    console.log("\nA community's own page carries what it's for");
+    const described = await api(`/api/boards/${comm.data.slug}`, {
+      method: "PATCH", jar: a.jar,
+      body: { details: "For people who went to RGUKT.", guidelines: "Be who you say you are." },
+    });
+    assert(described.status === 200, "the owner can write the objectives and the house rules");
+    const home2 = await api(`/api/map?net=${comm.data.slug}`, { jar: a.jar });
+    assert(home2.data.scope.home.details === "For people who went to RGUKT.", "…objectives reach the home page");
+    assert(home2.data.scope.home.guidelines === "Be who you say you are.", "…and so do the rules");
+    assert(home2.data.scope.home.canLeave === false, "the owner is never offered a leave button");
+    const notOwnerEdit = await api(`/api/boards/${comm.data.slug}`, {
+      method: "PATCH", jar: c.jar, body: { guidelines: "Anything goes." },
+    });
+    assert(notOwnerEdit.status === 403, "a non-owner can't rewrite the rules");
+
     console.log("\nEvery entry point terminates");
     for (const [label, path] of [
       ["a QR scan while signed out", `/join/${slug}`],
