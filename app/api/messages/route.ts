@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";
+import { cleanAttachments } from "@/lib/attachments";
 import { listMessages, sendMessage } from "@/lib/messages";
 
 export async function GET(req: Request) {
@@ -26,7 +27,7 @@ export async function POST(req: Request) {
   const text = typeof body?.body === "string" ? body.body : "";
   if (!connectionId) return NextResponse.json({ error: "Which conversation?" }, { status: 400 });
 
-  const result = await sendMessage(connectionId, user.id, text);
+  const result = await sendMessage(connectionId, user.id, text, cleanAttachments(body?.attachments));
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
   return NextResponse.json({ ok: true });
 }

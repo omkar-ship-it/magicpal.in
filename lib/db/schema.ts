@@ -8,6 +8,7 @@ import {
   boolean,
   doublePrecision,
   integer,
+  jsonb,
   real,
   check,
   type AnyPgColumn,
@@ -248,9 +249,29 @@ export const messages = pgTable("messages", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   body: text("body").notNull(),
+  /**
+   * Images and documents sent with the message.
+   *
+   * jsonb rather than a side table: an attachment has no life of its own —
+   * it is created with its message, read with its message and deleted with
+   * it. A join table would buy referential tidiness and cost a query on
+   * every thread open, for rows nothing else ever points at.
+   *
+   * Only ever URLs on our own blob host; see lib/attachments.
+   */
+  attachments: jsonb("attachments").$type<ChatAttachment[]>().notNull().default(sql`'[]'::jsonb`),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   readAt: timestamp("read_at", { withTimezone: true }),
 });
+
+/** One file on a message. `kind` decides whether it renders or just links. */
+export type ChatAttachment = {
+  kind: "image" | "file";
+  url: string;
+  name: string;
+  mime: string;
+  size: number;
+};
 
 // ---------------------------------------------------------------- boards
 

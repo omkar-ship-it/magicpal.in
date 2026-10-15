@@ -25,7 +25,7 @@ import PinsPanel from "./PinsPanel";
 import SignInPanel from "./SignInPanel";
 import ProfilePanel from "./ProfilePanel";
 import PublicOptIn from "./PublicOptIn";
-import { IconHidden } from "./Icons";
+import { IconChat, IconHidden } from "./Icons";
 
 export type Overlay = "signin" | "profile" | null;
 
@@ -91,6 +91,8 @@ export default function MapShell({
   }));
   const topZ = useRef(3);
   const [selected, setSelected] = useState<string | null>(null);
+  /** Whose thread Chats should land on, set when Message is tapped. */
+  const [chatWith, setChatWith] = useState<string | null>(null);
   const [activeEvent, setActiveEvent] = useState<string | null>(initialEvent);
   const [loading, setLoading] = useState(false);
   /**
@@ -443,7 +445,12 @@ export default function MapShell({
         onClose={() => win("chats", { open: false })}
         onFocus={() => focus("chats")}
       >
-        <ChatsPanel signedIn={signedIn} onChanged={() => void load({})} />
+        <ChatsPanel
+          signedIn={signedIn}
+          openWith={chatWith}
+          onOpened={() => setChatWith(null)}
+          onChanged={() => void load({})}
+        />
       </FloatWindow>
 
       {selectedPerson && (
@@ -468,6 +475,10 @@ export default function MapShell({
                 person={selectedPerson}
                 signedIn={signedIn}
                 onSignIn={() => openWin("signin")}
+                onMessage={() => {
+                  setChatWith(selectedPerson.id);
+                  openWin("chats");
+                }}
               />
               {ownsScope && data.scope.slug && (
                 <MemberControls
@@ -672,10 +683,13 @@ function ReachOut({
   person,
   signedIn,
   onSignIn,
+  onMessage,
 }: {
   person: MapProfile & { connectionStatus?: string | null };
   signedIn: boolean;
   onSignIn: () => void;
+  /** Open this person's thread in Chats. */
+  onMessage: () => void;
 }) {
   const [note, setNote] = useState("");
   /**
@@ -727,7 +741,12 @@ function ReachOut({
     return (
       <div className="card mt-2.5 p-3.5">
         <p className="text-[13px] font-semibold">You&rsquo;re connected</p>
-        <p className="mt-1 text-[12.5px] text-[var(--ink-soft)]">Your conversation is in Chats.</p>
+        {/* The whole point of connecting, one tap from the profile. Telling
+            somebody their conversation "is in Chats" and leaving them to go
+            find it is a navigation puzzle where a button belongs. */}
+        <button type="button" className="btn btn-primary btn-sm mt-2.5 w-full" onClick={onMessage}>
+          <IconChat size={13} /> Message {person.name.split(" ")[0]}
+        </button>
       </div>
     );
   }

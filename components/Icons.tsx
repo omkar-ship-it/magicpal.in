@@ -162,6 +162,28 @@ export function IconMeetup(p: Props) {
   );
 }
 
+/** A picture, for the chat composer's photo button. */
+export function IconImage(p: Props) {
+  return (
+    <Svg {...p}>
+      <rect x="3" y="4.5" width="18" height="15" rx="2.5" />
+      <circle cx="8.5" cy="10" r="1.6" />
+      <path d="m4 17 4.8-4.4a2 2 0 0 1 2.7 0L20 20" />
+    </Svg>
+  );
+}
+
+/** A document, for the chat composer's attach button. */
+export function IconDoc(p: Props) {
+  return (
+    <Svg {...p}>
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z" />
+      <path d="M14 3v5h5" />
+      <path d="M9 13h6M9 17h4" />
+    </Svg>
+  );
+}
+
 export function IconCheck(p: Props) {
   return (
     <Svg {...p}>

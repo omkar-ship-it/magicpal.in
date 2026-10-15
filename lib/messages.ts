@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
 import { db, hasDb } from "./db";
-import { connections, messages, users } from "./db/schema";
+import { connections, messages, users, type ChatAttachment } from "./db/schema";
 
 /**
  * Messages, scoped to an accepted connection and nothing else.
@@ -124,6 +124,7 @@ export type Message = {
   id: string;
   mine: boolean;
   body: string;
+  attachments: ChatAttachment[];
   createdAt: string;
 };
 
@@ -149,6 +150,7 @@ export async function listMessages(connectionId: string, userId: string): Promis
     id: m.id,
     mine: m.senderId === userId,
     body: m.body,
+    attachments: m.attachments ?? [],
     createdAt: m.createdAt.toISOString(),
   }));
 }
@@ -156,7 +158,8 @@ export async function listMessages(connectionId: string, userId: string): Promis
 export async function sendMessage(
   connectionId: string,
   userId: string,
-  body: string
+  body: string,
+  attachments: ChatAttachment[] = []
 ): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
   const conn = await connectionFor(connectionId, userId);
   if (!conn || !db) return { ok: false, error: "No such conversation.", status: 404 };
@@ -166,9 +169,12 @@ export async function sendMessage(
     return { ok: false, error: "They haven't accepted yet.", status: 403 };
   }
   const text = body.trim().slice(0, 2000);
-  if (!text) return { ok: false, error: "Say something.", status: 400 };
+  // A message may be nothing but a photo — but it can't be nothing at all.
+  if (!text && attachments.length === 0) {
+    return { ok: false, error: "Say something, or attach a file.", status: 400 };
+  }
 
-  await db.insert(messages).values({ connectionId, senderId: userId, body: text });
+  await db.insert(messages).values({ connectionId, senderId: userId, body: text, attachments });
   return { ok: true };
 }
 

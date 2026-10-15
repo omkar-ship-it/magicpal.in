@@ -191,6 +191,27 @@ h1, h2, h3 {
   .dock-slot:hover, .dock-slot:active { transform: none; }
 }
 
+/* The chat composer's three actions. Square, quiet, and the same height as
+   the field they sit beside, so the row reads as one control. */
+.composer-btn {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink-soft);
+  transition: border-color 140ms ease, color 140ms ease, background 140ms ease;
+}
+.composer-btn:hover { border-color: var(--brand); color: var(--brand); }
+.composer-btn[data-on="true"] {
+  border-color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 12%, var(--card));
+  color: var(--brand);
+}
+
 .scroll-clean { scrollbar-width: none; -ms-overflow-style: none; }
 .scroll-clean::-webkit-scrollbar { width: 0; height: 0; display: none; }
 

@@ -3,11 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { Message, Thread } from "@/lib/messages";
+import type { ChatAttachment } from "@/lib/db/schema";
 import { sinceLabel } from "@/lib/time";
 import Avatar from "./Avatar";
 import PanelNote from "./PanelNote";
+import ChatComposer, { MessageAttachments } from "./ChatComposer";
 import DirectoryPanel from "./DirectoryPanel";
-import { IconChevronLeft, IconCheck, IconSend, IconX } from "./Icons";
+import { IconChevronLeft, IconCheck, IconX } from "./Icons";
 
 /**
  * Conversations, and the requests that haven't become conversations yet.
@@ -23,9 +25,18 @@ import { IconChevronLeft, IconCheck, IconSend, IconX } from "./Icons";
  */
 export default function ChatsPanel({
   signedIn,
+  openWith,
+  onOpened,
   onChanged,
 }: {
   signedIn: boolean;
+  /**
+   * A person id the shell wants opened — set when somebody taps Message on
+   * a profile. Consumed once and handed back, so reopening Chats later
+   * doesn't keep yanking them into the same thread.
+   */
+  openWith?: string | null;
+  onOpened?: () => void;
   /** Lets the dock badge refresh when a request is answered or a thread read. */
   onChanged: () => void;
 }) {
@@ -62,8 +73,17 @@ export default function ChatsPanel({
       .then((r) => r.json())
       .then((d) => {
         if (!alive) return;
-        setThreads(d.threads ?? []);
+        const list = (d.threads ?? []) as Thread[];
+        setThreads(list);
         setLoading(false);
+        // Opened straight into the right conversation when the shell asked
+        // for one — the request is consumed here so reopening Chats later
+        // lands on the list, which is what somebody expects the second time.
+        if (openWith) {
+          const match = list.find((t) => t.other.id === openWith);
+          if (match) setOpen(match);
+          onOpened?.();
+        }
       })
       .catch(() => {
         if (alive) setLoading(false);
@@ -71,7 +91,7 @@ export default function ChatsPanel({
     return () => {
       alive = false;
     };
-  }, [signedIn]);
+  }, [signedIn, openWith, onOpened]);
 
   if (!signedIn) {
     return (
@@ -185,7 +205,6 @@ function ThreadView({
   onChanged: () => void;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(thread.status);
   const [error, setError] = useState("");
@@ -241,28 +260,29 @@ function ThreadView({
     }
   }
 
-  async function send(e: React.FormEvent) {
-    e.preventDefault();
-    const text = draft.trim();
-    if (!text) return;
+  /**
+   * The composer owns the draft now, so this takes the text and the files
+   * and answers whether it went — which is what tells the composer it may
+   * clear itself. Clearing optimistically here instead would throw away
+   * somebody's uploads on a failed send.
+   */
+  async function send(body: string, attachments: ChatAttachment[]): Promise<boolean> {
     setBusy(true);
     setError("");
-    // Cleared immediately: a send that leaves the text sitting there reads
-    // as a failure even when it worked.
-    setDraft("");
     try {
       const res = await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ connectionId: thread.connectionId, body: text }),
+        body: JSON.stringify({ connectionId: thread.connectionId, body, attachments }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Couldn't send that.");
       await load();
       onChanged();
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
-      setDraft(text);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -319,7 +339,7 @@ function ThreadView({
               <ul className="flex flex-col gap-1.5 py-1">
                 {messages.map((m) => (
                   <li key={m.id} className={m.mine ? "self-end" : "self-start"} style={{ maxWidth: "85%" }}>
-                    <p
+                    <div
                       className="rounded-2xl px-3 py-2 text-[12.5px] leading-[1.45]"
                       style={
                         m.mine
@@ -327,8 +347,9 @@ function ThreadView({
                           : { background: "var(--sunk)", color: "var(--ink)" }
                       }
                     >
-                      {m.body}
-                    </p>
+                      {m.body && <p className="whitespace-pre-line">{m.body}</p>}
+                      <MessageAttachments items={m.attachments ?? []} mine={m.mine} />
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -336,18 +357,7 @@ function ThreadView({
             <div ref={endRef} />
           </div>
 
-          <form onSubmit={send} className="mt-2 flex flex-none gap-2">
-            <input
-              className="input flex-1"
-              placeholder="Write a message"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              maxLength={2000}
-            />
-            <button type="submit" className="btn btn-primary btn-sm flex-none" disabled={busy || !draft.trim()}>
-              <IconSend size={14} />
-            </button>
-          </form>
+          <ChatComposer busy={busy} onSend={send} />
           {error && <p className="mt-1 text-[12.5px] font-medium text-[var(--warn)]">{error}</p>}
         </>
       )}

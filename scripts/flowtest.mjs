@@ -409,6 +409,66 @@ async function main() {
     });
     assert(snoopAfter.status === 404, "a stranger still can't post into it");
 
+    console.log("\nAttachments");
+    const BLOB = "https://x1ui46jl4bfgodpy.public.blob.vercel-storage.com/chat/a-1.png";
+    const img = { kind: "image", url: BLOB, name: "whiteboard.png", mime: "image/png", size: 2048 };
+
+    const empty = await api("/api/messages", { method: "POST", jar: a.jar, body: { connectionId: connId, body: "  " } });
+    assert(empty.status === 400, "a message with no words and no files is refused");
+
+    const justFile = await api("/api/messages", {
+      method: "POST", jar: a.jar, body: { connectionId: connId, body: "", attachments: [img] },
+    });
+    assert(justFile.status === 200, "…but a photo on its own is a message");
+
+    const withFile = await api(`/api/messages?connectionId=${connId}`, { jar: b.jar });
+    const got = withFile.data.messages.find((m) => (m.attachments ?? []).length > 0);
+    assert(Boolean(got), "attachments come back with the thread");
+    assert(got.attachments[0].name === "whiteboard.png", "…with the name they were sent under");
+    assert(got.attachments[0].kind === "image", "…and the kind that decides how they render");
+
+    // The control that matters: the send endpoint takes URLs from the client,
+    // so anything not on our own blob host would be a phishing surface
+    // wearing our chrome.
+    const foreign = await api("/api/messages", {
+      method: "POST", jar: a.jar,
+      body: { connectionId: connId, body: "", attachments: [{ ...img, url: "https://evil.example.com/x.png" }] },
+    });
+    assert(foreign.status === 400, "an attachment pointing off our blob host is dropped, leaving nothing to send");
+
+    const lookalike = await api("/api/messages", {
+      method: "POST", jar: a.jar,
+      body: {
+        connectionId: connId, body: "",
+        attachments: [{ ...img, url: "https://x.public.blob.vercel-storage.com.evil.com/x.png" }],
+      },
+    });
+    assert(lookalike.status === 400, "…and a hostname that merely starts the same way doesn't pass either");
+
+    const script = await api("/api/messages", {
+      method: "POST", jar: a.jar,
+      body: { connectionId: connId, body: "", attachments: [{ ...img, mime: "image/svg+xml", name: "x.svg" }] },
+    });
+    assert(script.status === 400, "svg is refused — it runs script when opened");
+
+    const many = await api("/api/messages", {
+      method: "POST", jar: a.jar,
+      body: {
+        connectionId: connId, body: "lots",
+        attachments: [1, 2, 3, 4, 5, 6].map((n) => ({ ...img, url: `${BLOB}?${n}` })),
+      },
+    });
+    assert(many.status === 200, "an over-full message still sends");
+    const capped = await api(`/api/messages?connectionId=${connId}`, { jar: b.jar });
+    const last = capped.data.messages.filter((m) => m.body === "lots")[0];
+    assert(last.attachments.length === 4, "…with the attachment count capped rather than the message rejected");
+
+    const huge = await api("/api/messages", {
+      method: "POST", jar: a.jar,
+      body: { connectionId: connId, body: "", attachments: [{ ...img, size: 99 * 1024 * 1024 }] },
+    });
+    assert(huge.status === 400, "a file claiming to be 99MB is dropped");
+
     console.log("\nShared interests are a matching signal of their own");
     // Carol shares a sector with Alice but needs nothing Alice offers, so
     // she can only surface through the symmetric interest signal.
