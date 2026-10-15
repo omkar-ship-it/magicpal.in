@@ -13,6 +13,7 @@ import FloatWindow, { DEFAULT_WINDOW, type WindowState } from "./FloatWindow";
 import LiveLocation from "./LiveLocation";
 import MapTopBar from "./MapTopBar";
 import PersonCard from "./PersonCard";
+import PeoplePanel from "./PeoplePanel";
 import MemberControls from "./MemberControls";
 import PersonProfile from "./PersonProfile";
 import PanelNote from "./PanelNote";
@@ -367,45 +368,18 @@ export default function MapShell({
         onClose={() => win("people", { open: false })}
         onFocus={() => focus("people")}
       >
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {shown.length === 0 ? (
-            <PanelNote title={filtering ? "Nothing matches that" : `Nobody on ${data.scope.name} yet`}>
-              {filtering
-                ? "Try fewer filters, or a wider radius."
-                : isOpenNet
-                  ? "Most people arrive through a board first and opt into the public map afterwards."
-                  : "Share the board's QR code and it fills as people scan it."}
-            </PanelNote>
-          ) : (
-            <div className="flex flex-col gap-2.5">
-              {/* The owner's running count of who's still unvouched. Shown
-                  here rather than on the home page because this is the
-                  window where the work actually gets done. */}
-              {ownsScope && unverified > 0 && (
-                <p className="rounded-xl p-2.5 text-[12px] leading-[1.45]" style={{ background: "var(--sunk)" }}>
-                  <span className="font-semibold">{unverified}</span>{" "}
-                  {unverified === 1 ? "person hasn't" : "people haven't"} been verified yet. Verifying tells everyone
-                  else they really are who they say.
-                </p>
-              )}
-              {shown.map((p) => (
-                <PersonCard
-                  key={p.id}
-                  person={p}
-                  compact
-                  onOpen={() => {
-                    setSelected(p.id);
-                    openWin("person");
-                  }}
-                >
-                  {ownsScope && data.scope.slug && (
-                    <MemberControls slug={data.scope.slug} person={p} onChanged={() => void load({})} />
-                  )}
-                </PersonCard>
-              ))}
-            </div>
-          )}
-        </div>
+        <PeoplePanel
+          people={shown}
+          scopeName={data.scope.name}
+          isOpenNet={isOpenNet}
+          filtering={filtering}
+          unverifiedCount={unverified}
+          showUnverified={ownsScope}
+          onOpenPerson={(id) => {
+            setSelected(id);
+            openWin("person");
+          }}
+        />
       </FloatWindow>
 
       <FloatWindow
@@ -491,6 +465,23 @@ export default function MapShell({
                 signedIn={signedIn}
                 onSignIn={() => openWin("signin")}
               />
+              {ownsScope && data.scope.slug && (
+                <MemberControls
+                  key={`mc-${selectedPerson.id}`}
+                  slug={data.scope.slug}
+                  person={selectedPerson}
+                  onChanged={(action) => {
+                    void load({});
+                    // A removed person has no profile left to look at; a
+                    // newly verified one does, and closing it would hide
+                    // the badge you just granted.
+                    if (action === "remove") {
+                      win("person", { open: false });
+                      setSelected(null);
+                    }
+                  }}
+                />
+              )}
             </PersonProfile>
           </div>
         </FloatWindow>

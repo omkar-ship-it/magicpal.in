@@ -6,6 +6,7 @@ import type { Message, Thread } from "@/lib/messages";
 import { sinceLabel } from "@/lib/time";
 import Avatar from "./Avatar";
 import PanelNote from "./PanelNote";
+import DirectoryPanel from "./DirectoryPanel";
 import { IconChevronLeft, IconCheck, IconSend, IconX } from "./Icons";
 
 /**
@@ -34,6 +35,9 @@ export default function ChatsPanel({
   // re-render on mount.
   const [loading, setLoading] = useState(signedIn);
   const [open, setOpen] = useState<Thread | null>(null);
+  // Search only — there is nothing to filter conversations *by*. A chip row
+  // here would be chrome pretending to be a feature.
+  const [query, setQuery] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -105,9 +109,34 @@ export default function ChatsPanel({
     );
   }
 
+  const q = query.trim().toLowerCase();
+  const shown = q
+    ? threads.filter((t) =>
+        [t.other.name, t.other.headline, t.lastMessage].filter(Boolean).some((f) => f!.toLowerCase().includes(q))
+      )
+    : threads;
+
+  const waiting = threads.filter((t) => t.awaitingYou).length;
+
   return (
+    <DirectoryPanel
+      query={query}
+      onQuery={setQuery}
+      placeholder={`Search ${threads.length} ${threads.length === 1 ? "conversation" : "conversations"}…`}
+      note={
+        waiting > 0 ? (
+          <>
+            <span className="font-semibold text-[var(--ink)]">{waiting}</span>{" "}
+            {waiting === 1 ? "person is" : "people are"} waiting on you.
+          </>
+        ) : null
+      }
+    >
+    {shown.length === 0 ? (
+      <PanelNote title="Nothing matches that" />
+    ) : (
     <ul className="stagger flex flex-col gap-1">
-      {threads.map((t) => (
+      {shown.map((t) => (
         <li key={t.connectionId}>
           <button
             type="button"
@@ -141,6 +170,8 @@ export default function ChatsPanel({
         </li>
       ))}
     </ul>
+    )}
+    </DirectoryPanel>
   );
 }
 

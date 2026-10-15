@@ -1050,6 +1050,24 @@ async function main() {
     );
     await api(`/api/boards/${comm.data.slug}/members/${bId}`, { method: "PATCH", jar: a.jar, body: { action: "verify" } });
 
+    // The badge has to reach the profile, not just the list — that is where
+    // somebody decides whether to trust a stranger. And it travels attached
+    // to the community that made the claim, because "verified" on its own
+    // is an assertion with nobody behind it.
+    const bobProfile = await api(`/api/person/${bId}`, { jar: a.jar });
+    const vouching = bobProfile.data.shared.find((x) => x.slug === comm.data.slug);
+    assert(vouching?.verified === true, "the profile says which community vouched for them");
+    const otherBoard = bobProfile.data.shared.find((x) => x.slug !== comm.data.slug);
+    assert(
+      !otherBoard || otherBoard.verified === false,
+      "…and a community that hasn't vouched isn't credited with it"
+    );
+    const strangerView = await api(`/api/person/${bId}`, { jar: c.jar });
+    assert(
+      strangerView.data.shared.every((x) => x.slug !== comm.data.slug),
+      "somebody outside the community sees no claim from it at all"
+    );
+
     console.log("\nLeaving is reversible; being removed is not");
     const joinedC = await api(`/api/boards/${comm.data.slug}/join`, { method: "POST", jar: c.jar });
     assert(joinedC.status === 200, "a stranger with the link can join");

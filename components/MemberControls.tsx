@@ -22,7 +22,9 @@ export default function MemberControls({
 }: {
   slug: string;
   person: { id: string; name: string; verified?: boolean };
-  onChanged: () => void;
+  /** Told which action landed: a vouch leaves you on the profile, a removal
+      has nothing left to show you. */
+  onChanged: (action: "verify" | "unverify" | "remove") => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -40,7 +42,7 @@ export default function MemberControls({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Couldn't do that.");
       setConfirming(false);
-      onChanged();
+      onChanged(action);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {

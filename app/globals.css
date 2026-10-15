@@ -163,6 +163,14 @@ h1, h2, h3 {
 .btn-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--warn) 10%, transparent); }
 .btn-sm { padding: 7px 14px; font-size: 12.5px; }
 
+/* Scroll areas inside floating windows hide their bar entirely.
+   A panel 320px wide loses real content to a scrollbar gutter, and the
+   track sitting against a rounded glass edge reads as a rendering bug
+   rather than an affordance. The content still scrolls by wheel, trackpad,
+   touch and keyboard — only the chrome is gone. */
+.scroll-clean { scrollbar-width: none; -ms-overflow-style: none; }
+.scroll-clean::-webkit-scrollbar { width: 0; height: 0; display: none; }
+
 .input {
   width: 100%;
   border-radius: 12px;
@@ -314,10 +322,6 @@ h1, h2, h3 {
   50% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--gold) 0%, transparent), 0 6px 16px -4px rgba(0, 0, 0, 0.4); }
 }
 .pin-active { animation: pin-breathe 2.4s ease-in-out infinite; }
-.pin-drop {
-  border-color: var(--gold);
-  animation: pin-pulse 1.6s ease-in-out infinite;
-}
 .pulse-dot {
   display: inline-block;
   width: 7px;
@@ -674,33 +678,84 @@ h1, h2, h3 {
   color: var(--warn);
 }
 
-/* An ad-hoc pin. Pulses because it is the one thing on the map that is
-   true only right now — everything else is still there in an hour. */
+/* An ad-hoc pin.
+   Shaped like a map pin rather than ringed like a face, because a circular
+   avatar with a coloured border is what *every* person on this map already
+   is — a glow alone left the one marker that means "a place, right now"
+   reading as just another profile. The teardrop says place; the face inside
+   says whose; the pulse at the tip says now. */
 .pin-drop {
   position: relative;
   display: block;
-  border-radius: 999px;
-  box-shadow: 0 0 0 2.5px var(--good), var(--shadow);
+  width: 40px;
+  /* 40 for the head, plus the ~8.3px the rotated corner hangs below it, so
+     the point itself lands on the coordinate under `anchor="bottom"`. */
+  height: 49px;
   transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .pin-drop:hover,
-.pin-drop:focus-visible {
-  transform: scale(1.08);
-  z-index: 2;
+.pin-drop:focus-visible { transform: translateY(-2px) scale(1.06); z-index: 2; }
+
+.pin-drop-body {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 40px;
+  height: 40px;
+  /* Three round corners and one sharp one, turned so the sharp one points
+     down. The classic marker silhouette, with no image to load. */
+  border-radius: 50% 50% 50% 2px;
+  transform: rotate(-45deg);
+  background: linear-gradient(135deg, var(--brand), var(--brand-deep));
+  border: 2px solid var(--card);
+  box-shadow: 0 10px 20px -8px rgba(0, 0, 0, 0.55);
 }
+.pin-drop-face {
+  position: absolute;
+  inset: 3px;
+  border-radius: 999px;
+  overflow: hidden;
+  /* Counter-rotated so the face sits upright inside a tilted pin. */
+  transform: rotate(45deg);
+  display: grid;
+  place-items: center;
+  background: var(--card);
+}
+.pin-drop-face img { width: 100%; height: 100%; object-fit: cover; }
+
+/* The ring breathes out of the point, not the head: what is "live" about a
+   pin is the spot on the ground, not the person's picture. */
 .pin-drop-pulse {
   position: absolute;
-  inset: -4px;
+  left: 50%;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  margin-left: -8px;
+  margin-bottom: -8px;
   border-radius: 999px;
-  background: var(--good);
-  opacity: 0.35;
+  background: var(--brand);
+  opacity: 0.4;
   animation: pin-drop-pulse 2.2s ease-out infinite;
 }
+/* A solid dot under the pulse so the exact spot stays readable between beats. */
+.pin-drop-dot {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 7px;
+  height: 7px;
+  margin-left: -3.5px;
+  margin-bottom: -3.5px;
+  border-radius: 999px;
+  background: var(--brand);
+  box-shadow: 0 0 0 2px var(--card);
+}
 @keyframes pin-drop-pulse {
-  0% { transform: scale(0.9); opacity: 0.35; }
-  70% { transform: scale(1.45); opacity: 0; }
-  100% { transform: scale(1.45); opacity: 0; }
+  0% { transform: scale(0.6); opacity: 0.45; }
+  70% { transform: scale(2.4); opacity: 0; }
+  100% { transform: scale(2.4); opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .pin-drop-pulse { animation: none; opacity: 0.25; }
+  .pin-drop-pulse { animation: none; opacity: 0.22; }
 }

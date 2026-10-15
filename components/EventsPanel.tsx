@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { EventRef } from "@/lib/shell";
 import { whenLabel } from "@/lib/time";
 import PanelNote from "./PanelNote";
+import DirectoryPanel from "./DirectoryPanel";
 import BoardQR from "./BoardQR";
 import CreateEvent from "./CreateEvent";
 import EditEvent from "./EditEvent";
@@ -101,37 +102,36 @@ export default function EventsPanel({
     );
   }
 
-  return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto">
-      <div className="flex flex-none gap-1.5">
-        <input
-          className="input flex-1"
-          placeholder="Search events"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          aria-label="Search events"
-        />
-      </div>
-      <div className="flex flex-none gap-1.5">
-        {([
-          ["upcoming", "Upcoming"],
-          ["going", "I’m going"],
-          ["all", "All"],
-        ] as const).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            className="chip-toggle tap"
-            data-on={when === id ? "true" : "false"}
-            aria-pressed={when === id}
-            onClick={() => setWhen(id)}
-          >
-            {when === id && <IconCheck size={11} />}
-            {label}
-          </button>
-        ))}
-      </div>
+  const live = events.filter((e) => e.live).length;
 
+  return (
+    <DirectoryPanel
+      query={q}
+      onQuery={setQ}
+      placeholder={`Search ${events.length} ${events.length === 1 ? "event" : "events"} by name or place…`}
+      filters={[
+        { id: "upcoming", label: "Upcoming" },
+        { id: "going", label: "I’m going" },
+        { id: "all", label: "All" },
+      ]}
+      activeFilter={when}
+      onFilter={(id) => setWhen(id as typeof when)}
+      note={
+        live > 0 ? (
+          <>
+            <span className="font-semibold text-[var(--ink)]">{live}</span>{" "}
+            {live === 1 ? "event is" : "events are"} happening right now.
+          </>
+        ) : null
+      }
+      footer={
+        canCreate ? (
+          <button type="button" className="btn btn-ghost btn-sm w-full" onClick={() => setCreating(true)}>
+            <IconPlus size={13} /> {scopeSlug ? `New event in ${scopeName}` : "Create an event"}
+          </button>
+        ) : null
+      }
+    >
       {sorted.length === 0 ? (
         <PanelNote title={q || when !== "all" ? "Nothing matches that" : `No events in ${scopeName} yet`}>
           {q || when !== "all"
@@ -190,13 +190,7 @@ export default function EventsPanel({
           ))}
         </ul>
       )}
-
-      {canCreate && (
-        <button type="button" className="btn btn-ghost btn-sm w-full" onClick={() => setCreating(true)}>
-          <IconPlus size={13} /> {scopeSlug ? `New event in ${scopeName}` : "Create an event"}
-        </button>
-      )}
-    </div>
+    </DirectoryPanel>
   );
 }
 

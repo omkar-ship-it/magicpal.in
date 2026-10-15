@@ -282,10 +282,23 @@ export async function rsvpSummary(
 export async function sharedBoardsBetween(
   aId: string,
   bId: string
-): Promise<Array<{ slug: string; name: string; type: string }>> {
+): Promise<Array<{ slug: string; name: string; type: string; verified: boolean }>> {
   if (!hasDb || !db) return [];
   const rows = await db
-    .select({ slug: boards.slug, name: boards.name, type: boards.type })
+    .select({
+      slug: boards.slug,
+      name: boards.name,
+      type: boards.type,
+      // Whether *b* — the person being looked at — is vouched for by this
+      // board. Verification is a claim a particular community makes, never
+      // a global fact about somebody, so it travels attached to the board
+      // that made it and the profile can name who is doing the vouching.
+      verified: sql<boolean>`exists (
+        select 1 from ${memberships} m3
+         where m3.board_id = ${boards.id} and m3.user_id = ${bId}
+           and m3.status = '${sql.raw(MEMBER_ACTIVE)}' and m3.verified_at is not null
+      )`,
+    })
     .from(memberships)
     .innerJoin(boards, eq(boards.id, memberships.boardId))
     .where(

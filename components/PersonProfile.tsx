@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { sectorById, stageById, topicById } from "@/lib/intents";
 import Avatar from "./Avatar";
+import VerifiedBadge from "./VerifiedBadge";
 import PanelNote from "./PanelNote";
 import {
   IconBriefcase,
@@ -67,7 +68,7 @@ export default function PersonProfile({
   const [data, setData] = useState<{
     person: Person;
     connection: { status: string; isSelf: boolean };
-    shared: Array<{ slug: string; name: string; type: string }>;
+    shared: Array<{ slug: string; name: string; type: string; verified: boolean }>;
   } | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -104,6 +105,9 @@ export default function PersonProfile({
   const offers = p.canHelpWith.map(topicById).filter(Boolean);
   const sectors = p.interests.map(sectorById).filter(Boolean);
   const connected = data.connection.status === "connected";
+  // Verification is a claim by a particular community, so the profile names
+  // which ones are making it rather than showing a bare, unattributable tick.
+  const vouchers = data.shared.filter((b) => b.verified);
 
   return (
     <div className="flex flex-col gap-4">
@@ -111,7 +115,12 @@ export default function PersonProfile({
       <div className="flex items-start gap-3.5">
         <Avatar name={p.name} photoUrl={p.photoUrl} size={76} ring={3} />
         <div className="min-w-0 flex-1">
-          <h3 className="text-[17px] font-semibold leading-tight">{p.name}</h3>
+          <div className="flex items-center gap-1.5">
+            <h3 className="min-w-0 text-[17px] font-semibold leading-tight">{p.name}</h3>
+            {vouchers.length > 0 && (
+              <VerifiedBadge size={16} label={`Verified by ${vouchers.map((v) => v.name).join(", ")}`} />
+            )}
+          </div>
           {p.headline && <p className="mt-0.5 text-[13px] leading-[1.4]">{p.headline}</p>}
           {p.company && (
             <p className="mt-0.5 flex items-center gap-1.5 text-[12.5px] text-[var(--ink-soft)]">
@@ -159,12 +168,31 @@ export default function PersonProfile({
         <Section title="You're both in">
           <div className="flex flex-wrap gap-1.5">
             {data.shared.map((b) => (
-              <span key={b.slug} className="pill" style={{ background: "var(--sunk)" }}>
-                <IconPeople size={11} /> {b.name}
+              <span
+                key={b.slug}
+                className="pill"
+                style={
+                  b.verified
+                    ? { background: "color-mix(in srgb, var(--brand) 12%, transparent)", color: "var(--brand)" }
+                    : { background: "var(--sunk)" }
+                }
+              >
+                {b.verified ? <VerifiedBadge size={11} label={`Verified by ${b.name}`} /> : <IconPeople size={11} />}
+                {b.name}
               </span>
             ))}
           </div>
         </Section>
+      )}
+
+      {vouchers.length > 0 && (
+        <p className="flex items-start gap-2 text-[12.5px] leading-[1.45]" style={{ color: "var(--brand)" }}>
+          <VerifiedBadge size={13} label="Verified" />
+          <span>
+            {vouchers.length === 1 ? vouchers[0].name : `${vouchers.length} of your communities`} confirmed{" "}
+            {p.name.split(" ")[0]} really is who they say.
+          </span>
+        </p>
       )}
 
       {p.workingOn && (

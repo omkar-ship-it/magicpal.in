@@ -258,8 +258,13 @@ export default function MapCanvas({
               onClick={() => onSelectPin?.(pin.id)}
               aria-label={`${pin.person.name}: ${pin.message}`}
             >
+              <span className="pin-drop-body">
+                <span className="pin-drop-face">
+                  <Avatar name={pin.person.name} photoUrl={pin.person.photoUrl} size={30} />
+                </span>
+              </span>
               <span className="pin-drop-pulse" aria-hidden="true" />
-              <Avatar name={pin.person.name} photoUrl={pin.person.photoUrl} size={30} ring={2} />
+              <span className="pin-drop-dot" aria-hidden="true" />
             </button>
             <PinCardHover pin={pin} />
           </span>
