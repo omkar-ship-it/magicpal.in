@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";
-import { boardBySlug, membershipOf, setCheckedIn } from "@/lib/boards";
+import { liveBoardBySlug, membershipOf, setCheckedIn } from "@/lib/boards";
 import { isActive } from "@/lib/membership";
 
 /**
@@ -19,7 +19,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ slug: string }
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
 
-  const board = await boardBySlug(slug);
+  const board = await liveBoardBySlug(slug);
   if (!board) return NextResponse.json({ error: "That board doesn't exist." }, { status: 404 });
   if (board.type !== "event") {
     return NextResponse.json({ error: "Only events have a here-now." }, { status: 400 });

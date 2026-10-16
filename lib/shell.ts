@@ -1,4 +1,4 @@
-import { boardById, boardBySlug, boardsForUser, childEvents, isLive, membershipOf, publicEvents, rsvpSummary, type Board } from "./boards";
+import { boardById, boardsForUser, childEvents, isLive, liveBoardBySlug, membershipOf, publicEvents, rsvpSummary, type Board } from "./boards";
 import { isActive } from "./membership";
 import { attachVouches } from "./vouch";
 import { getBoardMembers, getOpenMapProfiles, getProfileById, touchActivity, type MapProfile } from "./profiles";
@@ -203,7 +203,7 @@ export async function shellPayload(opts: {
 
   // ------------------------------------------------------------- board
   if (opts.scope.kind === "board") {
-    let board = await boardBySlug(opts.scope.slug);
+    let board = await liveBoardBySlug(opts.scope.slug);
     // An event slug selects its community: the network is the community, and
     // the event itself is shown on the map and in the Events window.
     if (board?.type === "event" && board.parentBoardId) {

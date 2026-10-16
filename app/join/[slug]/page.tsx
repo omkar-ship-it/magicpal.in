@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { boardById, boardBySlug, joinBoard, setRsvp } from "@/lib/boards";
+import { boardById, liveBoardBySlug, joinBoard, setRsvp } from "@/lib/boards";
 import { getSessionUser } from "@/lib/session";
 
 /**
@@ -23,8 +23,8 @@ import { getSessionUser } from "@/lib/session";
  */
 export default async function JoinPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const board = await boardBySlug(slug);
-  if (!board || board.archivedAt) notFound();
+  const board = await liveBoardBySlug(slug);
+  if (!board) notFound();
 
   const user = await getSessionUser();
 

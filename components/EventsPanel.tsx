@@ -117,6 +117,12 @@ export default function EventsPanel({
           onShow={() => onShow(open)}
           onEdit={() => setEditing(open.slug)}
           onOpenPerson={onOpenPerson}
+          onDeleted={() => {
+            // Back to the list first: the detail view is about to be looking
+            // at a board the payload no longer contains.
+            onOpenSlug(null);
+            onChanged();
+          }}
           onChanged={onChanged}
         />
       </div>

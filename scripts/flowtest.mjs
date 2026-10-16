@@ -1260,6 +1260,64 @@ async function main() {
     });
     assert(notOwnerEdit.status === 403, "a non-owner can't rewrite the rules");
 
+    console.log("\nOnly the host can delete an event, and it goes everywhere");
+    const doomed = await api("/api/boards", {
+      method: "POST", jar: a.jar,
+      body: {
+        type: "event", name: "Cancelled Before It Began", parentSlug: comm.data.slug,
+        startsAt: new Date(Date.now() + 86400_000).toISOString(),
+        lat: HERE.lat, lng: HERE.lng, place: "Somewhere",
+      },
+    });
+    assert(doomed.status === 200, "the host creates an event");
+    slugs.push(doomed.data.slug);
+    await api(`/api/boards/${doomed.data.slug}/rsvp`, { method: "POST", jar: b.jar, body: { rsvp: "going" } });
+
+    const anonDelete = await api(`/api/boards/${doomed.data.slug}`, { method: "DELETE" });
+    assert(anonDelete.status === 401, "a signed-out visitor can't delete it");
+    const guestDelete = await api(`/api/boards/${doomed.data.slug}`, { method: "DELETE", jar: b.jar });
+    assert(guestDelete.status === 403, "neither can somebody who merely RSVP'd");
+    const communityDelete = await api(`/api/boards/${comm.data.slug}`, { method: "DELETE", jar: a.jar });
+    assert(communityDelete.status === 400, "a community isn't deletable through this door");
+
+    const killed = await api(`/api/boards/${doomed.data.slug}`, { method: "DELETE", jar: a.jar });
+    assert(killed.status === 200, "the host can");
+
+    const { rows: still } = await pool.query("select archived_at from boards where slug = $1", [doomed.data.slug]);
+    assert(still[0]?.archived_at !== null, "it's archived, not dropped — the RSVPs and the discussion survive");
+
+    const listed = await api(`/api/map?net=${comm.data.slug}`, { jar: a.jar });
+    assert(
+      !listed.data.events.some((e) => e.slug === doomed.data.slug),
+      "it leaves the community's event list"
+    );
+
+    // The half that lists alone never covered: a deleted event used to stay
+    // reachable to anyone holding its link.
+    const byLink = await api(`/api/boards/${doomed.data.slug}`, { jar: a.jar });
+    assert(byLink.status === 404, "its own page is gone, even for the host");
+    const deadRsvp = await api(`/api/boards/${doomed.data.slug}/rsvp`, {
+      method: "POST", jar: b.jar, body: { rsvp: "going" },
+    });
+    assert(deadRsvp.status === 404, "nobody can RSVP to it any more");
+    // Empty rather than an error, deliberately: a stale ?net= from a
+    // bookmark should land somewhere, not on a dead screen. What matters is
+    // that nothing from inside it comes back.
+    const deadFeed = await api(`/api/feed?net=${doomed.data.slug}`, { jar: a.jar });
+    assert(
+      (deadFeed.data.items ?? []).length === 0,
+      "its discussion returns nothing to anyone, host included"
+    );
+    const deadCheckin = await api(`/api/boards/${doomed.data.slug}/checkin`, {
+      method: "POST", jar: b.jar, body: { here: true },
+    });
+    assert(deadCheckin.status === 404, "and nobody can check in at it");
+    const deadScope = await api(`/api/map?net=${doomed.data.slug}`, { jar: a.jar });
+    assert(deadScope.data.scope.kind === "open", "selecting it by name falls back to the open map");
+
+    const twice = await api(`/api/boards/${doomed.data.slug}`, { method: "DELETE", jar: a.jar });
+    assert(twice.status === 404, "deleting it again is a no-op, not an error");
+
     console.log("\nSigning out revokes the session, not just the cookie");
     // A spareCookie session for Carol, minted directly — this is about what
     // logout does to a session, not about how one is obtained.

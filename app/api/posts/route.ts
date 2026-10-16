@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";
-import { boardBySlug } from "@/lib/boards";
+import { liveBoardBySlug } from "@/lib/boards";
 import { canPostTo, createPost } from "@/lib/posts";
 
 const MAX_BODY = 2000;
@@ -38,8 +38,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Say something, or add a picture." }, { status: 400 });
   }
 
-  const board = await boardBySlug(slug);
-  if (!board || board.archivedAt) return NextResponse.json({ error: "No such community." }, { status: 404 });
+  const board = await liveBoardBySlug(slug);
+  if (!board) return NextResponse.json({ error: "No such community." }, { status: 404 });
   if (!(await canPostTo(board.id, user.id))) {
     return NextResponse.json({ error: "Join the community to post." }, { status: 403 });
   }
@@ -49,7 +49,7 @@ export async function POST(req: Request) {
   let eventBoardId: string | null = null;
   const eventSlug = typeof payload?.eventSlug === "string" ? payload.eventSlug : "";
   if (eventSlug) {
-    const ev = await boardBySlug(eventSlug);
+    const ev = await liveBoardBySlug(eventSlug);
     if (!ev || ev.type !== "event" || (ev.parentBoardId !== board.id && ev.id !== board.id)) {
       return NextResponse.json({ error: "That event isn't in this community." }, { status: 400 });
     }

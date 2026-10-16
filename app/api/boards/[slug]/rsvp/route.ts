@@ -4,7 +4,7 @@ import { db, hasDb } from "@/lib/db";
 import { memberships } from "@/lib/db/schema";
 import { isActiveMember } from "@/lib/membership";
 import { getSessionUser } from "@/lib/session";
-import { boardBySlug, joinBoard } from "@/lib/boards";
+import { liveBoardBySlug, joinBoard } from "@/lib/boards";
 
 const ANSWERS = ["going", "maybe", "no"] as const;
 
@@ -24,8 +24,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ slug: string }
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
 
-  const board = await boardBySlug(slug);
-  if (!board || board.archivedAt) return NextResponse.json({ error: "No such event." }, { status: 404 });
+  const board = await liveBoardBySlug(slug);
+  if (!board) return NextResponse.json({ error: "No such event." }, { status: 404 });
   if (board.type !== "event") {
     return NextResponse.json({ error: "Only events take an RSVP." }, { status: 400 });
   }

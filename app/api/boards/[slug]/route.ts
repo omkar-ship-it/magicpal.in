@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { db, hasDb } from "@/lib/db";
 import { boards } from "@/lib/db/schema";
 import { getSessionUser } from "@/lib/session";
-import { boardById, boardBySlug, membershipOf } from "@/lib/boards";
+import { archiveBoard, boardById, liveBoardBySlug, membershipOf } from "@/lib/boards";
 import { isActive } from "@/lib/membership";
 import { getBoardMembers, getProfileById } from "@/lib/profiles";
 import { attachVouches } from "@/lib/vouch";
@@ -39,8 +39,8 @@ function normalizeUrl(v: unknown): string {
 export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }> }) {
   const { slug } = await ctx.params;
 
-  const board = await boardBySlug(slug);
-  if (!board || board.archivedAt) return NextResponse.json({ error: "No such event." }, { status: 404 });
+  const board = await liveBoardBySlug(slug);
+  if (!board) return NextResponse.json({ error: "No such event." }, { status: 404 });
 
   // Checked before the membership lookup rather than folded into it: an
   // empty string reaching a uuid column is a 500, not a 403, and "who else
@@ -87,8 +87,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ slug: string 
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
 
-  const board = await boardBySlug(slug);
-  if (!board || board.archivedAt) return NextResponse.json({ error: "No such board." }, { status: 404 });
+  const board = await liveBoardBySlug(slug);
+  if (!board) return NextResponse.json({ error: "No such board." }, { status: 404 });
   // The host, and nobody else. A member editing the room's address would be
   // indistinguishable from a member moving the event.
   if (board.hostUserId !== user.id) {
@@ -142,5 +142,38 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ slug: string 
   }
 
   await db.update(boards).set(patch).where(eq(boards.id, board.id));
+  return NextResponse.json({ ok: true });
+}
+
+/**
+ * Take an event down.
+ *
+ * Events only, and only the host. A community is a different decision —
+ * it has members who joined it, events hanging off it and a feed that is
+ * other people's words, and none of that should go because one person
+ * tapped delete. That needs its own flow and isn't built.
+ *
+ * Archive, not drop: see `archiveBoard`. Everything underneath survives,
+ * reads just stop returning it.
+ */
+export async function DELETE(_req: Request, ctx: { params: Promise<{ slug: string }> }) {
+  const { slug } = await ctx.params;
+
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
+
+  const board = await liveBoardBySlug(slug);
+  if (!board) return NextResponse.json({ error: "No such event." }, { status: 404 });
+
+  if (board.type !== "event") {
+    return NextResponse.json({ error: "Communities can't be deleted here." }, { status: 400 });
+  }
+  // One 403 whether they're not the host or it isn't theirs at all.
+  if (board.hostUserId !== user.id) {
+    return NextResponse.json({ error: "Only the host can delete this event." }, { status: 403 });
+  }
+
+  const ok = await archiveBoard(board.id, user.id);
+  if (!ok) return NextResponse.json({ error: "Couldn't delete that." }, { status: 400 });
   return NextResponse.json({ ok: true });
 }

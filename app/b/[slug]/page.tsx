@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { boardBySlug, memberCount, membershipOf } from "@/lib/boards";
+import { liveBoardBySlug, memberCount, membershipOf } from "@/lib/boards";
 import { isActive, MEMBER_REMOVED } from "@/lib/membership";
 import { getProfileById } from "@/lib/profiles";
 import { getSessionUser } from "@/lib/session";
@@ -18,8 +18,8 @@ import { IconLock, IconPeople } from "@/components/Icons";
  */
 export default async function BoardPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const board = await boardBySlug(slug);
-  if (!board || board.archivedAt) notFound();
+  const board = await liveBoardBySlug(slug);
+  if (!board) notFound();
 
   const user = await getSessionUser();
   const membership = user ? await membershipOf(board.id, user.id) : null;

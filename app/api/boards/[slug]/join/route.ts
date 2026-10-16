@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";
-import { boardBySlug, joinBoard } from "@/lib/boards";
+import { liveBoardBySlug, joinBoard } from "@/lib/boards";
 
 /**
  * Join the board behind a scanned QR or a pasted link.
@@ -18,8 +18,8 @@ export async function POST(_req: Request, ctx: { params: Promise<{ slug: string 
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
 
-  const board = await boardBySlug(slug);
-  if (!board || board.archivedAt) {
+  const board = await liveBoardBySlug(slug);
+  if (!board) {
     return NextResponse.json({ error: "That board doesn't exist." }, { status: 404 });
   }
 

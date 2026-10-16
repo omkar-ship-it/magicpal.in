@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";
-import { boardBySlug, setMemberStatus } from "@/lib/boards";
+import { liveBoardBySlug, setMemberStatus } from "@/lib/boards";
 import { MEMBER_LEFT } from "@/lib/membership";
 
 /**
@@ -18,7 +18,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ slug: string 
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
 
-  const board = await boardBySlug(slug);
+  const board = await liveBoardBySlug(slug);
   if (!board) return NextResponse.json({ error: "No such community." }, { status: 404 });
 
   if (board.hostUserId === user.id) {

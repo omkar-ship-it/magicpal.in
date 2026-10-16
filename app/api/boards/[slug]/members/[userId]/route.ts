@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";
-import { boardBySlug, setMemberStatus, setMemberVerified } from "@/lib/boards";
+import { liveBoardBySlug, setMemberStatus, setMemberVerified } from "@/lib/boards";
 import { MEMBER_REMOVED } from "@/lib/membership";
 
 /**
@@ -21,8 +21,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ slug: string;
   const me = await getSessionUser();
   if (!me) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
 
-  const board = await boardBySlug(slug);
-  if (!board || board.archivedAt) return NextResponse.json({ error: "No such community." }, { status: 404 });
+  const board = await liveBoardBySlug(slug);
+  if (!board) return NextResponse.json({ error: "No such community." }, { status: 404 });
   if (board.hostUserId !== me.id) {
     return NextResponse.json({ error: "Only the owner can do that." }, { status: 403 });
   }

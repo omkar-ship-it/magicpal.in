@@ -101,10 +101,54 @@ export async function createBoard(input: {
   return null;
 }
 
+/**
+ * The raw row, archived or not.
+ *
+ * Almost nothing wants this. "Does this board exist" and "is this board
+ * still running" are different questions, and every caller that means the
+ * second must use `liveBoardBySlug` — see the note there.
+ */
 export async function boardBySlug(slug: string): Promise<Board | null> {
   if (!hasDb || !db) return null;
   const [row] = await db.select().from(boards).where(eq(boards.slug, slug)).limit(1);
   return row ?? null;
+}
+
+/**
+ * A board you may still act on, defined once.
+ *
+ * Archiving already removed boards from every *list* — the switcher, the
+ * open map, a community's own events — but five paths resolved a board
+ * straight from its slug and never asked, so a taken-down event stayed
+ * reachable by anyone holding its link: its feed, its RSVP, its check-in.
+ * Lists are the easy half; the by-slug paths are where this leaks.
+ *
+ * Same discipline as `isActiveMember` in lib/membership: one definition,
+ * and nothing spells it out inline.
+ */
+export async function liveBoardBySlug(slug: string): Promise<Board | null> {
+  const row = await boardBySlug(slug);
+  return row && !row.archivedAt ? row : null;
+}
+
+/**
+ * Take an event down.
+ *
+ * Archived, never deleted. The rows underneath — who said they were
+ * coming, what was said in the discussion — are a record of something that
+ * really happened, and a cascade would erase other people's words along
+ * with the host's mistake. Reads simply stop returning it.
+ */
+export async function archiveBoard(boardId: string, userId: string): Promise<boolean> {
+  if (!hasDb || !db) return false;
+  const board = await boardById(boardId);
+  if (!board || board.archivedAt) return false;
+  // The host, and only the host — the person who made the promise is the
+  // one who gets to withdraw it.
+  if (board.hostUserId !== userId) return false;
+
+  await db.update(boards).set({ archivedAt: new Date() }).where(eq(boards.id, boardId));
+  return true;
 }
 
 export async function boardById(id: string): Promise<Board | null> {

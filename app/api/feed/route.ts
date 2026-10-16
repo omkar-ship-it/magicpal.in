@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";
-import { boardBySlug, membershipOf } from "@/lib/boards";
+import { liveBoardBySlug, membershipOf } from "@/lib/boards";
 import { isActive } from "@/lib/membership";
 import { feedFor } from "@/lib/feed";
 
@@ -17,7 +17,7 @@ export async function GET(req: Request) {
 
   let boardId: string | null = null;
   if (net && net !== "open") {
-    const board = await boardBySlug(net);
+    const board = await liveBoardBySlug(net);
     if (!board) return NextResponse.json({ items: [] });
     if (!user || !isActive(await membershipOf(board.id, user.id))) {
       return NextResponse.json({ error: "Join the board first." }, { status: 403 });

@@ -7,6 +7,7 @@ import Avatar from "./Avatar";
 import BoardQR from "./BoardQR";
 import VerifiedBadge from "./VerifiedBadge";
 import EventDiscussion from "./EventDiscussion";
+import DeleteEvent from "./DeleteEvent";
 import { Fact, Facts, Hero, Page, Row, Section } from "./Panel";
 import { IconBeacon, IconCalendar, IconCheck, IconClock, IconPeople, IconPin, IconSparkle } from "./Icons";
 
@@ -31,6 +32,7 @@ export default function EventPage({
   onShow,
   onEdit,
   onOpenPerson,
+  onDeleted,
   onChanged,
 }: {
   event: EventRef;
@@ -39,6 +41,8 @@ export default function EventPage({
   onShow: () => void;
   onEdit: () => void;
   onOpenPerson: (id: string) => void;
+  /** Host deleted it — the panel has nothing left to show. */
+  onDeleted: () => void;
   onChanged: () => void;
 }) {
   const [busy, setBusy] = useState(false);
@@ -283,6 +287,10 @@ export default function EventPage({
           </button>
         )}
       </Section>
+
+      {event.isHost && (
+        <DeleteEvent slug={event.slug} name={event.name} going={event.going} onDeleted={onDeleted} />
+      )}
     </Page>
   );
 }
