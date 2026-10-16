@@ -96,6 +96,13 @@ export default function MapShell({
   /** Whose thread Chats should land on, set when Message is tapped. */
   const [chatWith, setChatWith] = useState<string | null>(null);
   const [activeEvent, setActiveEvent] = useState<string | null>(initialEvent);
+  /**
+   * What the run itself found, which is not the number the payload carries:
+   * the deck skips people you have already been shown, so this falls as you
+   * work through a room. A badge that didn't would keep promising twelve
+   * recommendations to somebody who has seen all twelve.
+   */
+  const [forYouCount, setForYouCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   /**
    * Overlays are the second layer of chrome: full surfaces (sign in, your
@@ -113,6 +120,8 @@ export default function MapShell({
     (id: string) => setWins((w) => ({ ...w, [id]: { ...w[id], z: ++topZ.current } })),
     []
   );
+  const onForYouCount = useCallback((n: number) => setForYouCount(n), []);
+
   const openWin = useCallback(
     (id: string) =>
       setWins((w) => ({ ...w, [id]: { ...w[id], open: true, min: false, z: ++topZ.current } })),
@@ -186,6 +195,9 @@ export default function MapShell({
   function switchNetwork(slug: string | null) {
     setFacets(NO_FACETS);
     setSelected(null);
+    // Belongs to the board being left — the panel remounts and reports the
+    // new one, and until it does the payload's own count stands in.
+    setForYouCount(null);
     void load({ net: slug });
     if (wins.feed.open) void loadFeed(slug);
   }
@@ -338,6 +350,7 @@ export default function MapShell({
           signedIn={signedIn}
           onboarded={onboarded}
           hasSignals={data.hasSignals}
+          onCount={onForYouCount}
           onOpenPerson={(id) => {
             setSelected(id);
             openWin("person");
@@ -602,7 +615,7 @@ export default function MapShell({
               ) ?? null)
         }
         counts={{
-          forYou: matched.length,
+          forYou: forYouCount ?? matched.length,
           people: shown.length,
           pins: data.pins.length,
           events: data.events.length,

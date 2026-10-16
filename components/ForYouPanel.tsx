@@ -28,6 +28,7 @@ export default function ForYouPanel({
   onboarded,
   hasSignals,
   embedded = false,
+  onCount,
   onOpenPerson,
   onSignIn,
   onProfile,
@@ -47,6 +48,12 @@ export default function ForYouPanel({
    * end and the page underneath refuses to move.
    */
   embedded?: boolean;
+  /**
+   * How many the run found, for the dock badge. Must be a stable callback:
+   * an inline arrow would change identity on every parent render and send
+   * the load effect round again.
+   */
+  onCount?: (n: number) => void;
   onOpenPerson: (id: string) => void;
   onSignIn: () => void;
   onProfile: () => void;
@@ -88,7 +95,9 @@ export default function ForYouPanel({
     let alive = true;
     load(edits)
       .then((r) => {
-        if (alive) setRun(r);
+        if (!alive) return;
+        setRun(r);
+        onCount?.(r.total);
       })
       .catch(() => {
         if (alive) setError(true);
@@ -96,7 +105,7 @@ export default function ForYouPanel({
     return () => {
       alive = false;
     };
-  }, [signedIn, onboarded, load, edits]);
+  }, [signedIn, onboarded, load, edits, onCount]);
 
   /**
    * Being shown somebody is what puts them on the follow-up list if you
@@ -124,7 +133,9 @@ export default function ForYouPanel({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ scope, state, ids: [id] }),
     });
-    setRun(await load(edits).catch(() => null));
+    const next = await load(edits).catch(() => null);
+    setRun(next);
+    if (next) onCount?.(next.total);
   }
 
   async function reset() {
@@ -133,7 +144,9 @@ export default function ForYouPanel({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ scope, reset: true }),
     });
-    setRun(await load(edits).catch(() => null));
+    const next = await load(edits).catch(() => null);
+    setRun(next);
+    if (next) onCount?.(next.total);
   }
 
   if (!signedIn) {
