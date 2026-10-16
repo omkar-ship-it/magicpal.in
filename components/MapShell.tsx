@@ -349,6 +349,7 @@ export default function MapShell({
             setSelected(id);
             openWin("person");
           }}
+          onOpenForYou={() => openWin("forYou")}
           onOpenSettings={() => openWin("profile")}
           onRead={() => void load({})}
         />

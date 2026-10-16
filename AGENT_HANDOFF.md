@@ -230,6 +230,14 @@ tells other people about it. Three rules carry that:
 - **Silence is the default for strangers.** Interests (the loosest signal)
   is opt-in; a pair can't re-fire for `ALERT_REPEAT_DAYS`; nobody gets more
   than `ALERT_DAILY_CAP` a day; the scan self-throttles per person.
+- **Density becomes a doorway, not a flood.** Above `ALERT_CROWD_THRESHOLD`
+  matches in a `CROWD_CLUSTER_KM` cluster, everyone gets *one* `crowd_nearby`
+  notice whose count climbs as the room fills, and tapping it opens For You.
+  Measured in a 200-person mixer: before this, 25 arrivals filled all 200
+  attendees' daily budgets with five arbitrary pings each; after, it is one
+  notice each and the day's budget is still intact. **Never add a second
+  ranker here** — picking "the best three" for a notification is what For
+  You already does properly, and two rankers will drift.
 
 Scans run in **both directions** on a position change — who should hear
 about the mover, and who the mover should hear about. One direction alone
@@ -299,7 +307,21 @@ Not just paint. This is why `FloatWindow` is two elements: an outer one for
 position/size with no clipping, and an inner `.floating-panel` that does the
 rounding — otherwise the resize handles are unreachable at the corners.
 
-### 6.8 Marker z-order
+### 6.8 Drizzle does not parenthesise raw `sql` fragments
+
+`and(a, b, sql\`x or y\`)` splices the fragment in untouched, and **OR binds
+looser than AND**, so the whole clause silently re-associates. In the
+proximity scan this turned
+
+```
+id <> mover AND name NOT NULL AND (lat in box OR baseLat in box)
+```
+
+into three OR branches, two of which had **no mover guard and no name
+check**. The visible symptom was somebody being notified about their own
+arrival. Always write the parentheses yourself inside a `sql` fragment.
+
+### 6.9 Marker z-order
 
 Map markers stack by latitude by default. The meet-up pin sets an explicit
 `zIndex` so "right now" doesn't lose a z-fight with ambient face stacks.

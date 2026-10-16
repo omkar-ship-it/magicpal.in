@@ -1,15 +1,19 @@
-import { and, desc, eq, gt, isNotNull, ne, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import { db, hasDb } from "./db";
 import { notifications, users } from "./db/schema";
 import { getProfileById, placeFor, type MapProfile } from "./profiles";
 import { connectedIds } from "./connections";
 import { matchesFor } from "./matching";
+import { TOPIC_BY_ID } from "./intents";
 import { distanceKm } from "./geo";
 import {
   ALERT_CITY_RADIUS_KM,
+  ALERT_CROWD_COOLDOWN_HOURS,
+  ALERT_CROWD_THRESHOLD,
   ALERT_DAILY_CAP,
   ALERT_REPEAT_DAYS,
   ALERT_SCAN_EVERY_MINUTES,
+  CROWD_CLUSTER_KM,
   type AlertKind,
 } from "./rules";
 
@@ -109,18 +113,45 @@ export async function runProximityScan(moverId: string, opts: { force?: boolean 
       and(
         ne(users.id, moverId),
         isNotNull(users.name),
-        sql`${users.lat} between ${box.minLat} and ${box.maxLat} or ${users.baseLat} between ${box.minLat} and ${box.maxLat}`,
-        sql`${users.lng} between ${box.minLng} and ${box.maxLng} or ${users.baseLng} between ${box.minLng} and ${box.maxLng}`
+        // Parenthesised, and that is load-bearing: drizzle splices a raw
+        // `sql` fragment in untouched, and OR binds looser than AND, so
+        // without these brackets the whole clause re-associated into
+        // `(id <> mover AND name AND lat…) OR (baseLat… AND lng…) OR
+        // (baseLng…)` — two branches with no mover guard and no name check
+        // at all. The visible symptom was somebody being notified about
+        // their own arrival.
+        sql`(${users.lat} between ${box.minLat} and ${box.maxLat} or ${users.baseLat} between ${box.minLat} and ${box.maxLat})`,
+        sql`(${users.lng} between ${box.minLng} and ${box.maxLng} or ${users.baseLng} between ${box.minLng} and ${box.maxLng})`
       )
     )
     .limit(400);
   if (rows.length === 0) return 0;
 
   const connected = await connectedIds(moverId);
+
+  // Everything the caps need, loaded once for the whole sweep.
+  //
+  // This used to be two queries per candidate pair, which in a 200-person
+  // room was roughly sixteen hundred round trips for a single arrival. The
+  // answers are the same for every pair, so they are fetched once.
+  const budget = await loadBudgets([moverId, ...rows.map((r) => r.id)]);
+
   let written = 0;
 
+  /**
+   * Is this a venue rather than a street?
+   *
+   * Density is a property of the *place*, not of a pair, so it is decided
+   * once from how many people are clustered around the mover and then
+   * applies to everyone in that cluster.
+   */
+  const clustered = rows.filter((r) => {
+    const p = ownPosition(r);
+    return p != null && distanceKm(here.lat, here.lng, p.lat, p.lng) <= CROWD_CLUSTER_KM;
+  }).length;
+  const crowded = clustered >= ALERT_CROWD_THRESHOLD;
+
   // ---------------------------------------------------- outward direction
-  // The mover arrived somewhere. Who nearby had asked to be told?
   const moverAsSeen = placeFor(mover);
   if (moverAsSeen) {
     for (const r of rows) {
@@ -134,14 +165,25 @@ export async function runProximityScan(moverId: string, opts: { force?: boolean 
       if (!kind) continue;
       if (!withinReach(km, recipient.prefs.notifyRadiusKm, moverAsSeen.placed)) continue;
 
-      if (await write(r.id, moverId, kind, recipient, mover, moverAsSeen, km)) written++;
+      // A connection arriving keeps its own line even in a crowd: you know
+      // them by name, and that is exactly what a count destroys.
+      if (kind !== "connection_nearby" && crowded) {
+        written += await noteCrowd(budget, r.id, moverAsSeen.label);
+        continue;
+      }
+
+      if (!budget.mayWrite(r.id, moverId, kind)) continue;
+      await insert(r.id, moverId, kind, reasonFor(recipient, mover), moverAsSeen, km, 1);
+      budget.spend(r.id, moverId, kind);
+      written++;
     }
   }
 
   // ----------------------------------------------------- inward direction
-  // The mover is now somewhere. Who is already here that they asked about?
   const moverPrefs = toPrefs(mover);
+  const me = selfCandidate(mover);
   if (moverPrefs.notifyConnections || moverPrefs.notifyMatches || moverPrefs.notifyInterests) {
+    const hits: Array<{ row: (typeof rows)[number]; kind: AlertKind; km: number }> = [];
     for (const r of rows) {
       const subject = toCandidate(r);
       if (!subject) continue;
@@ -149,16 +191,103 @@ export async function runProximityScan(moverId: string, opts: { force?: boolean 
       if (!seen) continue;
 
       const km = distanceKm(here.lat, here.lng, seen.lat, seen.lng);
-      const me = selfCandidate(mover);
       const kind = pickKind(me, r, connected.has(r.id));
       if (!kind) continue;
       if (!withinReach(km, moverPrefs.notifyRadiusKm, seen.placed)) continue;
+      hits.push({ row: r, kind, km });
+    }
 
-      if (await write(moverId, r.id, kind, me, r, seen, km)) written++;
+    const personal = hits.filter((h) => h.kind === "connection_nearby");
+    const strangers = hits.filter((h) => h.kind !== "connection_nearby");
+
+    for (const h of personal) {
+      if (!budget.mayWrite(moverId, h.row.id, h.kind)) continue;
+      await insert(moverId, h.row.id, h.kind, reasonFor(me, h.row), placeFor(h.row)!, h.km, 1);
+      budget.spend(moverId, h.row.id, h.kind);
+      written++;
+    }
+
+    if (strangers.length > ALERT_CROWD_THRESHOLD) {
+      // The point of the crowd case: no notification can carry twenty
+      // people usefully, and picking "the best three" means a second ranker
+      // that will drift from the one For You already uses. So this says how
+      // many and what they're mostly good for, and the ranking stays in the
+      // single place that does it properly.
+      written += await noteCrowd(
+        budget,
+        moverId,
+        null,
+        strangers.length,
+        topicOf(me, strangers.map((h) => h.row))
+      );
+    } else {
+      // Few enough to name, so nothing is truncated and nothing needs
+      // ranking — everybody who qualified gets their own line.
+      for (const h of strangers) {
+        if (!budget.mayWrite(moverId, h.row.id, h.kind)) continue;
+        await insert(moverId, h.row.id, h.kind, reasonFor(me, h.row), placeFor(h.row)!, h.km, 1);
+        budget.spend(moverId, h.row.id, h.kind);
+        written++;
+      }
     }
   }
 
   return written;
+}
+
+/**
+ * One notice per person per place, counting up as the room fills.
+ *
+ * Carries no actor: it is about a room, not a person. Tapping it opens For
+ * You, which already filters, ranks and explains — in a crowd a
+ * notification is a doorway, not a container.
+ */
+async function noteCrowd(
+  budget: Budget,
+  userId: string,
+  placeLabel: string | null,
+  total = 1,
+  topic: string | null = null
+): Promise<number> {
+  const open = budget.crowdFor(userId);
+  if (open) {
+    await bumpCrowd(open, total);
+    return 0;
+  }
+  if (!budget.mayWriteCrowd(userId)) return 0;
+  await insert(userId, null, "crowd_nearby", topic, { placed: "exact", label: placeLabel }, 0, total);
+  budget.spendCrowd(userId);
+  return 1;
+}
+
+/**
+ * What this crowd is mostly good for, as one phrase.
+ *
+ * A tally, not a ranking — "6 of them can help with funding" is the bit
+ * that decides whether somebody opens the list, and it costs one pass.
+ */
+function topicOf(me: Candidate, others: Intents[]): string | null {
+  const wanted = new Set(me.lookingFor ?? []);
+  const tally = new Map<string, number>();
+  for (const o of others) {
+    for (const t of o.canHelpWith ?? []) {
+      if (wanted.has(t)) tally.set(t, (tally.get(t) ?? 0) + 1);
+    }
+  }
+  let best: [string, number] | null = null;
+  for (const e of tally) if (!best || e[1] > best[1]) best = e;
+  if (!best) return null;
+  const topic = TOPIC_BY_ID.get(best[0]);
+  return topic ? `${best[1]} of them can help with ${topic.offer.toLowerCase()}` : null;
+}
+
+function reasonFor(me: Candidate, other: Intents): string | null {
+  const [m] = matchesFor(
+    { id: "me", lookingFor: me.lookingFor ?? [], canHelpWith: me.canHelpWith ?? [], interests: me.interests ?? [] },
+    [asPoolEntry(other)],
+    { surface: "open", limit: 1 }
+  );
+  return m?.reason ?? null;
 }
 
 /**
@@ -205,69 +334,107 @@ function withinReach(km: number, radiusKm: number, placed: "exact" | "base" | "l
   return km <= radiusKm;
 }
 
+/* --------------------------------------------------- caps and writing */
+
+type Budget = Awaited<ReturnType<typeof loadBudgets>>;
+
 /**
- * Write one, unless we've said it recently or said too much today.
+ * The caps, resolved once per sweep instead of once per pair.
  *
- * Both caps are per recipient, and both are checked here rather than in the
- * caller so there is no path that skips them.
+ * This used to be two queries per candidate pair, which in a 200-person
+ * room was roughly sixteen hundred round trips for a single arrival. The
+ * answers are identical for every pair, so they are fetched once: how much
+ * of today's budget each person has spent, which pairs already fired inside
+ * the repeat window, and who already has a live crowd notice.
  */
-async function write(
-  recipientId: string,
-  actorId: string,
-  kind: AlertKind,
-  recipient: Candidate,
-  subject: Intents,
-  seen: { placed: "exact" | "base" | "live"; label: string | null },
-  km: number
-): Promise<boolean> {
-  if (!db) return false;
-
-  const since = new Date(Date.now() - ALERT_REPEAT_DAYS * 86_400_000);
-  const [repeat] = await db
-    .select({ id: notifications.id })
-    .from(notifications)
-    .where(
-      and(
-        eq(notifications.userId, recipientId),
-        eq(notifications.actorId, actorId),
-        eq(notifications.kind, kind),
-        gt(notifications.createdAt, since)
-      )
-    )
-    .limit(1);
-  if (repeat) return false;
-
+async function loadBudgets(userIds: string[]) {
   const dayAgo = new Date(Date.now() - 86_400_000);
-  const [{ n }] = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(notifications)
-    .where(and(eq(notifications.userId, recipientId), gt(notifications.createdAt, dayAgo)));
-  if (n >= ALERT_DAILY_CAP) return false;
+  const repeatSince = new Date(Date.now() - ALERT_REPEAT_DAYS * 86_400_000);
+  const crowdSince = new Date(Date.now() - ALERT_CROWD_COOLDOWN_HOURS * 3_600_000);
 
-  // The matcher's sentence, written once — recomputing it next week would
-  // be answering a different question with today's profile.
-  const [m] = matchesFor(
-    {
-      id: "me",
-      lookingFor: recipient.lookingFor ?? [],
-      canHelpWith: recipient.canHelpWith ?? [],
-      interests: recipient.interests ?? [],
+  const [daily, pairs, crowds] = await Promise.all([
+    db!
+      .select({ userId: notifications.userId, n: sql<number>`count(*)::int` })
+      .from(notifications)
+      .where(and(inArray(notifications.userId, userIds), gt(notifications.createdAt, dayAgo)))
+      .groupBy(notifications.userId),
+    db!
+      .select({ userId: notifications.userId, actorId: notifications.actorId, kind: notifications.kind })
+      .from(notifications)
+      .where(and(inArray(notifications.userId, userIds), gt(notifications.createdAt, repeatSince))),
+    db!
+      .select({ id: notifications.id, userId: notifications.userId, count: notifications.count })
+      .from(notifications)
+      .where(
+        and(
+          inArray(notifications.userId, userIds),
+          eq(notifications.kind, "crowd_nearby"),
+          gt(notifications.createdAt, crowdSince)
+        )
+      ),
+  ]);
+
+  const spent = new Map(daily.map((d) => [d.userId, d.n]));
+  const seen = new Set(pairs.map((p) => `${p.userId}|${p.actorId}|${p.kind}`));
+  const crowdBy = new Map(crowds.map((c) => [c.userId, { id: c.id, count: c.count }]));
+
+  return {
+    mayWrite(userId: string, actorId: string, kind: AlertKind) {
+      if ((spent.get(userId) ?? 0) >= ALERT_DAILY_CAP) return false;
+      return !seen.has(`${userId}|${actorId}|${kind}`);
     },
-    [asPoolEntry(subject)],
-    { surface: "open", limit: 1 }
-  );
+    spend(userId: string, actorId: string, kind: AlertKind) {
+      spent.set(userId, (spent.get(userId) ?? 0) + 1);
+      seen.add(`${userId}|${actorId}|${kind}`);
+    },
+    /** A crowd notice has no actor, so the pair check doesn't apply to it. */
+    mayWriteCrowd(userId: string) {
+      return (spent.get(userId) ?? 0) < ALERT_DAILY_CAP && !crowdBy.has(userId);
+    },
+    spendCrowd(userId: string) {
+      spent.set(userId, (spent.get(userId) ?? 0) + 1);
+      // Remembered for the rest of this sweep too, so the next arrival
+      // bumps the count rather than writing a second notice.
+      crowdBy.set(userId, { id: "", count: 1 });
+    },
+    crowdFor(userId: string) {
+      return crowdBy.get(userId) ?? null;
+    },
+  };
+}
 
+/** More people turned up somewhere this person already knows is busy. */
+async function bumpCrowd(row: { id: string; count: number }, to: number) {
+  // A placeholder written during this same sweep has no row id yet; its
+  // count is recomputed by the next scan anyway.
+  if (!db || !row.id) return;
+  const next = Math.max(row.count, to);
+  if (next === row.count) return;
+  await db.update(notifications).set({ count: next }).where(eq(notifications.id, row.id));
+  row.count = next;
+}
+
+async function insert(
+  recipientId: string,
+  actorId: string | null,
+  kind: AlertKind,
+  reason: string | null,
+  seen: { placed: "exact" | "base" | "live"; label: string | null },
+  km: number,
+  count: number
+) {
+  if (!db) return;
   await db.insert(notifications).values({
     userId: recipientId,
     actorId,
     kind,
-    reason: m?.reason ?? null,
+    reason,
     placeLabel: seen.label,
-    // Null for a city-level position: the number would imply a precision
-    // that person never published.
-    distanceKm: seen.placed === "base" ? null : Math.round(km * 10) / 10,
+    // Null for a city-level position, and for a crowd — in both cases a
+    // number would imply a precision that was never published.
+    distanceKm: seen.placed === "base" || kind === "crowd_nearby" ? null : Math.round(km * 10) / 10,
+    count,
   });
-  return true;
 }
 
 /* ------------------------------------------------------------- helpers */
@@ -344,6 +511,8 @@ function boxAround(c: { lat: number; lng: number }, km: number) {
 export type AlertRow = {
   id: string;
   kind: AlertKind;
+  /** How many people a crowd notice stands for. 1 for everything else. */
+  count: number;
   reason: string | null;
   placeLabel: string | null;
   distanceKm: number | null;
@@ -361,6 +530,7 @@ export async function listAlerts(userId: string, limit: number): Promise<AlertRo
       reason: notifications.reason,
       placeLabel: notifications.placeLabel,
       distanceKm: notifications.distanceKm,
+      count: notifications.count,
       at: notifications.createdAt,
       readAt: notifications.readAt,
       actorId: users.id,
@@ -377,6 +547,7 @@ export async function listAlerts(userId: string, limit: number): Promise<AlertRo
   return rows.map((r) => ({
     id: r.id,
     kind: r.kind as AlertKind,
+    count: r.count,
     reason: r.reason,
     placeLabel: r.placeLabel,
     distanceKm: r.distanceKm,

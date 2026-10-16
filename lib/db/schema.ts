@@ -503,6 +503,16 @@ export const notifications = pgTable(
     /** How it was described — "in your city", "Bandra" — never coordinates. */
     placeLabel: text("place_label"),
     distanceKm: doublePrecision("distance_km"),
+    /**
+     * How many people this one line stands for.
+     *
+     * 1 for an ordinary alert. In a room where twenty people match you,
+     * twenty notifications is not twenty times the information — it is one
+     * piece of information delivered badly, and it empties the daily budget
+     * before the best person in the room has walked in. So density collapses
+     * into a single row whose count climbs as more people arrive.
+     */
+    count: integer("count").notNull().default(1),
     /** A board this is about, for notices that lead somewhere. */
     boardSlug: text("board_slug"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -511,7 +521,7 @@ export const notifications = pgTable(
   (t) => [
     check(
       "notifications_kind",
-      sql`${t.kind} in ('connection_nearby','match_nearby','interest_nearby')`
+      sql`${t.kind} in ('connection_nearby','match_nearby','interest_nearby','crowd_nearby')`
     ),
     index("notifications_inbox_idx").on(t.userId, t.createdAt),
     // The dedupe lookup: has this pair already fired recently?

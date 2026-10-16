@@ -173,7 +173,13 @@ export const ALERT_KINDS = [
   },
 ] as const;
 
-export type AlertKind = (typeof ALERT_KINDS)[number]["id"];
+/**
+ * `crowd_nearby` is not a preference — it is how a *match* alert is
+ * delivered when the place is busy. Somebody who asked to hear about
+ * people worth meeting has not asked a different question just because
+ * twenty of them are in one room.
+ */
+export type AlertKind = (typeof ALERT_KINDS)[number]["id"] | "crowd_nearby";
 
 /** How near counts as near. The default is a walk, not a drive. */
 export const ALERT_RADII = [1, 2, 5, 10, 25] as const;
@@ -190,6 +196,38 @@ export const DEFAULT_ALERT_RADIUS_KM = 5;
  */
 export const ALERT_REPEAT_DAYS = 14;
 export const ALERT_DAILY_CAP = 5;
+
+/**
+ * When a place stops being a list of people and becomes a crowd.
+ *
+ * Measured in a 200-person mixer: with per-person alerts, twenty-five
+ * arrivals filled every single attendee's daily budget with five arbitrary
+ * pings — whoever the scan happened to reach first, not whoever was worth
+ * meeting — and the room's remaining one hundred and seventy-five arrivals
+ * produced nothing but silence and wasted work.
+ *
+ * Above this many matches in one sweep, the right notification is about the
+ * room rather than about each person in it.
+ */
+export const ALERT_CROWD_THRESHOLD = 3;
+
+/**
+ * How long one crowd notice stands for a place.
+ *
+ * People trickle into a venue over hours. Without this, every arrival would
+ * be a fresh interruption about the same room. Inside the window the
+ * existing notice's count climbs instead and nothing new is sent.
+ */
+export const ALERT_CROWD_COOLDOWN_HOURS = 3;
+
+/**
+ * How tight a cluster has to be to count as one place.
+ *
+ * 300 m is a venue and its pavement — a co-working floor, a conference
+ * hall, a mixer and the bar next door. Wider than this and "everyone here"
+ * stops meaning anything somebody could act on.
+ */
+export const CROWD_CLUSTER_KM = 0.3;
 
 /** Don't re-scan the neighbourhood on every 90-second heartbeat. */
 export const ALERT_SCAN_EVERY_MINUTES = 15;

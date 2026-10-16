@@ -16,6 +16,8 @@
 import { spawn } from "node:child_process";
 import pg from "pg";
 
+const ALERT_CROWD_THRESHOLD = 3;
+const ALERT_DAILY_CAP = 5;
 const PORT = 3177;
 const BASE = `http://localhost:${PORT}`;
 const url = process.env.POSTGRES_URL ?? process.env.DATABASE_URL;
@@ -1388,6 +1390,75 @@ async function main() {
     // The throttle: without clearing alerts_scan_at, a second ping is a no-op.
     const { rows: scanStamp } = await pool.query("select alerts_scan_at from users where email = $1", [emailA]);
     assert(scanStamp[0].alerts_scan_at !== null, "a scan records when it ran, so pings don't re-scan every 90 seconds");
+
+    console.log("\nA crowded room is one doorway, not twenty pings");
+    // The scenario this was rebuilt for: a mixer. Measured before the
+    // change, twenty-five arrivals filled all 200 attendees' daily budgets
+    // with five arbitrary pings each.
+    await pool.query("delete from notifications");
+    await pool.query("delete from users where email like 'crowd%@flowtest'");
+    const crowdIds = [];
+    for (let i = 0; i < 12; i++) {
+      const { rows } = await pool.query(
+        `insert into users (email,name,headline,looking_for,can_help_with,interests,visibility,lat,lng,live_at,
+           notify_connections,notify_matches,notify_interests,notify_radius_km)
+         values ($1,$2,'Founder',$3,$4,$5,'live',$6,$7,now(),true,true,false,5) returning id`,
+        [`crowd${i}@flowtest`, `Crowd ${i}`, ["funding"], ["funding"], ["fintech"],
+         HERE.lat + (i - 6) * 0.0002, HERE.lng + (i - 6) * 0.0002]
+      );
+      crowdIds.push(rows[0].id);
+    }
+    emails.push(...Array.from({ length: 12 }, (_, i) => `crowd${i}@flowtest`));
+
+    // Alice walks into the room.
+    await pool.query(
+      "update users set visibility='live', live_at=now(), lat=$2, lng=$3, looking_for=$4, can_help_with=$5, alerts_scan_at=null where email=$1",
+      [emailA, HERE.lat, HERE.lng, ["funding"], ["funding"]]
+    );
+    await api("/api/live", { method: "POST", jar: a.jar, body: { lat: HERE.lat, lng: HERE.lng } });
+
+    const { rows: aliceGot } = await pool.query(
+      "select kind, count, place_label from notifications where user_id = (select id from users where email = $1)", [emailA]
+    );
+    const aliceCrowd = aliceGot.filter((r) => r.kind === "crowd_nearby");
+    assert(aliceCrowd.length === 1, "a room full of matches is one notification, not one per person");
+    assert(aliceCrowd[0].count > ALERT_CROWD_THRESHOLD, `…carrying how many people it stands for (${aliceCrowd[0].count})`);
+    // A connection keeps its own line even in a crowd — you know them by
+    // name, and that is exactly what a count destroys.
+    assert(
+      aliceGot.some((r) => r.kind === "connection_nearby"),
+      "…while somebody she actually knows still gets named"
+    );
+    assert(
+      !aliceGot.some((r) => r.kind === "crowd_nearby" && r.place_label !== null),
+      "the crowd notice is about a room, so it carries no single person's place"
+    );
+
+    const { rows: roomMates } = await pool.query(
+      "select user_id, count(*)::int n from notifications where user_id = any($1) group by user_id", [crowdIds]
+    );
+    assert(
+      roomMates.every((r) => r.n === 1),
+      "…and everybody already in the room gets one notice too, not one per arrival"
+    );
+
+    // The budgetLeft is the point: being in a crowd must not spend the day.
+    const { rows: budgetLeft } = await pool.query(
+      "select count(*)::int n from notifications where user_id = (select id from users where email = $1)", [emailA]
+    );
+    assert(
+      budgetLeft[0].n < ALERT_DAILY_CAP,
+      "…leaving the rest of the day's budgetLeft for something that matters"
+    );
+
+    const crowdInbox = await api("/api/alerts", { jar: a.jar });
+    const doorway = crowdInbox.data.alerts.find((x) => x.kind === "crowd_nearby");
+    assert(Boolean(doorway), "the crowd notice reaches the inbox");
+    assert(doorway.person === null, "…with no person attached, because it's about a place");
+    assert(doorway.distanceKm === null, "…and no distance, because a room isn't a point");
+
+    await pool.query("delete from users where email like 'crowd%@flowtest'");
+    await pool.query("delete from notifications");
 
     console.log("\nSomebody who asked not to be told, isn't");
     await pool.query("delete from notifications");

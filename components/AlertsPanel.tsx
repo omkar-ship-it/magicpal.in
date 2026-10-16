@@ -20,11 +20,14 @@ import { IconBeacon, IconCity, IconSparkle } from "./Icons";
 export default function AlertsPanel({
   signedIn,
   onOpenPerson,
+  onOpenForYou,
   onOpenSettings,
   onRead,
 }: {
   signedIn: boolean;
   onOpenPerson: (id: string) => void;
+  /** Where a crowd notice leads — the one surface built to rank a room. */
+  onOpenForYou: () => void;
   onOpenSettings: () => void;
   /** Clears the badge once the list has actually been looked at. */
   onRead: () => void;
@@ -75,7 +78,37 @@ export default function AlertsPanel({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2.5">
       <ul className="stagger flex min-h-0 flex-1 flex-col overflow-y-auto">
-        {alerts.map((a) => (
+        {alerts.map((a) =>
+          a.kind === "crowd_nearby" ? (
+            <li key={a.id}>
+              {/* A room, not a person. No notification can carry twenty
+                  people usefully, so this one is a doorway: it says how many
+                  and what they're mostly good for, and For You does the
+                  ranking it was built for. */}
+              <Row onClick={onOpenForYou}>
+                <span
+                  className="grid h-9 w-9 flex-none place-items-center rounded-xl"
+                  style={{ background: "color-mix(in srgb, var(--brand) 13%, transparent)", color: "var(--brand)" }}
+                >
+                  <IconSparkle size={16} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1.5">
+                    <span className="min-w-0 truncate text-[13px] font-semibold">
+                      {a.count} people worth meeting {a.placeLabel ? `in ${a.placeLabel}` : "near you"}
+                    </span>
+                    <span className="flex-none text-[11px] text-[var(--ink-soft)]">{sinceLabel(a.at)}</span>
+                  </span>
+                  <span className="block text-[11.5px]" style={{ color: "var(--brand)" }}>
+                    {a.reason ?? "Open For you to see who"}
+                  </span>
+                </span>
+                <span className="flex-none text-[11.5px] font-semibold" style={{ color: "var(--brand)" }}>
+                  Open →
+                </span>
+              </Row>
+            </li>
+          ) : (
           <li key={a.id}>
             <Row onClick={() => a.person && onOpenPerson(a.person.id)}>
               <span className="relative flex-none">
@@ -104,7 +137,8 @@ export default function AlertsPanel({
               </span>
             </Row>
           </li>
-        ))}
+          )
+        )}
       </ul>
       <button type="button" className="btn btn-ghost btn-sm w-full flex-none" onClick={onOpenSettings}>
         Choose what you&rsquo;re told about
