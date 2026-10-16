@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db, hasDb } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { getSessionUser } from "@/lib/session";
+import { runProximityScan } from "@/lib/alerts";
 
 /**
  * A live position push from the browser.
@@ -29,6 +30,11 @@ export async function POST(req: Request) {
   }
 
   await db.update(users).set({ lat, lng, liveAt: new Date() }).where(eq(users.id, user.id));
+
+  // Moving is the whole trigger: proximity is perishable, so the moment
+  // somebody's position changes is the moment to ask who should know. The
+  // scan rate-limits itself per person, so a 90-second ping is cheap.
+  await runProximityScan(user.id);
   return NextResponse.json({ ok: true });
 }
 

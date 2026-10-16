@@ -190,6 +190,16 @@ export function IconDoc(p: Props) {
   );
 }
 
+/** Alerts. The one place this product interrupts somebody. */
+export function IconBell(p: Props) {
+  return (
+    <Svg {...p}>
+      <path d="M18 8.5a6 6 0 0 0-12 0c0 6-2.2 7.5-2.2 7.5h16.4S18 14.5 18 8.5Z" />
+      <path d="M13.7 19.5a2 2 0 0 1-3.4 0" />
+    </Svg>
+  );
+}
+
 export function IconCheck(p: Props) {
   return (
     <Svg {...p}>

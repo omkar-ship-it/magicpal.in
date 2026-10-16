@@ -1318,6 +1318,104 @@ async function main() {
     const twice = await api(`/api/boards/${doomed.data.slug}`, { method: "DELETE", jar: a.jar });
     assert(twice.status === 404, "deleting it again is a no-op, not an error");
 
+    console.log("\nProximity alerts tell you who turned up, within the rules");
+    // A scan runs when somebody's position changes, in both directions —
+    // who should hear about the mover, and who the mover should hear about.
+    const alertsSeenBy = async (email) =>
+      (await pool.query(
+        `select n.kind, n.distance_km, n.place_label, u.name actor
+           from notifications n join users u on u.id = n.actor_id
+          where n.user_id = (select id from users where email = $1)
+          order by n.created_at desc`, [email]
+      )).rows;
+
+    await pool.query("delete from notifications");
+    // Alice and Bob are connected by now and both want to hear about it.
+    await pool.query(
+      "update users set notify_connections = true, notify_matches = true, notify_radius_km = 5, visibility = 'exact', lat = $2, lng = $3, alerts_scan_at = null where email = $1",
+      [emailA, HERE.lat, HERE.lng]
+    );
+    await pool.query(
+      "update users set notify_connections = true, notify_matches = true, notify_radius_km = 5, visibility = 'exact', lat = $2, lng = $3, alerts_scan_at = null where email = $1",
+      [emailB, HERE.lat + 0.004, HERE.lng + 0.004]
+    );
+
+    const livePush = await api("/api/live", { method: "POST", jar: a.jar, body: { lat: HERE.lat, lng: HERE.lng } });
+    assert(livePush.status === 409 || livePush.status === 200, "a position push is accepted or refused on visibility, never 500s");
+    await pool.query("update users set visibility = 'live', live_at = now() where email = any($1)", [[emailA, emailB]]);
+    await pool.query("update users set alerts_scan_at = null where email = $1", [emailA]);
+    await api("/api/live", { method: "POST", jar: a.jar, body: { lat: HERE.lat, lng: HERE.lng } });
+
+    const bobHeard = await alertsSeenBy(emailB);
+    assert(bobHeard.length > 0, "somebody nearby hears that a connection arrived");
+    assert(bobHeard[0].kind === "connection_nearby", "…and it's filed as a connection, not a stranger match");
+    assert(bobHeard[0].distance_km !== null, "…with a distance, because both publish an exact position");
+
+    const aliceHeard = await alertsSeenBy(emailA);
+    assert(aliceHeard.length > 0, "the person who moved also hears who was already there");
+
+    console.log("\nAlerts never out-run what somebody published");
+    await pool.query("delete from notifications");
+    // Bob drops to city-level. He can still say he's in town; he can never
+    // be reported as a number of metres away.
+    await pool.query(
+      "update users set visibility = 'base', base_lat = $2, base_lng = $3, base_label = 'Delhi' where email = $1",
+      [emailB, HERE.lat + 0.004, HERE.lng + 0.004]
+    );
+    await pool.query("update users set alerts_scan_at = null where email = $1", [emailA]);
+    await api("/api/live", { method: "POST", jar: a.jar, body: { lat: HERE.lat, lng: HERE.lng } });
+    const coarseAlerts = (await alertsSeenBy(emailA)).filter((r) => r.actor === "Flow Bob");
+    assert(coarseAlerts.length > 0, "a city-level person still triggers an alert");
+    assert(
+      coarseAlerts.every((r) => r.distance_km === null),
+      "…carrying no distance at all, because that precision was never theirs to give"
+    );
+
+    console.log("\nAlerts stay quiet");
+    await pool.query("delete from notifications");
+    await pool.query("update users set visibility = 'live', live_at = now() where email = $1", [emailB]);
+    await pool.query("update users set alerts_scan_at = null where email = $1", [emailA]);
+    await api("/api/live", { method: "POST", jar: a.jar, body: { lat: HERE.lat, lng: HERE.lng } });
+    const firstHeard = (await alertsSeenBy(emailB)).length;
+    assert(firstHeard > 0, "the first arrival is announced");
+    await pool.query("update users set alerts_scan_at = null where email = $1", [emailA]);
+    await api("/api/live", { method: "POST", jar: a.jar, body: { lat: HERE.lat, lng: HERE.lng } });
+    assert(
+      (await alertsSeenBy(emailB)).length === firstHeard,
+      "…and the same person arriving again says nothing — the repeat window holds"
+    );
+
+    // The throttle: without clearing alerts_scan_at, a second ping is a no-op.
+    const { rows: scanStamp } = await pool.query("select alerts_scan_at from users where email = $1", [emailA]);
+    assert(scanStamp[0].alerts_scan_at !== null, "a scan records when it ran, so pings don't re-scan every 90 seconds");
+
+    console.log("\nSomebody who asked not to be told, isn't");
+    await pool.query("delete from notifications");
+    await pool.query(
+      "update users set notify_connections = false, notify_matches = false, notify_interests = false where email = $1",
+      [emailB]
+    );
+    await pool.query("update users set alerts_scan_at = null where email = $1", [emailA]);
+    await api("/api/live", { method: "POST", jar: a.jar, body: { lat: HERE.lat, lng: HERE.lng } });
+    assert((await alertsSeenBy(emailB)).length === 0, "every switch off means silence");
+    await pool.query("update users set notify_connections = true, notify_matches = true where email = $1", [emailB]);
+
+    console.log("\nThe inbox");
+    await pool.query("delete from notifications");
+    await pool.query("update users set alerts_scan_at = null where email = $1", [emailA]);
+    await api("/api/live", { method: "POST", jar: a.jar, body: { lat: HERE.lat, lng: HERE.lng } });
+    const anonInbox = await api("/api/alerts");
+    assert(anonInbox.status === 401, "a signed-out visitor has no inbox");
+    const inboxRes = await api("/api/alerts", { jar: b.jar });
+    assert(inboxRes.status === 200 && inboxRes.data.alerts.length > 0, "a member reads their own");
+    assert(inboxRes.data.alerts[0].person?.name === "Flow Alice", "…naming who it's about");
+    assert(inboxRes.data.alerts.every((x) => x.read === false), "…unread until opened");
+    const badgedPayload = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}`, { jar: b.jar });
+    assert(badgedPayload.data.alerts > 0, "the badge count rides along with the shell payload");
+    await api("/api/alerts", { method: "POST", jar: b.jar });
+    const afterRead = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}`, { jar: b.jar });
+    assert(afterRead.data.alerts === 0, "…and clears once the list has been read");
+
     console.log("\nSigning out revokes the session, not just the cookie");
     // A spareCookie session for Carol, minted directly — this is about what
     // logout does to a session, not about how one is obtained.

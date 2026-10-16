@@ -90,6 +90,10 @@ const PROFILE_COLUMNS = {
  * their exact pin. The fallback would be the more "helpful" behaviour and
  * it would also be the exact leak the setting exists to prevent.
  */
+export function placeFor(r: Parameters<typeof place>[0]) {
+  return place(r);
+}
+
 function place(r: {
   visibility: string;
   lat: number | null;

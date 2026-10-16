@@ -5,7 +5,7 @@ import { SECTORS, STAGES, TOPICS } from "@/lib/intents";
 import { PROXIMITY_STEPS } from "@/lib/rules";
 import type { NetworkOption } from "@/lib/shell";
 import { facetsActive, NO_FACETS, type Facets } from "@/lib/search";
-import { IconCheck, IconChevronDown, IconGlobe, IconPeople, IconSearch, IconX } from "./Icons";
+import { IconBell, IconCheck, IconChevronDown, IconGlobe, IconPeople, IconSearch, IconX } from "./Icons";
 
 /**
  * Network, search, filters — in that order of how often they're used.
@@ -23,6 +23,9 @@ export default function MapTopBar({
   onFacets,
   radiusKm,
   onRadius,
+  alerts,
+  signedIn,
+  onAlerts,
   countLabel,
   onNetwork,
   isLive,
@@ -36,6 +39,10 @@ export default function MapTopBar({
   radiusKm: number;
   onRadius: (km: number) => void;
   countLabel: string;
+  /** Unread proximity alerts, badged on the bell. */
+  alerts: number;
+  signedIn: boolean;
+  onAlerts: () => void;
   onNetwork: (slug: string | null) => void;
   /** Room and building scale need live location to mean anything. */
   isLive: boolean;
@@ -148,6 +155,34 @@ export default function MapTopBar({
           >
             Filters{activeCount > 0 ? ` ${activeCount}` : ""}
           </button>
+
+          {/* The bell lives here rather than in the dock: the dock is eight
+              slots wide already and full on a phone, and a notification
+              belongs with the chrome you glance at, not the surfaces you
+              open. Visible on every width — an alert you only see on a
+              desktop is an alert for a product nobody carries. */}
+          {signedIn && (
+            <button
+              type="button"
+              onClick={onAlerts}
+              className="relative flex-none rounded-full border px-2.5 py-1.5 tap"
+              aria-label={alerts > 0 ? `${alerts} new alerts` : "Alerts"}
+              style={{
+                borderColor: alerts > 0 ? "var(--brand)" : "var(--chrome-line)",
+                color: alerts > 0 ? "var(--brand)" : "var(--chrome-ink)",
+              }}
+            >
+              <IconBell size={15} />
+              {alerts > 0 && (
+                <span
+                  className="absolute -right-0.5 -top-0.5 grid h-[17px] min-w-[17px] place-items-center rounded-full px-1 text-[10px] font-bold text-white"
+                  style={{ background: "var(--brand)", boxShadow: "0 0 0 2px var(--chrome)" }}
+                >
+                  {alerts}
+                </span>
+              )}
+            </button>
+          )}
         </div>
 
         {/* ------------------------------------------------ network list */}

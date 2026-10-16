@@ -5,7 +5,7 @@ re-deriving it. Read this before writing code; it is the only document that
 explains *why* things are the way they are, and most of the traps below cost
 real debugging time to find.
 
-Last updated: 2026-10-17.
+Last updated: 2026-10-16.
 
 ---
 
@@ -97,8 +97,8 @@ network tab, whatever the UI chose to render.
 
 ### The client shell
 
-`components/MapShell.tsx` is the whole app: nine floating windows (home,
-forYou, feed, people, pins, events, chats, person, profile, signin) over
+`components/MapShell.tsx` is the whole app: ten floating windows (home,
+forYou, feed, people, pins, events, chats, alerts, person, profile, signin) over
 `MapCanvas`. `FloatWindow` handles drag/resize/minimise/maximise on desktop
 and turns into a bottom sheet on narrow screens (`useIsNarrow`).
 
@@ -106,7 +106,7 @@ and turns into a bottom sheet on narrow screens (`useIsNarrow`).
 
 ## 4. Data model
 
-14 tables. `lib/db/schema.ts` is the single source of truth and is heavily
+15 tables. `lib/db/schema.ts` is the single source of truth and is heavily
 commented — read it, the comments explain the non-obvious columns.
 
 ```
@@ -115,7 +115,7 @@ boards  memberships
 connections  messages
 posts  comments  post_reactions
 pins  pin_joins
-matches
+notifications  matches
 ```
 
 Things worth knowing without reading the file:
@@ -214,7 +214,29 @@ There is no open inbox, by design. A map that shows where people are *plus*
 the ability to message anyone on it is a harassment vector with extra steps.
 Enforced server-side in `lib/messages.ts`, not just in the UI.
 
-### 5.7 Signing out revokes the session
+### 5.7 Proximity alerts never out-run what somebody published
+
+`lib/alerts.ts` tells people that somebody worth meeting is near them. It
+is the most dangerous code here, because it reads everyone's position and
+tells other people about it. Three rules carry that:
+
+- **Nothing escapes `place()`.** Alerts see exactly what the map would show
+  that recipient. Somebody publishing only their city triggers "is in your
+  city" and **never** a distance — `distance_km` is stored as null for them,
+  so no UI can invent the precision later.
+- **No alert is a new disclosure.** Everyone named is already visible to
+  that recipient on the map. The alert changes *when* they find out, not
+  *what* they may know.
+- **Silence is the default for strangers.** Interests (the loosest signal)
+  is opt-in; a pair can't re-fire for `ALERT_REPEAT_DAYS`; nobody gets more
+  than `ALERT_DAILY_CAP` a day; the scan self-throttles per person.
+
+Scans run in **both directions** on a position change — who should hear
+about the mover, and who the mover should hear about. One direction alone
+would say nothing to somebody flying into a city where their connections
+already live.
+
+### 5.8 Signing out revokes the session
 
 `destroySession()` deletes the `sessions` row **and then** the cookie.
 Clearing the cookie alone leaves the session id valid for 30 days.
@@ -392,6 +414,7 @@ npx vercel env pull /tmp/scratch/env.prod --environment=production --yes
 | `lib/profiles.ts` | `place()` — the location gate. §5.2 |
 | `lib/pins.ts` | Drop-ins; liveness and reach. §5.3 |
 | `lib/vouch.ts` | Viewer-relative verification. §5.4 |
+| `lib/alerts.ts` | **Proximity alerts** — the scan, the caps, the privacy gate. §5.7 |
 | `lib/attachments.ts` | What may be uploaded and referenced. §5.5 |
 | `lib/matching.ts` + `lib/intents.ts` | Recommendations and their vocabulary. §10 |
 | `lib/rules.ts` | **Client-safe constants only.** Never import the DB here. §6.1 |
@@ -490,8 +513,12 @@ image/document/emoji attachments · recommendations · sign out.
    public launch, particularly for a location product in India.
 6. **Ownership is a single point of failure.** No transfer; an inactive
    owner freezes their community.
-7. **No notifications.** Approved, removed, replied-to — the member learns
-   nothing. MSG91 is wired for OTP only.
+7. **Notifications are in-app only.** Proximity alerts exist (§5.7) but
+   only appear when somebody opens the app. Web Push is the missing half
+   and is what makes "someone is near you *now*" actually work — it needs
+   VAPID keys, a service worker and a subscription table. Activity
+   notifications (replied-to, removed, event cancelled) are still unbuilt;
+   the `notifications` table and `kind` CHECK are where they'd go.
 
 ### Suggested next order of work
 

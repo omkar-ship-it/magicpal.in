@@ -144,6 +144,68 @@ export const MAX_COMMENT_LENGTH = 600;
 /** Replies shown under a post before it asks you to open the rest. */
 export const COMMENTS_PREVIEWED = 2;
 
+/**
+ * Proximity alerts: what you can ask to be told about.
+ *
+ * Three cases, because they are three different appetites. Somebody who
+ * wants to know a friend is in town may well not want to hear about
+ * strangers, and the reverse is just as common — collapsing them into one
+ * switch makes the cautious answer to either one a no to both.
+ */
+export const ALERT_KINDS = [
+  {
+    id: "connection_nearby",
+    pref: "notifyConnections",
+    label: "People I'm connected to",
+    detail: "When somebody you already know turns up near you.",
+  },
+  {
+    id: "match_nearby",
+    pref: "notifyMatches",
+    label: "People who can help, or who I can help",
+    detail: "When what they're offering meets what you're looking for — or the other way round.",
+  },
+  {
+    id: "interest_nearby",
+    pref: "notifyInterests",
+    label: "People into the same things",
+    detail: "Shared sectors only. The loosest signal, so the noisiest — off unless you ask for it.",
+  },
+] as const;
+
+export type AlertKind = (typeof ALERT_KINDS)[number]["id"];
+
+/** How near counts as near. The default is a walk, not a drive. */
+export const ALERT_RADII = [1, 2, 5, 10, 25] as const;
+/** Widened, because this validates arbitrary request input. */
+export const ALERT_RADIUS_OPTIONS_KM: readonly number[] = ALERT_RADII;
+export const DEFAULT_ALERT_RADIUS_KM = 5;
+
+/**
+ * Noise control, and the whole feature lives or dies on it.
+ *
+ * A proximity alert that fires too often gets muted once and is never
+ * unmuted, so these are deliberately conservative: the same person can't
+ * resurface for a fortnight, and nobody gets more than a handful a day.
+ */
+export const ALERT_REPEAT_DAYS = 14;
+export const ALERT_DAILY_CAP = 5;
+
+/** Don't re-scan the neighbourhood on every 90-second heartbeat. */
+export const ALERT_SCAN_EVERY_MINUTES = 15;
+
+/**
+ * A city-level position can't support a street-level claim.
+ *
+ * Somebody publishing only their city may still trigger "is in your city",
+ * but never "600 m away" — so their alerts are capped at a radius where
+ * the coarse number is honest.
+ */
+export const ALERT_CITY_RADIUS_KM = 25;
+
+/** How many alerts the inbox shows at once. */
+export const ALERTS_SHOWN = 40;
+
 /** How many recommendations a surface shows at once. */
 export const MATCHES_SHOWN = 3;
 

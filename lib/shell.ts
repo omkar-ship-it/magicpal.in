@@ -7,6 +7,7 @@ import { attachConnectionStatus } from "./connections";
 import { waitingCount } from "./messages";
 import { listAcceptedConnections } from "./connections";
 import { livePinsFor, myLivePin, type PinRef } from "./pins";
+import { unreadAlerts } from "./alerts";
 import { DEFAULT_RADIUS_KM, MATCHES_SHOWN, MAX_PIN_REACH_KM } from "./rules";
 
 /**
@@ -132,6 +133,8 @@ export type ShellPayload = {
   hasSignals: boolean;
   /** Accepted connections — the product's one real conversion metric. */
   connections: number;
+  /** Unread proximity alerts, for the badge on the bell. */
+  alerts: number;
   /** Ad-hoc "here now" markers, visible in every scope. */
   pins: PinRef[];
   myPinId: string | null;
@@ -179,6 +182,7 @@ export async function shellPayload(opts: {
 
   const waiting = opts.userId ? await waitingCount(opts.userId) : 0;
   const connections = opts.userId ? (await listAcceptedConnections(opts.userId)).length : 0;
+  const alerts = opts.userId ? await unreadAlerts(opts.userId) : 0;
   const mine_pin = opts.userId ? await myLivePin(opts.userId) : null;
 
   // Drawn from the row directly rather than through place(), which exists to
@@ -267,6 +271,7 @@ export async function shellPayload(opts: {
         you,
         hasSignals,
         connections,
+        alerts,
         // Pins aren't scoped to the network: somebody in a café two streets
         // away is worth knowing about whichever community you're looking at.
         pins: await livePinsFor({
@@ -321,6 +326,7 @@ export async function shellPayload(opts: {
     you,
     hasSignals,
     connections,
+    alerts,
     // Deliberately not narrowed by the people-radius. Each pin already
     // carries its own reach, enforced in livePinsFor against where you
     // actually are, and that is the limit that matters — someone browsing

@@ -5,7 +5,7 @@ import { consents, users } from "@/lib/db/schema";
 import { getSessionUser } from "@/lib/session";
 import { getProfileById } from "@/lib/profiles";
 import { STAGE_BY_ID, validSectors, validTopics } from "@/lib/intents";
-import { CONSENT_COPY_VERSION, MAX_INTERESTS, MAX_SKILLS, MAX_TOPICS } from "@/lib/rules";
+import { ALERT_RADIUS_OPTIONS_KM, CONSENT_COPY_VERSION, MAX_INTERESTS, MAX_SKILLS, MAX_TOPICS } from "@/lib/rules";
 
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
@@ -55,6 +55,10 @@ export async function GET() {
       visibility: row.visibility,
       openToMentor: row.openToMentor,
       seekingMentor: row.seekingMentor,
+      notifyConnections: row.notifyConnections,
+      notifyMatches: row.notifyMatches,
+      notifyInterests: row.notifyInterests,
+      notifyRadiusKm: row.notifyRadiusKm,
     },
   });
 }
@@ -153,6 +157,15 @@ export async function POST(req: Request) {
       stage,
       openToMentor: Boolean(body?.openToMentor),
       seekingMentor: Boolean(body?.seekingMentor),
+      // Only written when the client actually sent them, so a save from a
+      // surface that doesn't show these controls can't silently reset
+      // somebody's alert preferences to the defaults.
+      ...("notifyConnections" in (body ?? {}) ? { notifyConnections: Boolean(body.notifyConnections) } : {}),
+      ...("notifyMatches" in (body ?? {}) ? { notifyMatches: Boolean(body.notifyMatches) } : {}),
+      ...("notifyInterests" in (body ?? {}) ? { notifyInterests: Boolean(body.notifyInterests) } : {}),
+      ...(ALERT_RADIUS_OPTIONS_KM.includes(Number(body?.notifyRadiusKm))
+        ? { notifyRadiusKm: Number(body.notifyRadiusKm) }
+        : {}),
       // Locations are only ever set from a geocoded result, so a request
       // with no valid coordinates leaves whatever was there — it never
       // wipes an existing pin to null.

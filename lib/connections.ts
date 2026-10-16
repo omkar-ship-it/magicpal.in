@@ -239,3 +239,18 @@ export async function attachConnectionStatus<T extends { id: string }>(
     return { ...p, connectionStatus, connectionId: info?.connectionId ?? null, mine: info?.mine ?? null };
   });
 }
+
+/**
+ * Just the ids, for code that needs "do these two know each other" in bulk.
+ *
+ * `listAcceptedConnections` loads whole profiles; the proximity scan asks
+ * this question four hundred times per run and needs a set, not a list.
+ */
+export async function connectedIds(userId: string): Promise<Set<string>> {
+  if (!hasDb || !db) return new Set();
+  const rows = await db
+    .select({ a: connections.userAId, b: connections.userBId })
+    .from(connections)
+    .where(and(eq(connections.status, "accepted"), or(eq(connections.userAId, userId), eq(connections.userBId, userId))));
+  return new Set(rows.map((r) => (r.a === userId ? r.b : r.a)));
+}

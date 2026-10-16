@@ -145,6 +145,32 @@ export const users = pgTable(
     visibility: text("visibility").notNull().default("off"),
 
     /**
+     * What this person wants to be told about, and how near is near.
+     *
+     * Opt-in per case rather than one master switch: "a friend is in town"
+     * and "a stranger who matches my interests is two streets away" are
+     * wildly different appetites, and a single toggle would make the
+     * cautious answer to either one be no to both.
+     *
+     * Interests is off by default — it is the loosest signal and therefore
+     * the noisiest, and a feature that starts noisy gets turned off once
+     * and never turned back on.
+     */
+    notifyConnections: boolean("notify_connections").notNull().default(true),
+    notifyMatches: boolean("notify_matches").notNull().default(true),
+    notifyInterests: boolean("notify_interests").notNull().default(false),
+    notifyRadiusKm: doublePrecision("notify_radius_km").notNull().default(5),
+
+    /**
+     * When the proximity scan last ran for this person.
+     *
+     * Live positions arrive every 90 seconds; evaluating the whole
+     * neighbourhood that often would be both wasteful and a good way to
+     * notify somebody about the same café four times an hour.
+     */
+    alertsScanAt: timestamp("alerts_scan_at", { withTimezone: true }),
+
+    /**
      * When the live position was last written.
      *
      * Live location has to expire by itself. Nobody taps "stop sharing" —
@@ -443,6 +469,53 @@ export const memberships = pgTable(
     check("memberships_role", sql`${t.role} in ('host','member')`),
     check("memberships_status", sql`${t.status} in ('active','left','removed')`),
     check("memberships_rsvp", sql`${t.rsvp} is null or ${t.rsvp} in ('going','maybe','no')`),
+  ]
+);
+
+/**
+ * Something worth telling somebody.
+ *
+ * The sentence is rendered at read time from `kind` and the actor's current
+ * row, never stored — a notification that still says "Priya" six months
+ * after she changed her name is the product remembering something it
+ * shouldn't. `reason` is the exception: it is the matcher's output about a
+ * specific pair at a specific moment, and recomputing it later would be
+ * answering a different question.
+ *
+ * `distanceKm` is null when the subject only publishes a city. The
+ * difference matters: "in your city" and "600 m away" are different
+ * promises, and the second must never be shown for somebody who consented
+ * only to the first.
+ */
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    /** Who is being told. */
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    /** Who it is about. Null for notices that aren't about a person. */
+    actorId: uuid("actor_id").references((): AnyPgColumn => users.id, { onDelete: "cascade" }),
+    /** The matcher's sentence, when there is one. */
+    reason: text("reason"),
+    /** How it was described — "in your city", "Bandra" — never coordinates. */
+    placeLabel: text("place_label"),
+    distanceKm: doublePrecision("distance_km"),
+    /** A board this is about, for notices that lead somewhere. */
+    boardSlug: text("board_slug"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    readAt: timestamp("read_at", { withTimezone: true }),
+  },
+  (t) => [
+    check(
+      "notifications_kind",
+      sql`${t.kind} in ('connection_nearby','match_nearby','interest_nearby')`
+    ),
+    index("notifications_inbox_idx").on(t.userId, t.createdAt),
+    // The dedupe lookup: has this pair already fired recently?
+    index("notifications_pair_idx").on(t.userId, t.actorId, t.kind, t.createdAt),
   ]
 );
 

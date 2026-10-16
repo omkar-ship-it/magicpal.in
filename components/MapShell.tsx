@@ -14,6 +14,7 @@ import LiveLocation from "./LiveLocation";
 import MapTopBar from "./MapTopBar";
 import PersonCard from "./PersonCard";
 import PeoplePanel from "./PeoplePanel";
+import AlertsPanel from "./AlertsPanel";
 import MemberControls from "./MemberControls";
 import PersonProfile from "./PersonProfile";
 import PanelNote from "./PanelNote";
@@ -85,6 +86,7 @@ export default function MapShell({
     pins: { ...DEFAULT_WINDOW, x: 116, y: 172 },
     events: { ...DEFAULT_WINDOW, x: 136, y: 192 },
     chats: { ...DEFAULT_WINDOW, x: 176, y: 232 },
+    alerts: { ...DEFAULT_WINDOW, x: 420, y: 96, w: 380 },
     person: { ...DEFAULT_WINDOW, x: 60, y: 120 },
     profile: { ...DEFAULT_WINDOW, open: initialOverlay === "profile", x: 216, y: 92, z: 3 },
     signin: { ...DEFAULT_WINDOW, open: initialOverlay === "signin", x: 240, y: 120, z: 3 },
@@ -280,6 +282,9 @@ export default function MapShell({
           void load({ radius: km });
         }}
         countLabel={`${shown.length} of ${data.people.length} shown`}
+        alerts={data.alerts}
+        signedIn={signedIn}
+        onAlerts={() => openWin("alerts")}
         onNetwork={switchNetwork}
         isLive={myVisibility === "live"}
         onGoLive={() => openWin("profile")}
@@ -328,6 +333,24 @@ export default function MapShell({
           }}
           onSignIn={() => openWin("signin")}
           onProfile={() => openWin("profile")}
+        />
+      </FloatWindow>
+
+      <FloatWindow
+        title={data.alerts > 0 ? `Alerts · ${data.alerts}` : "Alerts"}
+        state={visible("alerts") ? wins.alerts : { ...wins.alerts, open: false }}
+        onChange={(n) => win("alerts", n)}
+        onClose={() => win("alerts", { open: false })}
+        onFocus={() => focus("alerts")}
+      >
+        <AlertsPanel
+          signedIn={signedIn}
+          onOpenPerson={(id) => {
+            setSelected(id);
+            openWin("person");
+          }}
+          onOpenSettings={() => openWin("profile")}
+          onRead={() => void load({})}
         />
       </FloatWindow>
 

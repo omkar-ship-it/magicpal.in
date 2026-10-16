@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SECTORS, STAGES } from "@/lib/intents";
-import { MAX_INTERESTS } from "@/lib/rules";
+import { ALERT_KINDS, ALERT_RADII, DEFAULT_ALERT_RADIUS_KM, MAX_INTERESTS } from "@/lib/rules";
 import type { NetworkOption } from "@/lib/shell";
 import AvatarPicker from "./AvatarPicker";
 import PlaceSearch, { type Place } from "./PlaceSearch";
@@ -14,7 +14,7 @@ import BoardQR from "./BoardQR";
 import SignOut from "./SignOut";
 import PanelNote from "./PanelNote";
 import Avatar from "./Avatar";
-import { IconCheck, IconPeople, IconPin, IconPlus, IconSparkle, IconUser } from "./Icons";
+import { IconBeacon, IconCheck, IconPeople, IconPin, IconPlus, IconSparkle, IconUser } from "./Icons";
 
 /** One heading shape for every section, so the long form reads as a list. */
 function SectionTitle({ icon, title, hint }: { icon: React.ReactNode; title: string; hint?: string }) {
@@ -39,6 +39,10 @@ type Draft = {
   phoneVisibility: "private" | "connections";
   photoUrl: string | null;
   avatarStyle: string;
+  notifyConnections: boolean;
+  notifyMatches: boolean;
+  notifyInterests: boolean;
+  notifyRadiusKm: number;
   lookingFor: string[];
   canHelpWith: string[];
   interests: string[];
@@ -104,6 +108,10 @@ export default function ProfilePanel({
           phoneVisibility: p.phoneVisibility ?? "connections",
           photoUrl: p.photoUrl,
           avatarStyle: "notionists",
+          notifyConnections: p.notifyConnections ?? true,
+          notifyMatches: p.notifyMatches ?? true,
+          notifyInterests: p.notifyInterests ?? false,
+          notifyRadiusKm: p.notifyRadiusKm ?? DEFAULT_ALERT_RADIUS_KM,
           lookingFor: p.lookingFor,
           canHelpWith: p.canHelpWith,
           interests: p.interests,
@@ -493,6 +501,74 @@ export default function ProfilePanel({
       </form>
 
       {/* ------------------------------------------------- your networks */}
+        {/* ------------------------------------------- what you're told */}
+        <section>
+          <SectionTitle
+            icon={<IconBeacon size={13} />}
+            title="Tell me when someone's near"
+            hint="Proximity is the one thing a directory can't do — but only if you hear about it while you're still there."
+          />
+          <div className="mt-3 flex flex-col gap-2.5">
+            {ALERT_KINDS.map((k) => {
+              const on = Boolean(d[k.pref as "notifyConnections"]);
+              return (
+                <button
+                  key={k.id}
+                  type="button"
+                  className="lift rounded-xl border p-3 text-left tap"
+                  style={{
+                    borderColor: on ? "var(--brand)" : "var(--line)",
+                    background: on ? "color-mix(in srgb, var(--brand) 7%, transparent)" : "transparent",
+                  }}
+                  aria-pressed={on}
+                  onClick={() => set(k.pref as "notifyConnections", !on)}
+                >
+                  <span className="flex items-center gap-2">
+                    <span
+                      className="grid h-4 w-4 flex-none place-items-center rounded-full"
+                      style={{
+                        background: on ? "var(--brand)" : "transparent",
+                        border: on ? "none" : "1.5px solid var(--line)",
+                        color: "#fff",
+                      }}
+                    >
+                      {on && <IconCheck size={10} strokeWidth={3} />}
+                    </span>
+                    <span className="text-[12.5px] font-semibold">{k.label}</span>
+                  </span>
+                  <span className="mt-1 block pl-6 text-[11.5px] leading-[1.45] text-[var(--ink-soft)]">
+                    {k.detail}
+                  </span>
+                </button>
+              );
+            })}
+
+            <div>
+              <p className="label">How near is near</p>
+              <div className="flex flex-wrap gap-1.5">
+                {ALERT_RADII.map((km) => (
+                  <button
+                    key={km}
+                    type="button"
+                    className="chip-toggle tap"
+                    data-on={d.notifyRadiusKm === km ? "true" : "false"}
+                    aria-pressed={d.notifyRadiusKm === km}
+                    onClick={() => set("notifyRadiusKm", km)}
+                  >
+                    {d.notifyRadiusKm === km && <IconCheck size={11} />}
+                    {km} km
+                  </button>
+                ))}
+              </div>
+              {/* The honest limit, said where the choice is made. */}
+              <p className="mt-1.5 text-[12px] leading-[1.45] text-[var(--ink-soft)]">
+                Somebody showing only their city can still tell you they&rsquo;re in town, but never how close —
+                that precision was never theirs to give.
+              </p>
+            </div>
+          </div>
+        </section>
+
       <section className="mt-5 border-t border-[var(--line)] pt-4">
         <SectionTitle
           icon={<IconPeople size={13} />}
