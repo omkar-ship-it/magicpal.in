@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- MagicPal's mark: a map pin, because the map is the product.
+       A filled silhouette on a solid tile rather than an outline glyph on
+       transparent — at 16px in a browser tab an outline turns to mush, and
+       a tile keeps the shape readable on light and dark tab strips alike. -->
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff7a58"/>
+      <stop offset="1" stop-color="#c23f23"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#g)"/>
+  <path d="M32 13c7.7 0 14 6.3 14 14 0 10.5-14 24-14 24S18 37.5 18 27c0-7.7 6.3-14 14-14Z" fill="#fff"/>
+  <circle cx="32" cy="26.6" r="5.2" fill="#c23f23"/>
+</svg>
