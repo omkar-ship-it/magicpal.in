@@ -247,6 +247,86 @@ export const ALERTS_SHOWN = 40;
 /** How many recommendations a surface shows at once. */
 export const MATCHES_SHOWN = 3;
 
+/**
+ * How far a recommendation run reaches — named steps, never a slider.
+ *
+ * A slider invites dragging with no feedback: nobody knows whether 3.4 km
+ * is a better answer than 2.8 km, so they fiddle and learn nothing. Naming
+ * the distances is what makes the choice decidable.
+ *
+ * Three different queries wear one label here, and the user should never
+ * have to care which. `distance` is a radius. `city` is an administrative
+ * question — 500 km from Hyderabad reaches Chennai and not Delhi, so a
+ * radius is simply the wrong shape for it. `presence` is neither: at an
+ * event, who is *in the room* is answered by checking in, not by GPS,
+ * because indoor positioning cannot tell you which floor somebody is on.
+ */
+export const REACH_STEPS = [
+  { id: "here", label: "Here right now", kind: "presence", km: null },
+  { id: "roster", label: "Everyone attending", kind: "all", km: null },
+  { id: "km1", label: "Within 1 km", kind: "distance", km: 1 },
+  { id: "km2", label: "Within 2 km", kind: "distance", km: 2 },
+  { id: "km5", label: "Within 5 km", kind: "distance", km: 5 },
+  { id: "km10", label: "Within 10 km", kind: "distance", km: 10 },
+  { id: "city", label: "My city", kind: "city", km: null },
+  { id: "anywhere", label: "Anywhere", kind: "all", km: null },
+] as const;
+
+export type Reach = (typeof REACH_STEPS)[number]["id"];
+
+export const REACH_BY_ID = new Map(REACH_STEPS.map((r) => [r.id as Reach, r]));
+
+export function reachLabel(r: Reach): string {
+  return REACH_BY_ID.get(r)?.label ?? String(r);
+}
+
+/** A distance step can't be answered from a city centroid — see `place()`. */
+export function reachNeedsPosition(r: Reach): boolean {
+  return REACH_BY_ID.get(r)?.kind === "distance";
+}
+
+/**
+ * The ladder's length depends on the audience, because the value of a
+ * match decays with distance at completely different rates.
+ *
+ * An event is one room, so it asks about presence rather than metres. A
+ * community is bound by identity rather than proximity — a fellow alum in
+ * Singapore is genuinely useful — so it runs all the way out. The open
+ * network has no bond except stated intent, so proximity is the only thing
+ * that makes a match actionable and it stops at the city.
+ *
+ * "My country" is missing on purpose: profiles store a place *label* and
+ * no region, so the query can't be answered honestly yet.
+ */
+/**
+ * Every ladder runs narrowest first, which is what lets a dead end offer
+ * the next rung up without checking which direction it is going. An event's
+ * two rungs look backwards next to the others — presence is tighter than
+ * the roster, not looser — and reading them as a widening order is exactly
+ * how "nobody is here yet" would offer to narrow further.
+ */
+export const REACHES_FOR: Record<"event" | "community" | "open", Reach[]> = {
+  event: ["here", "roster"],
+  community: ["km1", "km2", "km5", "km10", "city", "anywhere"],
+  open: ["km1", "km2", "km5", "km10", "city"],
+};
+
+export function defaultReach(kind: "event" | "community" | "open"): Reach {
+  // Not `here` for an event: before and after one nobody is checked in, so
+  // defaulting to presence would open on an empty deck.
+  if (kind === "event") return "roster";
+  // A community opens at the bond, not at a radius. Every location filter
+  // drops members who publish no location at all — exactly the people a
+  // private board exists to serve — so starting at "my city" would quietly
+  // hide half the roster from itself. Narrowing is a choice the reader
+  // makes; it is not a default worth having.
+  if (kind === "community") return "anywhere";
+  return "km5";
+}
+
+/** Five at a time, however many qualified — a deck, not a directory. */
+export const DECK_SIZE = 5;
+
 /** How recently a heartbeat has to have landed to count as "active now" on the map. */
 export const ACTIVE_WINDOW_MINUTES = 20;
 /** How often the client pings the heartbeat endpoint while a page is open. */

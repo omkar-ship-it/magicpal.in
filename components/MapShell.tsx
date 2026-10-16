@@ -12,7 +12,6 @@ import MapDock, { type DockTab } from "./MapDock";
 import FloatWindow, { DEFAULT_WINDOW, type WindowState } from "./FloatWindow";
 import LiveLocation from "./LiveLocation";
 import MapTopBar from "./MapTopBar";
-import PersonCard from "./PersonCard";
 import PeoplePanel from "./PeoplePanel";
 import AlertsPanel from "./AlertsPanel";
 import MemberControls from "./MemberControls";
@@ -26,7 +25,8 @@ import PinsPanel from "./PinsPanel";
 import SignInPanel from "./SignInPanel";
 import ProfilePanel from "./ProfilePanel";
 import PublicOptIn from "./PublicOptIn";
-import { IconChat, IconHidden, IconSparkle } from "./Icons";
+import ForYouPanel from "./ForYouPanel";
+import { IconChat, IconHidden } from "./Icons";
 
 export type Overlay = "signin" | "profile" | null;
 
@@ -281,7 +281,10 @@ export default function MapShell({
           setRadiusKm(km);
           void load({ radius: km });
         }}
-        countLabel={`${shown.length} of ${data.people.length} shown`}
+        // Said where the count lives rather than as a spinner over the map:
+        // the numbers beside it are the thing going stale, and a pan that
+        // hasn't landed yet should say so next to them.
+        countLabel={loading ? "Updating…" : `${shown.length} of ${data.people.length} shown`}
         alerts={data.alerts}
         signedIn={signedIn}
         onAlerts={() => openWin("alerts")}
@@ -319,15 +322,23 @@ export default function MapShell({
         onClose={() => win("forYou", { open: false })}
         onFocus={() => focus("forYou")}
       >
-        <ForYou
-          matched={matched}
-          loading={loading}
+        <ForYouPanel
+          // Remounted on a network switch: the deck, the refine panel and
+          // the follow-up list all belong to one board, and carrying them
+          // across would show you the last room's answers in this one.
+          key={data.scope.slug ?? "open"}
+          // An event board and a community board hold the same people but
+          // ask different questions of them: one is a room with a door, so
+          // its ladder is "attending / here now" rather than a radius.
+          scope={
+            data.scope.slug
+              ? `${data.scope.kind === "event" ? "event" : "net"}=${encodeURIComponent(data.scope.slug)}`
+              : ""
+          }
           signedIn={signedIn}
           onboarded={onboarded}
           hasSignals={data.hasSignals}
-          filtering={filtering}
-          scopeName={data.scope.name}
-          onOpen={(id) => {
+          onOpenPerson={(id) => {
             setSelected(id);
             openWin("person");
           }}
@@ -446,12 +457,17 @@ export default function MapShell({
           scopeName={data.scope.name}
           scopeSlug={data.scope.slug}
           canCreate={signedIn && onboarded}
+          signedIn={signedIn}
+          onboarded={onboarded}
+          hasSignals={data.hasSignals}
           openSlug={activeEvent}
           onOpenSlug={setActiveEvent}
           onOpenPerson={(id) => {
             setSelected(id);
             openWin("person");
           }}
+          onProfile={() => openWin("profile")}
+          onSignIn={() => openWin("signin")}
           onChanged={() => void load({})}
           onShow={(e: EventRef) => {
             if (e.lat != null && e.lng != null) {
@@ -605,120 +621,6 @@ export default function MapShell({
       )}
 
       {signedIn && onboarded && myVisibility === "off" && isOpenNet && <OffMapNudge />}
-    </div>
-  );
-}
-
-function ForYou({
-  matched,
-  loading,
-  signedIn,
-  onboarded,
-  hasSignals,
-  filtering,
-  scopeName,
-  onOpen,
-  onSignIn,
-  onProfile,
-}: {
-  matched: Array<{ match: { id: string; reason: string; twoWay: boolean }; person: MapProfile }>;
-  loading: boolean;
-  signedIn: boolean;
-  onboarded: boolean;
-  /** False when the viewer has stated no needs, offers or interests. */
-  hasSignals: boolean;
-  filtering: boolean;
-  scopeName: string;
-  onOpen: (id: string) => void;
-  onSignIn: () => void;
-  onProfile: () => void;
-}) {
-  if (!signedIn) {
-    return (
-      <PanelNote title="Sign in to get recommendations">
-        The map is public. Who you should meet on it isn&rsquo;t — that needs to know what you&rsquo;re looking for.
-        <button type="button" className="btn btn-primary btn-sm mt-3" onClick={onSignIn}>
-          Sign in
-        </button>
-      </PanelNote>
-    );
-  }
-  if (!onboarded) {
-    return (
-      <PanelNote title="Say what you're here for">
-        Two questions — what you need, and what you can offer. Every recommendation is built from those.
-        <button type="button" className="btn btn-primary btn-sm mt-3" onClick={onProfile}>
-          Finish your profile
-        </button>
-      </PanelNote>
-    );
-  }
-  if (loading) return <PanelNote title="Looking for people worth your time…" />;
-  // Checked before the empty-result case: with nothing stated, the matcher
-  // has nothing to run on, and "nobody here lines up with what you're
-  // after" blames the room for a blank in your own profile.
-  if (!hasSignals) {
-    return (
-      <PanelNote title="Tell us what you're looking for">
-        Recommendations are built from what you need, what you can offer and what you&rsquo;re into. Without any of
-        those there&rsquo;s nothing to match on — the People tab still shows everyone.
-        <button type="button" className="btn btn-primary btn-sm mt-3" onClick={onProfile}>
-          Add your signals
-        </button>
-      </PanelNote>
-    );
-  }
-  if (matched.length === 0) {
-    return (
-      <PanelNote title={filtering ? "No matches inside those filters" : `No strong match on ${scopeName} yet`}>
-        {filtering
-          ? "Clear a filter or two — recommendations are narrowed by the same search as everything else."
-          : "Nobody here has stated something that lines up with what you're after. The People tab is still worth a scroll."}
-      </PanelNote>
-    );
-  }
-  // Somebody standing in the room right now outranks a better-stated match
-  // three suburbs away — proximity is the only thing this product has that
-  // a directory doesn't, and a recommendation you can act on in the next
-  // ten minutes is worth more than one you'll forget by tomorrow.
-  const ordered = [...matched].sort(
-    (a, b) => Number(Boolean(b.person.hereNow)) - Number(Boolean(a.person.hereNow))
-  );
-  const hereCount = ordered.filter((m) => m.person.hereNow).length;
-
-  return (
-    <div className="min-h-0 flex-1 overflow-y-auto">
-      <p className="mb-2.5 text-[12px] leading-[1.45] text-[var(--ink-soft)]">
-        {ordered.length} {ordered.length === 1 ? "person" : "people"} worth your time on{" "}
-        <span className="font-semibold text-[var(--ink)]">{scopeName}</span>
-        {hereCount > 0 ? ` · ${hereCount} here right now` : ""}.
-      </p>
-      <div className="stagger flex flex-col gap-2.5">
-        {ordered.map(({ match, person }, i) => (
-          <PersonCard
-            key={person.id}
-            person={person}
-            reason={match.reason}
-            twoWay={match.twoWay}
-            badge={
-              // A list with no point of view is a list. One label, on the
-              // one the matcher actually ranked first.
-              i === 0 ? (
-                <span
-                  className="pill"
-                  style={{
-                    background: "color-mix(in srgb, var(--brand) 13%, transparent)",
-                    color: "var(--brand)",
-                  }}
-                >
-                  <IconSparkle size={10} /> {person.hereNow ? "Here now — start with them" : "Start with them"}
-                </span>
-              ) : undefined
-            }
-            onOpen={() => onOpen(person.id)}
-          />
-        ))}
-      </div>
     </div>
   );
 }

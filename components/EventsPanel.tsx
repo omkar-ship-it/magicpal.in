@@ -23,16 +23,25 @@ export default function EventsPanel({
   scopeName,
   scopeSlug,
   canCreate,
+  signedIn,
+  onboarded,
+  hasSignals,
   openSlug,
   onOpenSlug,
   onShow,
   onOpenPerson,
+  onProfile,
+  onSignIn,
   onChanged,
 }: {
   events: EventRef[];
   scopeName: string;
   scopeSlug: string | null;
   canCreate: boolean;
+  signedIn: boolean;
+  onboarded: boolean;
+  /** False when the viewer has stated no needs, offers or interests. */
+  hasSignals: boolean;
   /** Controlled by the shell so a map click and this list agree. */
   openSlug: string | null;
   onOpenSlug: (slug: string | null) => void;
@@ -40,6 +49,8 @@ export default function EventsPanel({
   onShow: (e: EventRef) => void;
   /** Open somebody's profile from the host card or the attendee list. */
   onOpenPerson: (id: string) => void;
+  onProfile: () => void;
+  onSignIn: () => void;
   onChanged: () => void;
 }) {
   const [creating, setCreating] = useState(false);
@@ -113,10 +124,15 @@ export default function EventsPanel({
         <EventPage
           event={open}
           sharing={sharing === open.slug}
+          signedIn={signedIn}
+          onboarded={onboarded}
+          hasSignals={hasSignals}
           onShare={() => setSharing(sharing === open.slug ? null : open.slug)}
           onShow={() => onShow(open)}
           onEdit={() => setEditing(open.slug)}
           onOpenPerson={onOpenPerson}
+          onProfile={onProfile}
+          onSignIn={onSignIn}
           onDeleted={() => {
             // Back to the list first: the detail view is about to be looking
             // at a board the payload no longer contains.

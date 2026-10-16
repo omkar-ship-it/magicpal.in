@@ -8,6 +8,7 @@ import BoardQR from "./BoardQR";
 import VerifiedBadge from "./VerifiedBadge";
 import EventDiscussion from "./EventDiscussion";
 import DeleteEvent from "./DeleteEvent";
+import EventMatches from "./EventMatches";
 import { Fact, Facts, Hero, Page, Row, Section } from "./Panel";
 import { IconBeacon, IconCalendar, IconCheck, IconClock, IconPeople, IconPin, IconSparkle } from "./Icons";
 
@@ -28,19 +29,30 @@ import { IconBeacon, IconCalendar, IconCheck, IconClock, IconPeople, IconPin, Ic
 export default function EventPage({
   event,
   sharing,
+  signedIn,
+  onboarded,
+  hasSignals,
   onShare,
   onShow,
   onEdit,
   onOpenPerson,
+  onProfile,
+  onSignIn,
   onDeleted,
   onChanged,
 }: {
   event: EventRef;
   sharing: boolean;
+  signedIn: boolean;
+  onboarded: boolean;
+  /** False when the viewer has stated no needs, offers or interests. */
+  hasSignals: boolean;
   onShare: () => void;
   onShow: () => void;
   onEdit: () => void;
   onOpenPerson: (id: string) => void;
+  onProfile: () => void;
+  onSignIn: () => void;
   /** Host deleted it — the panel has nothing left to show. */
   onDeleted: () => void;
   onChanged: () => void;
@@ -196,6 +208,19 @@ export default function EventPage({
         </div>
         {error && <p className="mt-1.5 text-[12px] font-medium text-[var(--warn)]">{error}</p>}
       </Section>
+
+      {/* Directly under the ask, and deliberately not inside any "is it
+          live" branch: the run that matters most is the one before the
+          event, when there is still time to plan who to find. */}
+      <EventMatches
+        slug={event.slug}
+        signedIn={signedIn}
+        onboarded={onboarded}
+        hasSignals={hasSignals}
+        onOpenPerson={onOpenPerson}
+        onProfile={onProfile}
+        onSignIn={onSignIn}
+      />
 
       {extra?.host && (
         <Section title="Hosted by" icon={<IconSparkle size={12} />}>

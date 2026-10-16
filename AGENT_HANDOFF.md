@@ -106,7 +106,7 @@ and turns into a bottom sheet on narrow screens (`useIsNarrow`).
 
 ## 4. Data model
 
-15 tables. `lib/db/schema.ts` is the single source of truth and is heavily
+16 tables. `lib/db/schema.ts` is the single source of truth and is heavily
 commented — read it, the comments explain the non-obvious columns.
 
 ```
@@ -116,6 +116,7 @@ connections  messages
 posts  comments  post_reactions
 pins  pin_joins
 notifications  matches
+recommendation_state
 ```
 
 Things worth knowing without reading the file:
@@ -129,6 +130,8 @@ Things worth knowing without reading the file:
   central promise about location.
 - **`pins.reach_km`** is how far a pin carries. See §5.
 - **`messages.attachments`** is jsonb. See §5.
+- **`recommendation_state`** is the For You deck's memory: one row per
+  (viewer, scope, subject) holding `shown | connected | dismissed`. See §10.
 
 ---
 
@@ -494,6 +497,82 @@ text to work with**, not before.
 Ranking currently puts anyone physically present first: proximity is the
 only thing this product has that a directory doesn't.
 
+### "For you" is a run you aim, not a list you're handed
+
+`lib/recommendations.ts` + `app/api/recommendations/route.ts` +
+`components/ForYouPanel.tsx`. Three layers, and **they never cross**:
+
+| Layer | Question | Owner |
+|---|---|---|
+| **scope** | who is eligible at all | the shell — the board you're standing on |
+| **reach** | how far *within* that scope | the reader, from a named ladder |
+| **criteria** | what you want from them today | seeded from your profile, overridable for one run |
+
+Reach can never widen a scope. "Anywhere" inside a community means every
+member with no distance filter — not everyone on the product.
+
+**The ladder's length depends on the audience** (`REACHES_FOR` in
+`lib/rules.ts`), because the value of a match decays with distance at
+completely different rates:
+
+- **event** — `here`, `roster`. One room; metres are meaningless in it.
+- **community** — `km1 … km10`, `city`, `anywhere`. Bound by identity, so a
+  fellow alum in Singapore is genuinely useful. Defaults to `anywhere`:
+  every location filter drops members who publish no location, which are
+  exactly the people a private board exists to serve.
+- **open** — `km1 … km10`, `city`. No bond except stated intent, so
+  proximity is the only thing making a match actionable, and it stops at
+  the city.
+
+Every ladder is ordered **narrowest first**, which is what lets a dead end
+offer the next rung without checking which way it's going.
+
+**Named steps, never a slider.** Nobody knows whether 3.4 km is a better
+answer than 2.8 km, so they drag it about and learn nothing.
+
+**A distance needs a precise position at both ends.** A city centroid can be
+twenty kilometres from where somebody actually is, so their distance from
+you is not imprecise, it is *unknown*. Distance chips are offered but inert
+when the viewer is city-only, with the reason attached — silently returning
+nothing reads as the feature being broken.
+
+**Presence at an event is a check-in, never GPS** (`memberships.checkedInAt`,
+12-hour window). Indoor positioning cannot tell you which floor somebody is
+on; a check-in is a deliberate act that says they are actually here.
+
+**The deck is five, however many qualified** (`DECK_SIZE`). At a 200-person
+mixer the answer to "who should I talk to" is never a list of two hundred.
+Depth is shown as a number, not as scroll.
+
+**Memory is the substrate, and `shown` is load-bearing.** "Skip people I've
+seen" has to mean *seen*, not merely acted on — otherwise the same five stay
+top-ranked, you meet them again on every visit, and nobody ever lands on the
+follow-up list because they never leave the deck. The follow-up list
+("seen but not contacted") is not a feature anybody curates: it is the
+residue of the deck, which is exactly "who did I miss" after an event.
+
+Three rules the writes depend on:
+
+1. **GET never records anything.** Running is a read with parameters; a
+   background refresh must not advance a deck nobody looked at. Marking
+   people shown is a separate explicit POST, and the preview on the event
+   page deliberately only reads.
+2. **`shown` never overwrites a decision** (`markState`'s
+   `where state = 'shown'`). Being re-rendered must not un-dismiss somebody.
+3. **Criteria never write back to the profile.** Editing your profile to
+   change your results would change how everybody else sees you,
+   permanently, for a need you have this afternoon.
+
+A dead end always names what's blocking and offers the nearest loosening
+(`diagnose()`): with six controls people filter to nothing and blame the
+product, and "nobody has checked in yet" or "3 more if you widen to
+“My city”" turns a shrug into the next run.
+
+Entry points: the **For you** dock panel, scoped to whatever board the map
+is showing; and a two-face preview on the **event page**, under the RSVP and
+deliberately outside any "is it live" branch — the run that matters most is
+the one *before* the event, when there is still time to plan who to find.
+
 ---
 
 ## 11. State of play
@@ -505,7 +584,8 @@ visibility controls · communities · events inside them · QR/link joining ·
 member verification · member removal and leaving · house rules · the feed
 (posts, images, links, reactions, one-level replies, a pinned post) ·
 ad-hoc pins with reach and expiry · connections and 1:1 chat with
-image/document/emoji attachments · recommendations · sign out.
+image/document/emoji attachments · proximity alerts · the For You run with
+per-board memory · sign out.
 
 ### Parked, by explicit decision
 

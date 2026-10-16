@@ -362,6 +362,152 @@ async function main() {
     );
     assert(anonMap.data.events.some((e) => e.name === "Flowtest Meetup"), "a parentless event does appear publicly");
 
+    console.log("\nFor you is a run you aim, inside one scope");
+    const anonRun = await api("/api/recommendations");
+    assert(anonRun.status === 401, "a signed-out visitor can't run recommendations");
+
+    const openRun = await api("/api/recommendations", { jar: a.jar });
+    assert(openRun.status === 200, "the open network runs");
+    assert(openRun.data.scopeKey === "open", "memory for the open map is its own scope");
+    assert(openRun.data.run.reach === "km5", "the open map opens on a radius — proximity is the whole bond");
+    assert(
+      !openRun.data.run.reaches.includes("anywhere"),
+      "…and the ladder stops at the city: past that, a stranger with no shared anything is noise"
+    );
+    assert(
+      !openRun.data.run.deck.some((p) => p.name === "Flow Bob"),
+      "somebody off the open map is not recommended on it"
+    );
+
+    const eventRun = await api(`/api/recommendations?event=${slug}`, { jar: a.jar });
+    assert(eventRun.status === 200, "an event board runs");
+    assert(eventRun.data.scopeKey === `event:${slug}`, "an event remembers separately from its community");
+    assert(eventRun.data.run.reach === "roster", "an event opens on everyone attending, so a run before it isn't empty");
+    assert(
+      eventRun.data.run.reaches.join(",") === "here,roster",
+      "an event's ladder is presence and the roster — metres are meaningless in one room"
+    );
+    assert(
+      eventRun.data.run.deck.some((p) => p.name === "Flow Bob"),
+      "the same person, off the open map, is reachable inside the board he joined"
+    );
+    const bobCard = eventRun.data.run.deck.find((p) => p.name === "Flow Bob");
+    assert(bobCard.twoWay === true, "the exchange is named as going both ways when it does");
+    assert(/raising|invest/i.test(bobCard.reason), "every card carries a reason in words");
+    assert(!/\d+%/.test(bobCard.reason), "…and never a score");
+
+    const outsiderRun = await api(`/api/recommendations?event=${slug}`, { jar: c.jar });
+    assert(outsiderRun.status === 404, "a non-member has nothing to run against — reach can't widen a scope");
+
+    console.log("\nA community is bound by identity, not by distance");
+    const commRun = await api(`/api/recommendations?net=${comm.data.slug}`, { jar: a.jar });
+    assert(commRun.data.run.reach === "anywhere", "a community opens at the bond, not at a radius");
+    assert(commRun.data.run.eligible === 0, "…and Alice is alone on hers");
+    assert(
+      /Nobody else is on this board yet/.test(commRun.data.run.blocked.line),
+      "an empty board says it's empty rather than telling you to ask for less"
+    );
+
+    await api(`/api/boards/${comm.data.slug}/join`, { method: "POST", jar: b.jar });
+    const commRun2 = await api(`/api/recommendations?net=${comm.data.slug}`, { jar: a.jar });
+    assert(
+      commRun2.data.run.deck.some((p) => p.name === "Flow Bob"),
+      "a member who publishes no location at all is still matchable inside the community"
+    );
+    const cityRun = await api(`/api/recommendations?net=${comm.data.slug}&reach=city`, { jar: a.jar });
+    assert(
+      !cityRun.data.run.deck.some((p) => p.name === "Flow Bob"),
+      "…but can't answer “my city”, because he never said where he is"
+    );
+
+    console.log("\nIn a room, presence is a check-in and not a GPS reading");
+    const hereRun = await api(`/api/recommendations?event=${slug}&reach=here`, { jar: a.jar });
+    assert(hereRun.data.run.reach === "here", "presence is a reach of its own");
+    const herePresent = hereRun.data.run.deck.find((p) => p.name === "Flow Bob");
+    assert(Boolean(herePresent) && herePresent.hereNow === true, "somebody checked in is in the room");
+    const bobsHereRun = await api(`/api/recommendations?event=${slug}&reach=here`, { jar: b.jar });
+    assert(bobsHereRun.data.run.total === 0, "somebody who only RSVP'd is not in the room");
+    assert(
+      /checked in/.test(bobsHereRun.data.run.blocked.line),
+      "…and an empty room names the mechanism instead of blaming the filters"
+    );
+    assert(bobsHereRun.data.run.blocked.widenTo === "roster", "…offering the roster, which is the loosening");
+
+    console.log("\nThe deck remembers, and a run never advances it on its own");
+    const bobUserId = (await pool.query("select id from users where email = $1", [emailB])).rows[0].id;
+    const recState = () =>
+      pool.query(
+        "select state from recommendation_state where user_id = (select id from users where email = $1) and scope_key = $2 and subject_id = $3",
+        [emailA, `event:${slug}`, bobUserId]
+      );
+    assert((await recState()).rowCount === 0, "running records nothing — a refresh must not advance a deck nobody read");
+
+    const marked = await api("/api/recommendations", {
+      method: "POST", jar: a.jar,
+      body: { scope: `event=${slug}`, state: "shown", ids: [bobUserId] },
+    });
+    assert(marked.status === 200 && (await recState()).rows[0].state === "shown", "being shown is recorded explicitly");
+
+    const afterShown = await api(`/api/recommendations?event=${slug}`, { jar: a.jar });
+    assert(
+      !afterShown.data.run.deck.some((p) => p.name === "Flow Bob"),
+      "“skip people I've seen” means seen — otherwise the top five stay the top five forever"
+    );
+    assert(
+      afterShown.data.run.followUp.some((p) => p.name === "Flow Bob"),
+      "…and whoever the deck moved past becomes the follow-up list, which is “who did I miss”"
+    );
+
+    const withSeen = await api(`/api/recommendations?event=${slug}&skipSeen=0`, { jar: a.jar });
+    assert(withSeen.data.run.deck.some((p) => p.name === "Flow Bob"), "turning the skip off shows them again");
+
+    await api("/api/recommendations", {
+      method: "POST", jar: a.jar,
+      body: { scope: `event=${slug}`, state: "dismissed", ids: [bobUserId] },
+    });
+    await api("/api/recommendations", {
+      method: "POST", jar: a.jar,
+      body: { scope: `event=${slug}`, state: "shown", ids: [bobUserId] },
+    });
+    assert((await recState()).rows[0].state === "dismissed", "being rendered again never quietly un-dismisses somebody");
+
+    const badIds = await api("/api/recommendations", {
+      method: "POST", jar: a.jar,
+      body: { scope: `event=${slug}`, state: "shown", ids: ["not-a-uuid"] },
+    });
+    assert(badIds.status === 400, "a malformed id is a bad request, not a 500");
+
+    await api("/api/recommendations", { method: "POST", jar: a.jar, body: { scope: `event=${slug}`, reset: true } });
+    assert((await recState()).rowCount === 0, "starting the board over forgets it");
+    const afterReset = await api(`/api/recommendations?event=${slug}`, { jar: a.jar });
+    assert(
+      afterReset.data.run.deck.some((p) => p.name === "Flow Bob"),
+      "…and brings back the people you passed on, which is the only way back to them"
+    );
+
+    console.log("\nA run's criteria are for that run, not for your profile");
+    const narrowed = await api(`/api/recommendations?event=${slug}&looking=role`, { jar: a.jar });
+    assert(
+      narrowed.data.run.criteria.lookingFor.join(",") === "role",
+      "the run reports what it actually scored, so the controls can't lie about it"
+    );
+    const { rows: stillA } = await pool.query("select looking_for from users where email = $1", [emailA]);
+    assert(
+      stillA[0].looking_for.join(",") === "funding",
+      "…and asking for something else today never changes how everybody else sees you"
+    );
+    // The exact shape the panel puts on the wire: a present-but-empty param
+    // so that clearing every chip reads as "nothing", rather than being
+    // dropped and silently re-seeded from the profile.
+    const cleared = await api(`/api/recommendations?event=${slug}&looking=`, { jar: a.jar });
+    assert(cleared.data.run.criteria.lookingFor.length === 0, "clearing every chip means none, not “back to your profile”");
+    const appended = await api(`/api/recommendations?event=${slug}&looking=&looking=role`, { jar: a.jar });
+    assert(appended.data.run.criteria.lookingFor.join(",") === "role", "…and the empty marker doesn't eat the real values beside it");
+
+    const junkRun = await api(`/api/recommendations?event=${slug}&looking=not-a-real-topic&reach=moon`, { jar: a.jar });
+    assert(junkRun.status === 200, "junk criteria don't break the run");
+    assert(junkRun.data.run.criteria.lookingFor.length === 0, "…an unknown topic is dropped, not honoured");
+    assert(junkRun.data.run.reach === "roster", "…and an unknown reach falls back to the scope's default");
     console.log("\nFeed is scoped and private");
     const openFeed = await api("/api/feed", { jar: a.jar });
     assert(openFeed.status === 200, "the open network's feed loads");

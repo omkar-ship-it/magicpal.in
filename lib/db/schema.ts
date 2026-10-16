@@ -529,6 +529,41 @@ export const notifications = pgTable(
   ]
 );
 
+/**
+ * What a recommendation run has already shown you, and what you did.
+ *
+ * The substrate the whole surface rests on. Without it a second run
+ * returns the same faces, the deck can never advance, and there is no such
+ * thing as "who did I miss" — which is where most of an event's value
+ * otherwise evaporates.
+ *
+ * Scoped, because a dismissal inside one community says nothing about a
+ * different one, and one row per pair per scope: `state` moves forward
+ * (shown → connected, shown → dismissed) rather than accumulating rows.
+ */
+export const recommendationState = pgTable(
+  "recommendation_state",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** open | board:<slug> | event:<slug> */
+    scopeKey: text("scope_key").notNull(),
+    subjectId: uuid("subject_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    state: text("state").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("rec_state_unique_idx").on(t.userId, t.scopeKey, t.subjectId),
+    check("rec_state_kind", sql`${t.state} in ('shown','connected','dismissed')`),
+    index("rec_state_scope_idx").on(t.userId, t.scopeKey),
+  ]
+);
+
 // --------------------------------------------------------------- matches
 
 /**
