@@ -47,7 +47,13 @@ async function sendMsg91TemplateEmail(opts: {
       headers: { authkey: authKey, "Content-Type": "application/json" },
       body: JSON.stringify({
         recipients: [{ to: [{ email: opts.to }], variables: opts.variables }],
-        from: { email: fromEmail, name: process.env.MSG91_FROM_NAME || BRAND_NAME },
+        // The brand name comes from lib/brand.ts and nowhere else. It used
+        // to fall back through MSG91_FROM_NAME, which meant an env var set
+        // once at setup silently outranked the rename — the sender line
+        // kept saying the old name long after every surface in the app had
+        // moved. A name that can be overridden invisibly is a name that
+        // will be wrong.
+        from: { email: fromEmail, name: BRAND_NAME },
         domain,
         template_id: opts.templateId,
       }),
@@ -70,11 +76,17 @@ export async function sendOtpEmail(to: string, code: string): Promise<SendResult
   return sendMsg91TemplateEmail({
     to,
     templateId: process.env.MSG91_EMAIL_TEMPLATE_ID,
-    // The `magicpal` MSG91 template's merge tag is spelled OTP_CODE, not the
-    // `otp` key BrandSquare/LetterMail's templates use — each template's own
-    // editor decides this, and a mismatch fails silently (200 OK, blank spot
-    // in the email), so this has to match whatever that template actually has.
-    variables: { OTP_CODE: code, company_name: BRAND_NAME },
+    // The MSG91 template's merge tag is spelled OTP_CODE, not the `otp` key
+    // BrandSquare/LetterMail's templates use — each template's own editor
+    // decides this, and a mismatch fails silently (200 OK, blank spot in the
+    // email), so this has to match whatever that template actually has.
+    //
+    // The brand is sent under two names because the template's own tag
+    // can't be read from here and an unused variable is simply ignored.
+    // Note what this *can't* reach: any brand name typed as literal text
+    // into the template's subject or body, which only the MSG91 dashboard
+    // can change.
+    variables: { OTP_CODE: code, company_name: BRAND_NAME, brand_name: BRAND_NAME },
     logLabel: "otp",
     devFallbackMessage: `login code for ${to} is ${code}`,
   });
