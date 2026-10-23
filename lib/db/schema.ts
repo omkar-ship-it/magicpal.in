@@ -437,7 +437,7 @@ export const memberships = pgTable(
     /**
      * The owner vouching that this person is who they claim to be.
      *
-     * The community is the only thing that can do this — nobody at MagicPal
+     * The community is the only thing that can do this — nobody running the product
      * knows who really graduated from a given college in 2014. It is a
      * positive claim only: no badge means nobody has got to them yet, which
      * is a queue position and not an accusation.

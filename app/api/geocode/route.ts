@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { BRAND_NAME } from "@/lib/brand";
 
 type Result = { label: string; lat: number; lng: number };
 
@@ -74,7 +75,7 @@ async function reverseNominatim(lat: number, lng: number): Promise<Result[]> {
   url.searchParams.set("format", "jsonv2");
 
   const res = await fetch(url, {
-    headers: { "User-Agent": "MagicPal/1.0 (networking app; contact admin@bandicoventures.com)" },
+    headers: { "User-Agent": `${BRAND_NAME}/1.0 (networking app; contact admin@bandicoventures.com)` },
   });
   if (!res.ok) return [];
   const d = (await res.json()) as { display_name?: string };
@@ -106,7 +107,7 @@ async function geocodeNominatim(q: string): Promise<Result[]> {
   url.searchParams.set("addressdetails", "0");
 
   const res = await fetch(url, {
-    headers: { "User-Agent": "MagicPal/1.0 (networking app; contact admin@bandicoventures.com)" },
+    headers: { "User-Agent": `${BRAND_NAME}/1.0 (networking app; contact admin@bandicoventures.com)` },
   });
   if (!res.ok) return [];
   const data = (await res.json()) as Array<{ display_name: string; lat: string; lon: string }>;

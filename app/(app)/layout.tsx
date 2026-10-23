@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getSessionUser } from "@/lib/session";
 import Avatar from "@/components/Avatar";
+import { BRAND_NAME } from "@/lib/brand";
 
 /** The normal website chrome — header + padded content — for everything that isn't a map. */
 export default async function AppGroupLayout({ children }: { children: React.ReactNode }) {
@@ -17,7 +18,7 @@ export default async function AppGroupLayout({ children }: { children: React.Rea
             >
               ✦
             </span>
-            <span className="text-[15px]">MagicPal</span>
+            <span className="text-[15px]">{BRAND_NAME}</span>
           </Link>
 
           <nav className="flex items-center gap-1 text-[13px]">

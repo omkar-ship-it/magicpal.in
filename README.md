@@ -1,4 +1,4 @@
-# MagicPal
+# OpenNetworks
 
 Boards for events and communities, and a map of the people on them. You scan
 a code, see the room, and get told who's worth talking to — and why, in a

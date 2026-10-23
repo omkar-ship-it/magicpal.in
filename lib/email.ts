@@ -1,6 +1,6 @@
-type SendResult = { ok: true } | { ok: false; error: string };
+import { BRAND_NAME } from "./brand";
 
-export const BRAND_NAME = "MagicPal";
+type SendResult = { ok: true } | { ok: false; error: string };
 
 /**
  * MSG91 v5 template email when configured, a console log otherwise. The

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { IconLock } from "./Icons";
+import { BRAND_NAME } from "@/lib/brand";
 
 /**
  * Signing out, at the bottom of your own profile.
@@ -58,7 +59,7 @@ export default function SignOut({ email, live }: { email: string; live: boolean 
 
   return (
     <div className="mt-5 rounded-xl border p-3.5" style={{ borderColor: "var(--warn)" }}>
-      <p className="text-[13px] font-semibold leading-tight">Sign out of MagicPal?</p>
+      <p className="text-[13px] font-semibold leading-tight">Sign out of {BRAND_NAME}?</p>
       <p className="mt-1.5 text-[12.5px] leading-[1.45] text-[var(--ink-soft)]">
         {live
           ? "Your live location stops being shared straight away. "

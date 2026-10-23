@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <!-- MagicPal's mark: a map pin, because the map is the product.
+  <!-- The product's mark: a map pin, because the map is the product.
        A filled silhouette on a solid tile rather than an outline glyph on
        transparent — at 16px in a browser tab an outline turns to mush, and
        a tile keeps the shape readable on light and dark tab strips alike. -->

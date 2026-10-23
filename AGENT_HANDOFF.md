@@ -1,4 +1,4 @@
-# MagicPal — handoff for engineers and coding agents
+# OpenNetworks — handoff for engineers and coding agents
 
 Everything another person (or agent) needs to pick this up without
 re-deriving it. Read this before writing code; it is the only document that
@@ -11,7 +11,7 @@ Last updated: 2026-10-16.
 
 ## 1. What this is
 
-**MagicPal is a map-first professional networking product.** The map is not
+**OpenNetworks is a map-first professional networking product.** The map is not
 a feature inside the app — the map *is* the app. Every surface (feed,
 people, events, chats, your profile, sign-in) is a floating window on top of
 a live map. There are deliberately no separate pages: `/you`, `/login`,
@@ -41,10 +41,18 @@ Rules that fall out of this and must not be quietly broken:
 
 ### Live
 
-- Production: **https://magicpal-in.vercel.app** (Vercel project `magicpal-in`)
+- Production: **https://www.opennetworks.in** (also served at
+  `magicpal-in.vercel.app`; Vercel project `magicpal-in`)
 - Repo: `github.com/omkar-ship-it/magicpal.in`
 - Production DB: Neon, provisioned through the Vercel marketplace as
   `magicpal-in-db`.
+
+> **The product was renamed from MagicPal to OpenNetworks (2026-10-23).**
+> Only the *user-visible* name moved — it lives in `lib/brand.ts` and every
+> mention reads from there. The repo, the Vercel project, the npm package
+> and the database keep their original names on purpose: renaming them
+> breaks deploys and no user can see them. `magicpal.in` is still a
+> registered domain but no longer serves the app.
 - There is an **older prototype** at `magicpal.vercel.app` (separate repo,
   separate Neon project). It is a design reference only. **Do not point this
   app at the prototype's database.**

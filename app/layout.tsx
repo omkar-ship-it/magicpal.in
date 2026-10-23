@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand";
 import "./globals.css";
 
 const inter = Inter({
@@ -8,7 +9,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "MagicPal — who's worth meeting, here",
+  // The name beside the favicon, which is the one piece of branding every
+  // visitor sees whether or not they ever read a word of the page.
+  title: `${BRAND_NAME} — ${BRAND_TAGLINE}`,
   description:
     "Boards for events and communities, and a map of the people on them. Scan a code, see the room, and get told who to talk to and why.",
 };

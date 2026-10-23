@@ -1,4 +1,4 @@
-// End-to-end coverage for the promises MagicPal actually makes: sign in,
+// End-to-end coverage for the promises the product actually makes: sign in,
 // state your intents, join a board, get recommended somebody with a reason,
 // and — most of all — appear exactly where you agreed to appear and nowhere
 // else. Runs against a real server this script spawns itself (on its own

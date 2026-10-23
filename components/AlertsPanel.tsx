@@ -7,6 +7,7 @@ import Avatar from "./Avatar";
 import PanelNote from "./PanelNote";
 import { Row } from "./Panel";
 import { IconBeacon, IconCity, IconSparkle } from "./Icons";
+import { BRAND_NAME } from "@/lib/brand";
 
 /**
  * What you were told while you weren't looking.
@@ -55,7 +56,7 @@ export default function AlertsPanel({
   if (!signedIn) {
     return (
       <PanelNote title="Sign in to be told who's around">
-        MagicPal can tell you when somebody worth meeting turns up near you.
+        {BRAND_NAME} can tell you when somebody worth meeting turns up near you.
       </PanelNote>
     );
   }
