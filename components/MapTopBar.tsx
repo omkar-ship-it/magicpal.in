@@ -4,6 +4,7 @@ import { useState } from "react";
 import { SECTORS, STAGES, TOPICS } from "@/lib/intents";
 import { PROXIMITY_STEPS } from "@/lib/rules";
 import type { NetworkOption } from "@/lib/shell";
+import BoardLogo from "./BoardLogo";
 import { facetsActive, NO_FACETS, type Facets } from "@/lib/search";
 import { IconBell, IconCheck, IconChevronDown, IconGlobe, IconPeople, IconSearch, IconX } from "./Icons";
 
@@ -199,15 +200,19 @@ export default function MapTopBar({
                 className="flex w-full items-center gap-2.5 rounded-xl p-2.5 text-left tap hover:bg-[var(--sunk)]"
                 style={n.slug === activeSlug ? { background: "var(--sunk)" } : undefined}
               >
-                <span
-                  className="grid h-8 w-8 flex-none place-items-center rounded-xl"
-                  style={{
-                    background: "var(--sunk)",
-                    color: n.slug === null ? "var(--brand)" : "var(--layer-event)",
-                  }}
-                >
-                  {n.slug === null ? <IconGlobe size={15} /> : <IconPeople size={15} />}
-                </span>
+                {/* The open network is a query, not a group, so it keeps
+                    the globe. Everything else is somebody's own mark —
+                    picking by recognition beats reading a list of names. */}
+                {n.slug === null ? (
+                  <span
+                    className="grid h-8 w-8 flex-none place-items-center rounded-xl"
+                    style={{ background: "var(--sunk)", color: "var(--brand)" }}
+                  >
+                    <IconGlobe size={15} />
+                  </span>
+                ) : (
+                  <BoardLogo name={n.name} logoUrl={n.logoUrl} size={32} />
+                )}
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1.5">
                     <span className="truncate text-[13.5px] font-semibold">{n.name}</span>

@@ -1,4 +1,13 @@
-import { describeOverlap, isTwoWay, overlaps, sharedInterests, type Overlap } from "./intents";
+import {
+  customOverlaps,
+  describeMatch,
+  isTwoWay,
+  overlaps,
+  sharedCustomInterests,
+  sharedInterests,
+  type CustomOverlap,
+  type Overlap,
+} from "./intents";
 import type { MapProfile } from "./profiles";
 
 /**
@@ -33,6 +42,8 @@ export type Match = {
   /** Internal only — ordering, never display. */
   score: number;
   overlaps: Overlap[];
+  /** Hand-typed phrases that matched word for word. See lib/intents. */
+  customOverlaps: CustomOverlap[];
   /** The fallback sentence. A cached model-written one supersedes it. */
   reason: string;
   /** Each has something the other asked for. Worth badging; it's rare. */
@@ -60,6 +71,22 @@ const TWO_WAY_BONUS = 3;
 const INTEREST_WEIGHT = 1.4;
 
 /**
+ * A hand-typed phrase that matched word for word, scored slightly *above*
+ * its vocabulary equivalent.
+ *
+ * Two people who independently typed "warehouse automation" have told you
+ * something far more specific than two people who both ticked "Technical
+ * help", and the odds of it happening by accident are much lower. The same
+ * reasoning raises a shared custom interest above a shared sector.
+ */
+const CUSTOM_DIRECTION_WEIGHT: Record<Overlap["direction"], number> = {
+  "mine-wants-theirs": 3.5,
+  mutual: 3.5,
+  "theirs-wants-mine": 2.4,
+};
+const CUSTOM_INTEREST_WEIGHT = 1.8;
+
+/**
  * Diminishing returns past the first two overlaps.
  *
  * Someone who ticked nine boxes is not nine times more relevant — they are
@@ -69,6 +96,19 @@ const INTEREST_WEIGHT = 1.4;
  */
 function overlapScore(list: Overlap[]): number {
   return list.reduce((sum, o, i) => sum + DIRECTION_WEIGHT[o.direction] / (1 + i * 0.6), 0);
+}
+
+/**
+ * Decayed on the same curve and over the *combined* count, so a person
+ * with three ticked boxes and three typed phrases doesn't out-rank a good
+ * match by sheer volume — the over-claiming this guards against doesn't
+ * care which field it was typed into.
+ */
+function customOverlapScore(list: CustomOverlap[], startIndex: number): number {
+  return list.reduce(
+    (sum, o, i) => sum + CUSTOM_DIRECTION_WEIGHT[o.direction] / (1 + (startIndex + i) * 0.6),
+    0
+  );
 }
 
 function proximityScore(surface: Surface, other: MapProfile): number {
@@ -94,7 +134,15 @@ function proximityScore(surface: Surface, other: MapProfile): number {
  * rank in well under a millisecond.
  */
 export function matchesFor(
-  me: { id: string; lookingFor: readonly string[]; canHelpWith: readonly string[]; interests?: readonly string[] },
+  me: {
+    id: string;
+    lookingFor: readonly string[];
+    canHelpWith: readonly string[];
+    interests?: readonly string[];
+    customLookingFor?: readonly string[];
+    customCanHelpWith?: readonly string[];
+    customInterests?: readonly string[];
+  },
   pool: readonly MapProfile[],
   opts: { surface: Surface; limit?: number; exclude?: readonly string[] } = { surface: "open" }
 ): Match[] {
@@ -105,10 +153,19 @@ export function matchesFor(
   for (const other of pool) {
     if (excluded.has(other.id)) continue;
     const list = overlaps(me, other);
-    const base = overlapScore(list);
-    const two = isTwoWay(list);
+    const custom = customOverlaps(me, other);
+    const base = overlapScore(list) + customOverlapScore(custom, list.length);
+    // A trade counts as a trade whichever vocabulary it came from: needing
+    // what they typed while they need what you ticked is still a trade.
+    const two =
+      isTwoWay(list) ||
+      ([...list, ...custom].some((o) => o.direction === "mine-wants-theirs") &&
+        [...list, ...custom].some((o) => o.direction === "theirs-wants-mine"));
     const shared = sharedInterests(me.interests ?? [], other.interests);
-    const affinity = Math.min(shared.length, 2) * INTEREST_WEIGHT;
+    const sharedCustom = sharedCustomInterests(me.customInterests, other.customInterests);
+    const affinity =
+      Math.min(shared.length, 2) * INTEREST_WEIGHT +
+      Math.min(sharedCustom.length, 2) * CUSTOM_INTEREST_WEIGHT;
     // Someone with nothing in common is not a match at any distance — the
     // open map would otherwise recommend the nearest stranger, which is
     // exactly the uselessness this product exists to replace. A shared
@@ -124,7 +181,15 @@ export function matchesFor(
       other,
       score,
       overlaps: list,
-      reason: describeOverlap(list, firstName(other.name), other, shared),
+      customOverlaps: custom,
+      reason: describeMatch({
+        list,
+        custom,
+        firstName: firstName(other.name),
+        other,
+        shared,
+        sharedCustom,
+      }),
       twoWay: two,
     });
   }
@@ -148,7 +213,9 @@ function diversify(ranked: Match[], limit: number): Match[] {
 
   for (const m of ranked) {
     if (out.length >= limit) break;
-    const lead = m.overlaps[0]?.topic.id;
+    // A hand-typed phrase is its own subject, so five people who all wrote
+    // the same thing don't fill the deck between them.
+    const lead = m.overlaps[0]?.topic.id ?? m.customOverlaps[0]?.label.toLowerCase();
     if (lead && usedTopics.has(lead)) continue;
     out.push(m);
     if (lead) usedTopics.add(lead);

@@ -150,6 +150,12 @@ export async function runRecommendations(opts: {
     lookingFor: criteria.lookingFor,
     canHelpWith: criteria.canHelpWith,
     interests: me.interests ?? [],
+    // Not part of the refine panel: the chips are a closed list the panel
+    // can draw, and somebody's own phrasing is not something to re-type per
+    // run. They come straight off the profile and are matched word for word.
+    customLookingFor: me.customLookingFor ?? [],
+    customCanHelpWith: me.customCanHelpWith ?? [],
+    customInterests: me.customInterests ?? [],
   };
   let all = matchesFor(asked, reached, { surface: "open", limit: 500, exclude: skip });
   if (criteria.twoWayOnly) all = all.filter((m) => m.twoWay);

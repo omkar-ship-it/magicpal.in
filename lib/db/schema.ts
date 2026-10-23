@@ -69,6 +69,24 @@ export const users = pgTable(
     workingOn: text("working_on"),
 
     /**
+     * The same three questions, in the person's own words.
+     *
+     * Separate columns rather than extra entries in the arrays above, and
+     * that separation is load-bearing: every read of `looking_for` runs
+     * through `validTopics`, which drops anything not in the vocabulary, so
+     * a hand-typed phrase stored there would be silently deleted on its way
+     * to the client. Keeping them apart also means the matcher can never
+     * mistake one person's phrasing for a vocabulary id.
+     *
+     * Matched against each other by exact wording (see `customKey`), never
+     * against the vocabulary and never fuzzily — a reason the reader can't
+     * verify is worse than no reason at all.
+     */
+    customLookingFor: text("custom_looking_for").array().notNull().default(sql`'{}'::text[]`),
+    customCanHelpWith: text("custom_can_help_with").array().notNull().default(sql`'{}'::text[]`),
+    customInterests: text("custom_interests").array().notNull().default(sql`'{}'::text[]`),
+
+    /**
      * What they're into, as distinct from what they need.
      *
      * The only *symmetric* signal the matcher has: two people deep in
@@ -347,6 +365,18 @@ export const boards = pgTable(
 
     name: text("name").notNull(),
     blurb: text("blurb"),
+
+    /**
+     * The group's own mark, on a blob URL.
+     *
+     * An alumni association or a company has a logo already, and a page
+     * that can't show it reads as a generic list rather than as *their*
+     * network — which is most of what makes somebody trust the invite they
+     * were sent. Falls back to an initial on a tinted tile, so a community
+     * with no logo is never a broken image.
+     */
+    logoUrl: text("logo_url"),
+
     /** Free text: a venue for an event, a city or "everywhere" for a group. */
     place: text("place"),
     /** Where the board centres its map. Null for a community with no home. */

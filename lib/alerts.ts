@@ -4,7 +4,7 @@ import { notifications, users } from "./db/schema";
 import { getProfileById, placeFor, type MapProfile } from "./profiles";
 import { connectedIds } from "./connections";
 import { matchesFor } from "./matching";
-import { TOPIC_BY_ID } from "./intents";
+import { sharedCustomInterests, TOPIC_BY_ID } from "./intents";
 import { distanceKm } from "./geo";
 import {
   ALERT_CITY_RADIUS_KM,
@@ -56,6 +56,10 @@ type Intents = {
   lookingFor: string[] | null;
   canHelpWith: string[] | null;
   interests: string[] | null;
+  /** Hand-typed phrases, matched word for word. See lib/intents. */
+  customLookingFor: string[] | null;
+  customCanHelpWith: string[] | null;
+  customInterests: string[] | null;
 };
 
 type Candidate = Intents & { prefs: Prefs };
@@ -283,7 +287,15 @@ function topicOf(me: Candidate, others: Intents[]): string | null {
 
 function reasonFor(me: Candidate, other: Intents): string | null {
   const [m] = matchesFor(
-    { id: "me", lookingFor: me.lookingFor ?? [], canHelpWith: me.canHelpWith ?? [], interests: me.interests ?? [] },
+    {
+      id: "me",
+      lookingFor: me.lookingFor ?? [],
+      canHelpWith: me.canHelpWith ?? [],
+      interests: me.interests ?? [],
+      customLookingFor: me.customLookingFor ?? [],
+      customCanHelpWith: me.customCanHelpWith ?? [],
+      customInterests: me.customInterests ?? [],
+    },
     [asPoolEntry(other)],
     { surface: "open", limit: 1 }
   );
@@ -307,6 +319,9 @@ function pickKind(recipient: Candidate, subject: Intents, isConnected: boolean):
         lookingFor: recipient.lookingFor ?? [],
         canHelpWith: recipient.canHelpWith ?? [],
         interests: recipient.interests ?? [],
+        customLookingFor: recipient.customLookingFor ?? [],
+        customCanHelpWith: recipient.customCanHelpWith ?? [],
+        customInterests: recipient.customInterests ?? [],
       },
       [asPoolEntry(subject)],
       { surface: "open", limit: 1 }
@@ -317,6 +332,12 @@ function pickKind(recipient: Candidate, subject: Intents, isConnected: boolean):
   if (recipient.prefs.notifyInterests) {
     const mine = new Set(recipient.interests ?? []);
     if ((subject.interests ?? []).some((i) => mine.has(i))) return "interest_nearby";
+    // A typed interest counts the same: somebody who wrote "carnatic music"
+    // and is standing near the one other person who wrote it should hear
+    // about it, and the sector list will never have that row.
+    if (sharedCustomInterests(recipient.customInterests, subject.customInterests).length > 0) {
+      return "interest_nearby";
+    }
   }
   return null;
 }
@@ -461,6 +482,9 @@ function toCandidate(r: Intents & Prefs): Candidate | null {
     lookingFor: r.lookingFor,
     canHelpWith: r.canHelpWith,
     interests: r.interests,
+    customLookingFor: r.customLookingFor,
+    customCanHelpWith: r.customCanHelpWith,
+    customInterests: r.customInterests,
     prefs: toPrefs(r),
   };
 }
@@ -473,6 +497,9 @@ function selfCandidate(m: Intents & Prefs): Candidate {
     lookingFor: m.lookingFor,
     canHelpWith: m.canHelpWith,
     interests: m.interests,
+    customLookingFor: m.customLookingFor,
+    customCanHelpWith: m.customCanHelpWith,
+    customInterests: m.customInterests,
     prefs: toPrefs(m),
   };
 }
@@ -496,6 +523,9 @@ function asPoolEntry(p: Intents): MapProfile {
     lookingFor: p.lookingFor ?? [],
     canHelpWith: p.canHelpWith ?? [],
     interests: p.interests ?? [],
+    customLookingFor: p.customLookingFor ?? [],
+    customCanHelpWith: p.customCanHelpWith ?? [],
+    customInterests: p.customInterests ?? [],
   } as MapProfile;
 }
 

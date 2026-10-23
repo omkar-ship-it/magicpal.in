@@ -306,6 +306,168 @@ export function describeOverlap(
   return `In the room.`;
 }
 
+/* ------------------------------------------------------ your own words */
+
+/**
+ * The fixed lists will never cover everybody, and shouldn't try.
+ *
+ * "A distribution partner in the Gulf" is not a checkbox. Adding it to
+ * TOPICS would make the vocabulary longer for everyone to serve one person,
+ * and the twelfth checkbox is where people stop reading — so each question
+ * also takes a few entries in somebody's own words.
+ *
+ * What makes this safe for the matcher is that custom entries only ever
+ * match *each other*, by exact wording. That is a real overlap, as
+ * checkable as an enumerated one and more specific: two people who both
+ * typed "climate finance" have told you something a dropdown couldn't. What
+ * is deliberately NOT attempted is matching free text against the
+ * vocabulary, or one person's phrase against another's — "fintech" against
+ * "financial technology" needs a model to judge, and a reason the reader
+ * can't verify is worse than no reason at all.
+ *
+ * The comparison key, therefore, is doing real work: it has to be loose
+ * enough that two people typing the same thing match (case, spacing,
+ * trailing punctuation, "&" for "and") and tight enough that it never
+ * claims a match nobody would agree with.
+ */
+export function customKey(s: string): string {
+  return s
+    .toLowerCase()
+    // Everything that isn't a letter or digit becomes a separator, and the
+    // joining words go — so "R&D", "R and D", "climate & finance" and
+    // "climate finance" all land on the same key. Dropping "and" can't
+    // invent a match anybody would dispute; keeping it meant two spellings
+    // of one claim failed to meet.
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(" ")
+    .filter((w) => w && w !== "and")
+    .join(" ");
+}
+
+/**
+ * Clean a submitted list: trimmed, length-capped, de-duplicated by key,
+ * empties dropped, count-capped. The first spelling of a key wins, because
+ * it is the one the person typed first.
+ */
+export function cleanCustom(
+  values: unknown,
+  opts: { max: number; maxLength: number }
+): string[] {
+  if (!Array.isArray(values)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const v of values) {
+    if (typeof v !== "string") continue;
+    // Collapse internal whitespace too: "climate   finance" and
+    // "climate finance" are the same claim and should render identically.
+    const label = v.trim().replace(/\s+/g, " ").slice(0, opts.maxLength);
+    const key = customKey(label);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(label);
+    if (out.length >= opts.max) break;
+  }
+  return out;
+}
+
+export type CustomOverlap = {
+  /** The reader's own spelling — what they typed, not what the other did. */
+  label: string;
+  direction: Overlap["direction"];
+};
+
+/**
+ * Custom need against custom offer, both ways, plus the symmetric case.
+ *
+ * `kind: "intent"` crosses needs with offers the way TOPICS does.
+ * `kind: "interest"` matches like-for-like, the way SECTORS does — being
+ * into the same thing is the overlap, there is nothing to exchange.
+ */
+export function customOverlaps(
+  a: { customLookingFor?: readonly string[] | null; customCanHelpWith?: readonly string[] | null },
+  b: { customLookingFor?: readonly string[] | null; customCanHelpWith?: readonly string[] | null }
+): CustomOverlap[] {
+  const key = (xs: readonly string[] | null | undefined) =>
+    new Map((xs ?? []).map((s) => [customKey(s), s]));
+  const aNeeds = key(a.customLookingFor);
+  const aOffers = key(a.customCanHelpWith);
+  const bNeeds = key(b.customLookingFor);
+  const bOffers = key(b.customCanHelpWith);
+
+  const out: CustomOverlap[] = [];
+  for (const [k, label] of aNeeds) {
+    // Both needing the same thing is mutual — the "we're both looking for a
+    // co-founder" case, which the vocabulary models with `symmetric`.
+    if (bOffers.has(k)) out.push({ label, direction: "mine-wants-theirs" });
+    else if (bNeeds.has(k)) out.push({ label, direction: "mutual" });
+  }
+  for (const [k, label] of aOffers) {
+    if (bNeeds.has(k)) out.push({ label, direction: "theirs-wants-mine" });
+  }
+  const rank = (d: Overlap["direction"]) =>
+    d === "mine-wants-theirs" ? 0 : d === "theirs-wants-mine" ? 1 : 2;
+  return out.sort((x, y) => rank(x.direction) - rank(y.direction));
+}
+
+/** Shared free-text interests, in the reader's own spelling. */
+export function sharedCustomInterests(
+  a: readonly string[] | null | undefined,
+  b: readonly string[] | null | undefined
+): string[] {
+  const theirs = new Set((b ?? []).map(customKey));
+  return (a ?? []).filter((s) => theirs.has(customKey(s)));
+}
+
+/**
+ * The one sentence every card shows, from both vocabularies at once.
+ *
+ * Precedence, and the whole argument for this order: a genuine two-way
+ * trade is the rarest and most compelling thing there is, so it leads even
+ * when it comes from the fixed list. After that, *specificity* wins — a
+ * phrase somebody typed by hand beats a checkbox they ticked, because
+ * "you asked for warehouse automation and that's what they do" is a better
+ * reason to cross a room than "you're after technical help".
+ */
+export function describeMatch(opts: {
+  list: Overlap[];
+  custom: CustomOverlap[];
+  firstName: string;
+  other?: { canHelpWith: readonly string[]; workingOn?: string | null };
+  shared?: Sector[];
+  sharedCustom?: string[];
+}): string {
+  const { list, custom, firstName, other } = opts;
+  const shared = opts.shared ?? [];
+  const sharedCustom = opts.sharedCustom ?? [];
+
+  // A fixed-vocabulary trade: the richest sentence the product can write,
+  // and it names both directions.
+  if (isTwoWay(list)) return describeOverlap(list, firstName, other, shared);
+
+  const mine = custom.find((c) => c.direction === "mine-wants-theirs");
+  if (mine) return `You asked for “${mine.label}” — that's exactly what they offer.`;
+
+  if (list.some((o) => o.direction === "mine-wants-theirs")) {
+    return describeOverlap(list, firstName, other, shared);
+  }
+
+  const theirs = custom.find((c) => c.direction === "theirs-wants-mine");
+  if (theirs) return `${firstName} asked for “${theirs.label}” — that's one of yours to give.`;
+
+  if (list.length > 0) return describeOverlap(list, firstName, other, shared);
+
+  const mutual = custom.find((c) => c.direction === "mutual");
+  if (mutual) return `You're both after “${mutual.label}”.`;
+
+  if (sharedCustom.length > 0) {
+    return `You both put down ${joinWords(sharedCustom.map((s) => `“${s}”`))}.`;
+  }
+
+  // Nothing custom either — back to the fixed-vocabulary fallbacks, which
+  // already handle shared sectors and the bare "in the room" case.
+  return describeOverlap(list, firstName, other, shared);
+}
+
 /** "a, b and c" — an Oxford-comma-free list, because these are at most three. */
 function joinWords(words: string[]): string {
   if (words.length <= 1) return words[0] ?? "";

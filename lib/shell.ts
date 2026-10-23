@@ -31,6 +31,8 @@ export type NetworkOption = {
   type: "open" | "event" | "community";
   memberCount: number;
   live: boolean;
+  /** The group's mark, so the picker shows whose network each one is. */
+  logoUrl?: string | null;
 };
 
 export type EventRef = {
@@ -103,6 +105,8 @@ export type ShellPayload = {
     slug: string | null;
     name: string;
     blurb: string | null;
+    /** The group's own mark. Null on the open map and for a board with none. */
+    logoUrl: string | null;
     /** Everything the community's own home needs. Null on the open map. */
     home: {
       place: string | null;
@@ -177,6 +181,7 @@ export async function shellPayload(opts: {
         type: "community" as const,
         memberCount: b.memberCount,
         live: false,
+        logoUrl: b.logoUrl ?? null,
       })),
   ];
 
@@ -201,8 +206,17 @@ export async function shellPayload(opts: {
         }
       : null;
 
+  // Words somebody typed themselves count every bit as much as a ticked
+  // box — otherwise the one person who described exactly what they need is
+  // told they have "stated nothing to match on".
   const hasSignals = Boolean(
-    me && ((me.lookingFor?.length ?? 0) > 0 || (me.canHelpWith?.length ?? 0) > 0 || (me.interests?.length ?? 0) > 0)
+    me &&
+      ((me.lookingFor?.length ?? 0) > 0 ||
+        (me.canHelpWith?.length ?? 0) > 0 ||
+        (me.interests?.length ?? 0) > 0 ||
+        (me.customLookingFor?.length ?? 0) > 0 ||
+        (me.customCanHelpWith?.length ?? 0) > 0 ||
+        (me.customInterests?.length ?? 0) > 0)
   );
 
   // ------------------------------------------------------------- board
@@ -233,7 +247,15 @@ export async function shellPayload(opts: {
       const surface = board.type as Surface;
       const matches =
         me?.name
-          ? matchesFor({ id: me.id, lookingFor: me.lookingFor, canHelpWith: me.canHelpWith, interests: me.interests }, members, {
+          ? matchesFor({
+            id: me.id,
+            lookingFor: me.lookingFor,
+            canHelpWith: me.canHelpWith,
+            interests: me.interests,
+            customLookingFor: me.customLookingFor,
+            customCanHelpWith: me.customCanHelpWith,
+            customInterests: me.customInterests,
+          }, members, {
               surface,
               limit: MATCHES_SHOWN,
             }).map((m) => ({ id: m.other.id, reason: m.reason, twoWay: m.twoWay }))
@@ -247,6 +269,7 @@ export async function shellPayload(opts: {
           slug: board.slug,
           name: board.name,
           blurb: board.blurb,
+          logoUrl: board.logoUrl,
           home: {
             place: board.place,
             hostName: host?.name ?? "a member",
@@ -302,7 +325,15 @@ export async function shellPayload(opts: {
   });
 
   const matches = me?.name
-    ? matchesFor({ id: me.id, lookingFor: me.lookingFor, canHelpWith: me.canHelpWith, interests: me.interests }, people, {
+    ? matchesFor({
+            id: me.id,
+            lookingFor: me.lookingFor,
+            canHelpWith: me.canHelpWith,
+            interests: me.interests,
+            customLookingFor: me.customLookingFor,
+            customCanHelpWith: me.customCanHelpWith,
+            customInterests: me.customInterests,
+          }, people, {
         surface: "open",
         limit: MATCHES_SHOWN,
       }).map((m) => ({ id: m.other.id, reason: m.reason, twoWay: m.twoWay }))
@@ -315,7 +346,7 @@ export async function shellPayload(opts: {
   const events = await publicEvents();
 
   return {
-    scope: { kind: "open", slug: null, name: "Open network", blurb: null, home: null },
+    scope: { kind: "open", slug: null, name: "Open network", blurb: null, logoUrl: null, home: null },
     people: withStatus,
     matches,
     events: await toEventRefs(events, opts.userId),

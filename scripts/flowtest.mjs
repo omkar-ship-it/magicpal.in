@@ -508,6 +508,197 @@ async function main() {
     assert(junkRun.status === 200, "junk criteria don't break the run");
     assert(junkRun.data.run.criteria.lookingFor.length === 0, "…an unknown topic is dropped, not honoured");
     assert(junkRun.data.run.reach === "roster", "…and an unknown reach falls back to the scope's default");
+    console.log("\nA community's own mark");
+    const logoSlug = comm.data.slug;
+    const logoPng = Buffer.from(
+      "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c6300010000050001" +
+        "0d0a2db40000000049454e44ae426082",
+      "hex"
+    );
+    const asFile = (bytes, type, name) => {
+      const form = new FormData();
+      form.append("file", new File([bytes], name, { type }));
+      return form;
+    };
+    const postLogo = (slug, jar, form) =>
+      fetch(`${BASE}/api/boards/${slug}/logo`, { method: "POST", headers: jar ? jar.headers() : {}, body: form })
+        .then(async (r) => ({ status: r.status, data: await r.json().catch(() => ({})) }));
+
+    const anonLogo = await postLogo(logoSlug, null, asFile(logoPng, "image/png", "l.png"));
+    assert(anonLogo.status === 401, "a signed-out visitor can't set a logo");
+    const strangerLogo = await postLogo(logoSlug, c.jar, asFile(logoPng, "image/png", "l.png"));
+    assert(strangerLogo.status === 403, "neither can a member who doesn't run it");
+
+    const notAnImage = await postLogo(logoSlug, a.jar, asFile(Buffer.from("not an image"), "text/plain", "l.txt"));
+    assert(notAnImage.status === 400, "a file that isn't an image is refused");
+    const tooBig = await postLogo(
+      logoSlug, a.jar,
+      asFile(Buffer.alloc(3 * 1024 * 1024, 1), "image/png", "big.png")
+    );
+    assert(tooBig.status === 400, "an oversized image is refused before it reaches storage");
+
+    const hostLogo = await postLogo(logoSlug, a.jar, asFile(logoPng, "image/png", "l.png"));
+    // Blob storage needs a token; locally there usually isn't one, and the
+    // route says so rather than half-succeeding. Either answer is correct —
+    // what must never happen is a 200 with no stored URL, or a 500.
+    assert(
+      hostLogo.status === 200 || hostLogo.status === 503,
+      `the host's upload either stores it or says storage isn't configured (got ${hostLogo.status})`
+    );
+    const { rows: logoRow } = await pool.query("select logo_url from boards where slug = $1", [logoSlug]);
+    if (hostLogo.status === 200) {
+      assert(typeof logoRow[0].logo_url === "string" && logoRow[0].logo_url.length > 0, "…and the row carries the URL");
+      const gone = await fetch(`${BASE}/api/boards/${logoSlug}/logo`, { method: "DELETE", headers: a.jar.headers() });
+      assert(gone.status === 200, "the host can remove it again");
+      const { rows: cleared } = await pool.query("select logo_url from boards where slug = $1", [logoSlug]);
+      assert(cleared[0].logo_url === null, "…and the row is cleared");
+    } else {
+      assert(logoRow[0].logo_url === null, "…and nothing is written when storage is unavailable");
+    }
+
+    const logoDelete = await fetch(`${BASE}/api/boards/${logoSlug}/logo`, { method: "DELETE", headers: c.jar.headers() });
+    assert(logoDelete.status === 403, "only the host can remove a logo");
+    const ghostLogo = await postLogo("no-such-board-xxxx", a.jar, asFile(logoPng, "image/png", "l.png"));
+    assert(ghostLogo.status === 404, "a board that doesn't exist 404s rather than creating anything");
+
+    // The payload the community page draws itself from.
+    const commShell = await api(`/api/map?net=${logoSlug}`, { jar: a.jar });
+    assert("logoUrl" in commShell.data.scope, "the shell's scope carries the logo field");
+    assert(
+      commShell.data.networks.some((n) => n.slug === logoSlug && "logoUrl" in n),
+      "…and so does every network in the picker"
+    );
+    console.log("\nYour own words, where the vocabulary runs out");
+    const ownWordsSave = await api("/api/profile", {
+      method: "POST", jar: a.jar,
+      body: {
+        name: "Flow Alice", headline: "Founder, test co",
+        lookingFor: ["funding"], canHelpWith: ["product"],
+        customLookingFor: ["  Warehouse  automation ", "warehouse AUTOMATION", "", "   ", "x".repeat(80), "a", "b", "c"],
+        customCanHelpWith: ["Carnatic music"],
+        customInterests: ["Climate finance", "climate & finance"],
+        lat: HERE.lat, lng: HERE.lng, locationLabel: HERE.label, visibility: "exact",
+      },
+    });
+    assert(ownWordsSave.status === 200, "a profile saves with free-text entries beside the chips");
+    const { rows: own } = await pool.query(
+      "select custom_looking_for c1, custom_can_help_with c2, custom_interests c3 from users where email = $1",
+      [emailA]
+    );
+    assert(own[0].c1[0] === "Warehouse automation", "whitespace is collapsed and trimmed, so two typists match");
+    assert(own[0].c1.length === 3, `capped at ${3} entries, not however many were posted`);
+    assert(!own[0].c1.includes(""), "empty strings never become tags");
+    assert(own[0].c1.every((v) => v.length <= 32), "each entry is length-capped");
+    assert(
+      own[0].c1.filter((v) => v.toLowerCase().startsWith("warehouse")).length === 1,
+      "a case-only repeat is a duplicate, not a second tag"
+    );
+    assert(own[0].c3.length === 1, "“climate & finance” and “climate finance” are the same claim");
+
+    // The separation that keeps the matcher honest: a typed phrase must
+    // never end up anywhere the vocabulary is read from.
+    const { rows: vocab } = await pool.query("select looking_for from users where email = $1", [emailA]);
+    assert(
+      vocab[0].looking_for.join(",") === "funding",
+      "a free-text phrase never leaks into the enumerated vocabulary"
+    );
+
+    console.log("\nA phrase two people typed is a real match, and says so");
+    await api("/api/profile", {
+      method: "POST", jar: b.jar,
+      body: {
+        name: "Flow Bob", headline: "Angel investor",
+        lookingFor: ["product"], canHelpWith: ["funding"],
+        // Spelled differently on purpose: same claim, different typing.
+        customCanHelpWith: ["warehouse automation"],
+        customInterests: ["Climate Finance"],
+        lat: HERE.lat + 0.004, lng: HERE.lng + 0.004, locationLabel: "Barakhamba, Delhi",
+        visibility: "exact",
+      },
+    });
+    const ownRun = await api(`/api/recommendations?event=${slug}&skipSeen=0`, { jar: a.jar });
+    const bobOwn = ownRun.data.run.deck.find((p) => p.name === "Flow Bob");
+    assert(Boolean(bobOwn), "the match still lands");
+    assert(
+      /warehouse automation/i.test(bobOwn.reason) || /raising|invest/i.test(bobOwn.reason),
+      "the reason names something checkable on their profile"
+    );
+
+    // Alice needs only the typed phrase now — no vocabulary overlap at all,
+    // which is the case that would have returned nothing before.
+    await api("/api/profile", {
+      method: "POST", jar: a.jar,
+      body: {
+        name: "Flow Alice", headline: "Founder, test co",
+        lookingFor: [], canHelpWith: [], interests: [],
+        customLookingFor: ["Warehouse automation"],
+        customCanHelpWith: [], customInterests: [],
+        lat: HERE.lat, lng: HERE.lng, locationLabel: HERE.label, visibility: "exact",
+      },
+    });
+    const onlyOwn = await api(`/api/recommendations?event=${slug}&skipSeen=0`, { jar: a.jar });
+    const bobOnly = onlyOwn.data.run.deck.find((p) => p.name === "Flow Bob");
+    assert(Boolean(bobOnly), "somebody whose only stated need is hand-typed still gets matched");
+    assert(
+      /warehouse automation/i.test(bobOnly.reason),
+      "…and the reason quotes the phrase, which is what makes it checkable"
+    );
+    assert(!/\d+%/.test(bobOnly.reason), "…with no score, as everywhere else");
+
+    const openOwn = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}&radiusKm=25`, { jar: a.jar });
+    assert(openOwn.data.hasSignals === true, "typed words count as having stated something to match on");
+    const bobOnMap = openOwn.data.people.find((p) => p.name === "Flow Bob");
+    assert(
+      bobOnMap.customCanHelpWith.join(",") === "warehouse automation",
+      "the map payload carries them, so cards can show them"
+    );
+
+    console.log("\nA phrase nobody else typed matches nobody, rather than guessing");
+    await api("/api/profile", {
+      method: "POST", jar: c.jar,
+      body: {
+        name: "Flow Carol", headline: "Curious stranger",
+        lookingFor: [], canHelpWith: [], interests: [],
+        customLookingFor: ["Antique clock repair"],
+        lat: HERE.lat, lng: HERE.lng, locationLabel: HERE.label, visibility: "exact",
+      },
+    });
+    const carolRun = await api("/api/recommendations", { jar: c.jar });
+    assert(
+      carolRun.data.run.deck.every((p) => !/antique clock/i.test(p.reason)),
+      "an unmatched phrase is never stretched into a reason about somebody else"
+    );
+
+    // Restore Alice and Bob for everything downstream. Every field the
+    // earlier sections asserted on has to be named here: the profile route
+    // writes the whole vocabulary on every save, so a field left out of
+    // this body is a field this section quietly erased.
+    await api("/api/profile", {
+      method: "POST", jar: a.jar,
+      body: {
+        name: "Flow Alice", headline: "Founder, test co", workingOn: "Raising a seed round",
+        lookingFor: ["funding"], canHelpWith: ["product"],
+        interests: ["fintech"], stage: "founder",
+        customLookingFor: [], customCanHelpWith: [], customInterests: [],
+        lat: HERE.lat, lng: HERE.lng, locationLabel: HERE.label,
+        baseLat: CITY.lat, baseLng: CITY.lng, baseLabel: CITY.label, visibility: "exact",
+      },
+    });
+    await api("/api/profile", {
+      method: "POST", jar: b.jar,
+      body: {
+        name: "Flow Bob", headline: "Angel investor",
+        lookingFor: ["product"], canHelpWith: ["funding"],
+        customLookingFor: [], customCanHelpWith: [], customInterests: [],
+        lat: HERE.lat + 0.004, lng: HERE.lng + 0.004, locationLabel: "Barakhamba, Delhi",
+        baseLat: CITY.lat, baseLng: CITY.lng, baseLabel: CITY.label, visibility: "off",
+      },
+    });
+    await api("/api/profile", {
+      method: "POST", jar: c.jar,
+      body: { name: "Flow Carol", headline: "Curious stranger", lookingFor: ["peers"], canHelpWith: ["peers"],
+              customLookingFor: [], visibility: "off" },
+    });
     console.log("\nFeed is scoped and private");
     const openFeed = await api("/api/feed", { jar: a.jar });
     assert(openFeed.status === 200, "the open network's feed loads");

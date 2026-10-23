@@ -55,7 +55,20 @@ function haystack(p: MapProfile): string {
   const sectorWords = validSectors(p.interests)
     .map((id) => sectorById(id)?.label ?? "")
     .join(" ");
-  return [p.name, p.headline, p.company, p.workingOn, p.locationLabel, topicWords, sectorWords, stageById(p.stage)?.label]
+  // Somebody's own words are the most specific thing on their profile, so
+  // they're also the most useful thing to be able to search for.
+  const ownWords = [...p.customLookingFor, ...p.customCanHelpWith, ...p.customInterests].join(" ");
+  return [
+    p.name,
+    p.headline,
+    p.company,
+    p.workingOn,
+    p.locationLabel,
+    topicWords,
+    sectorWords,
+    ownWords,
+    stageById(p.stage)?.label,
+  ]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();

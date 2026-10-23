@@ -138,6 +138,12 @@ Things worth knowing without reading the file:
   central promise about location.
 - **`pins.reach_km`** is how far a pin carries. See §5.
 - **`messages.attachments`** is jsonb. See §5.
+- **`users.custom_looking_for` / `custom_can_help_with` / `custom_interests`**
+  are free-text entries beside the fixed vocabularies. Kept in their own
+  columns deliberately — see §10.
+- **`boards.logo_url`** is the group's own mark, on a blob URL. `BoardLogo`
+  falls back to an initial on a seeded tint, so no logo is never a broken
+  image.
 - **`recommendation_state`** is the For You deck's memory: one row per
   (viewer, scope, subject) holding `shown | connected | dismissed`. See §10.
 
@@ -423,12 +429,19 @@ npx vercel env pull /tmp/scratch/env.prod --environment=production --yes
 # 2. push, with POSTGRES_URL unset
 ( set -a; . /tmp/scratch/env.prod; set +a; unset POSTGRES_URL; npx drizzle-kit push --force )
 
-# 3. diff the constraints — push does not update edited CHECKs (§6.2)
+# 3. VERIFY IN THE CATALOGUE, not from the command's output. A push that
+#    cannot reach the database exits quietly and changes nothing; this has
+#    happened (a flaky local resolver REFUSING the Neon endpoint host).
+#    select column_name from information_schema.columns where table_name='…';
+#    When push can't connect, write the DDL by hand into drizzle/manual/
+#    and apply it — 0003 is the worked example.
+#
+# 4. diff the constraints — push does not update edited CHECKs (§6.2)
 #    select conname, pg_get_constraintdef(oid) from pg_constraint
 #    where contype='c' and connamespace='public'::regnamespace order by 1;
 
-# 4. delete the scratch env file, confirm .env.local is untouched
-# 5. commit, push, confirm the deployment is Ready
+# 5. delete the scratch env file, confirm .env.local is untouched
+# 6. commit, push, confirm the deployment is Ready
 ```
 
 > **Open task:** a build-time check that fails when `schema.ts` and the
@@ -484,8 +497,31 @@ be clear about it.
 
 `matchesFor()` in `lib/matching.ts` scores overlap between **enumerated
 vocabularies** in `lib/intents.ts` (`TOPICS`, `SECTORS`, `STAGES`), and
-`describeOverlap()` composes the sentence from templates. "You're both into
+`describeMatch()` composes the sentence from templates. "You're both into
 b2b & saas" is string assembly.
+
+### Your own words (`custom_*` columns)
+
+The fixed lists will never cover everybody, so each of the three questions
+also takes up to three free-text entries (`MAX_CUSTOM`). **They live in
+separate columns on purpose**: every read of `looking_for` runs through
+`validTopics`, which drops anything not in the vocabulary, so a typed
+phrase stored there would be silently deleted on its way to the client.
+
+Three rules keep this honest, and breaking any of them breaks the reason:
+
+1. **Custom only ever matches custom**, by exact key (`customKey` — strips
+   punctuation, drops "and", so "R&D" = "R and D" = "r d"). Never against
+   the vocabulary, never fuzzily.
+2. **The sentence quotes the phrase** — `You asked for "warehouse
+   automation" — that's exactly what they offer.` Checkable against the
+   other profile, which is the whole property the matcher trades on.
+3. **A phrase nobody else typed matches nobody.** No stretching, no
+   synonyms. A reason the reader can't verify is worse than no reason.
+
+Scored slightly *above* the vocabulary equivalent (`CUSTOM_DIRECTION_WEIGHT`
+3.5 vs 3): two people who independently typed the same phrase have told you
+something more specific than two people who ticked the same box.
 
 Why it was built this way: every reason is **checkable and explainable** at
 the moment a stranger decides whether to walk over, it costs nothing, and it

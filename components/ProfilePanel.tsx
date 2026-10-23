@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SECTORS, STAGES } from "@/lib/intents";
 import { ALERT_KINDS, ALERT_RADII, DEFAULT_ALERT_RADIUS_KM, MAX_INTERESTS } from "@/lib/rules";
+import OwnWords from "./OwnWords";
+import BoardLogo from "./BoardLogo";
 import type { NetworkOption } from "@/lib/shell";
 import AvatarPicker from "./AvatarPicker";
 import PlaceSearch, { type Place } from "./PlaceSearch";
@@ -46,6 +48,10 @@ type Draft = {
   lookingFor: string[];
   canHelpWith: string[];
   interests: string[];
+  /** The same three answers, in their own words. See lib/intents. */
+  customLookingFor: string[];
+  customCanHelpWith: string[];
+  customInterests: string[];
   stage: string;
   locationLabel: string | null;
   lat: number | null;
@@ -115,6 +121,9 @@ export default function ProfilePanel({
           lookingFor: p.lookingFor,
           canHelpWith: p.canHelpWith,
           interests: p.interests,
+          customLookingFor: p.customLookingFor ?? [],
+          customCanHelpWith: p.customCanHelpWith ?? [],
+          customInterests: p.customInterests ?? [],
           stage: p.stage,
           locationLabel: p.locationLabel,
           lat: p.lat,
@@ -213,9 +222,9 @@ export default function ProfilePanel({
   // the part this shows.
   const steps: Array<{ done: boolean; label: string }> = [
     { done: Boolean(d.name && d.headline), label: "your name and a line about you" },
-    { done: d.lookingFor.length > 0, label: "what you're looking for" },
-    { done: d.canHelpWith.length > 0, label: "what you can help with" },
-    { done: d.interests.length > 0, label: "what you're into" },
+    { done: d.lookingFor.length + d.customLookingFor.length > 0, label: "what you're looking for" },
+    { done: d.canHelpWith.length + d.customCanHelpWith.length > 0, label: "what you can help with" },
+    { done: d.interests.length + d.customInterests.length > 0, label: "what you're into" },
     { done: Boolean(d.workingOn), label: "what you're working on" },
     { done: Boolean(d.photoUrl || d.avatarStyle), label: "a picture" },
     { done: d.visibility !== "off", label: "where you appear" },
@@ -374,8 +383,24 @@ export default function ProfilePanel({
           />
 
           <div className="mt-3 flex flex-col gap-4">
-            <TopicPicker side="need" selected={d.lookingFor} onChange={(v) => set("lookingFor", v)} />
-            <TopicPicker side="offer" selected={d.canHelpWith} onChange={(v) => set("canHelpWith", v)} />
+            <div>
+              <TopicPicker side="need" selected={d.lookingFor} onChange={(v) => set("lookingFor", v)} />
+              <OwnWords
+                values={d.customLookingFor}
+                placeholder="A distribution partner in the Gulf"
+                hint="Not on the list? Say it your way. It finds people who wrote the same thing."
+                onChange={(v) => set("customLookingFor", v)}
+              />
+            </div>
+            <div>
+              <TopicPicker side="offer" selected={d.canHelpWith} onChange={(v) => set("canHelpWith", v)} />
+              <OwnWords
+                values={d.customCanHelpWith}
+                placeholder="Warehouse automation"
+                hint="The specific thing you'd actually help a stranger with."
+                onChange={(v) => set("customCanHelpWith", v)}
+              />
+            </div>
 
             <div>
               <div className="mb-2 flex items-baseline justify-between gap-3">
@@ -408,6 +433,12 @@ export default function ProfilePanel({
               <p className="mt-2 text-[12px] leading-[1.45] text-[var(--ink-soft)]">
                 Finds people worth an hour even when neither of you needs what the other offers.
               </p>
+              <OwnWords
+                values={d.customInterests}
+                placeholder="Carnatic music"
+                hint="Anything you'd happily lose an hour to. Matches people who wrote the same."
+                onChange={(v) => set("customInterests", v)}
+              />
             </div>
 
             <div>
@@ -582,12 +613,7 @@ export default function ProfilePanel({
               <li key={b.slug}>
                 <div className="card p-3">
                   <div className="flex items-center gap-2.5">
-                    <span
-                      className="grid h-8 w-8 flex-none place-items-center rounded-xl"
-                      style={{ background: "var(--sunk)", color: "var(--layer-event)" }}
-                    >
-                      <IconPeople size={15} />
-                    </span>
+                    <BoardLogo name={b.name} logoUrl={b.logoUrl} size={32} />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[13px] font-semibold">{b.name}</span>
                       <span className="block truncate text-[11.5px] text-[var(--ink-soft)]">

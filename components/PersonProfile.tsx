@@ -29,6 +29,9 @@ type Person = {
   lookingFor: string[];
   canHelpWith: string[];
   interests: string[];
+  customLookingFor: string[];
+  customCanHelpWith: string[];
+  customInterests: string[];
   skills: string[];
   linkedinUrl: string | null;
   websiteUrl: string | null;
@@ -103,9 +106,12 @@ export default function PersonProfile({
 
   const p = data.person;
   const stage = stageById(p.stage);
-  const wants = p.lookingFor.map(topicById).filter(Boolean);
-  const offers = p.canHelpWith.map(topicById).filter(Boolean);
-  const sectors = p.interests.map(sectorById).filter(Boolean);
+  // Their own words sit in the same rows as the vocabulary chips: both are
+  // claims the same person made about themselves, and splitting them into
+  // "official" and "other" would read as the product doubting one of them.
+  const wants = [...p.lookingFor.map((id) => topicById(id)?.need).filter(Boolean), ...p.customLookingFor];
+  const offers = [...p.canHelpWith.map((id) => topicById(id)?.offer).filter(Boolean), ...p.customCanHelpWith];
+  const sectors = [...p.interests.map((id) => sectorById(id)?.label).filter(Boolean), ...p.customInterests];
   const connected = data.connection.status === "connected";
   // Verification is a claim by a particular community, so the profile names
   // which ones are making it rather than showing a bare, unattributable tick.
@@ -225,7 +231,7 @@ export default function PersonProfile({
                 <p className="mb-1 text-[10.5px] font-semibold uppercase tracking-wide text-[var(--ink-soft)]">
                   Looking for
                 </p>
-                <Chips items={wants.map((t) => t!.need)} tone="brand" />
+                <Chips items={wants as string[]} tone="brand" />
               </div>
             )}
             {offers.length > 0 && (
@@ -233,7 +239,7 @@ export default function PersonProfile({
                 <p className="mb-1 text-[10.5px] font-semibold uppercase tracking-wide text-[var(--ink-soft)]">
                   Can help with
                 </p>
-                <Chips items={offers.map((t) => t!.offer)} tone="good" />
+                <Chips items={offers as string[]} tone="good" />
               </div>
             )}
           </div>
@@ -242,7 +248,7 @@ export default function PersonProfile({
 
       {(sectors.length > 0 || p.skills.length > 0) && (
         <Section title="Into" icon={<IconSparkle size={12} />}>
-          <Chips items={[...sectors.map((s) => s!.label), ...p.skills]} tone="muted" />
+          <Chips items={[...(sectors as string[]), ...p.skills]} tone="muted" />
         </Section>
       )}
 

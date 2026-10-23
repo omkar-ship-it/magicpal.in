@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import PlaceSearch, { type Place } from "./PlaceSearch";
-import { IconChevronLeft } from "./Icons";
+import BoardLogo from "./BoardLogo";
+import { IconChevronLeft, IconImage } from "./Icons";
 
 /**
  * The owner editing their own community.
@@ -29,6 +30,7 @@ export default function EditCommunity({
     details: string | null;
     guidelines: string | null;
     place: string | null;
+    logoUrl: string | null;
   };
   onCancel: () => void;
   onSaved: () => void;
@@ -41,6 +43,49 @@ export default function EditCommunity({
   const [coords, setCoords] = useState<Place | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // The logo saves on its own, the moment a file is picked — it's a
+  // multipart upload, and holding it until "Save changes" would mean a
+  // half-saved form if the text fields failed validation.
+  const [logoUrl, setLogoUrl] = useState(initial.logoUrl);
+  const [logoBusy, setLogoBusy] = useState(false);
+  const [logoError, setLogoError] = useState("");
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  async function pickLogo(file: File | undefined) {
+    if (!file) return;
+    setLogoBusy(true);
+    setLogoError("");
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch(`/api/boards/${slug}/logo`, { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Couldn't upload that.");
+      setLogoUrl(data.logoUrl);
+      onSaved();
+    } catch (err) {
+      setLogoError(err instanceof Error ? err.message : "Upload failed.");
+    } finally {
+      setLogoBusy(false);
+      // Cleared so picking the same file twice still fires a change event.
+      if (fileInput.current) fileInput.current.value = "";
+    }
+  }
+
+  async function removeLogo() {
+    setLogoBusy(true);
+    setLogoError("");
+    try {
+      const res = await fetch(`/api/boards/${slug}/logo`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Couldn't remove it.");
+      setLogoUrl(null);
+      onSaved();
+    } catch (err) {
+      setLogoError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setLogoBusy(false);
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -74,6 +119,46 @@ export default function EditCommunity({
       <button type="button" className="btn btn-ghost btn-sm self-start" onClick={onCancel}>
         <IconChevronLeft size={13} /> Back
       </button>
+
+      {/* First, because it's the thing that makes the page look like the
+          group's own rather than a generic list. */}
+      <div>
+        <p className="label">Logo</p>
+        <div className="flex items-center gap-3">
+          <BoardLogo name={name || "?"} logoUrl={logoUrl} size={56} />
+          <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                disabled={logoBusy}
+                onClick={() => fileInput.current?.click()}
+              >
+                <IconImage size={13} /> {logoBusy ? "Uploading…" : logoUrl ? "Replace" : "Upload"}
+              </button>
+              {logoUrl && (
+                <button type="button" className="btn btn-ghost btn-sm" disabled={logoBusy} onClick={removeLogo}>
+                  Remove
+                </button>
+              )}
+            </div>
+            <p className="text-[11.5px] leading-[1.4] text-[var(--ink-soft)]">
+              {logoError ? (
+                <span style={{ color: "var(--warn)" }}>{logoError}</span>
+              ) : (
+                "A square image reads best. Under 2MB. Saves straight away."
+              )}
+            </p>
+          </div>
+        </div>
+        <input
+          ref={fileInput}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => pickLogo(e.target.files?.[0])}
+        />
+      </div>
 
       <div>
         <label className="label" htmlFor="c-name">

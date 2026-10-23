@@ -4,8 +4,16 @@ import { db, hasDb } from "@/lib/db";
 import { consents, users } from "@/lib/db/schema";
 import { getSessionUser } from "@/lib/session";
 import { getProfileById } from "@/lib/profiles";
-import { STAGE_BY_ID, validSectors, validTopics } from "@/lib/intents";
-import { ALERT_RADIUS_OPTIONS_KM, CONSENT_COPY_VERSION, MAX_INTERESTS, MAX_SKILLS, MAX_TOPICS } from "@/lib/rules";
+import { cleanCustom, STAGE_BY_ID, validSectors, validTopics } from "@/lib/intents";
+import {
+  ALERT_RADIUS_OPTIONS_KM,
+  CONSENT_COPY_VERSION,
+  MAX_CUSTOM,
+  MAX_CUSTOM_LENGTH,
+  MAX_INTERESTS,
+  MAX_SKILLS,
+  MAX_TOPICS,
+} from "@/lib/rules";
 
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
@@ -45,6 +53,9 @@ export async function GET() {
       lookingFor: row.lookingFor ?? [],
       canHelpWith: row.canHelpWith ?? [],
       interests: row.interests ?? [],
+      customLookingFor: row.customLookingFor ?? [],
+      customCanHelpWith: row.customCanHelpWith ?? [],
+      customInterests: row.customInterests ?? [],
       stage: row.stage ?? "",
       locationLabel: row.locationLabel,
       lat: row.lat,
@@ -97,6 +108,14 @@ export async function POST(req: Request) {
   const lookingFor = validTopics(body?.lookingFor).slice(0, MAX_TOPICS);
   const canHelpWith = validTopics(body?.canHelpWith).slice(0, MAX_TOPICS);
   const interests = validSectors(body?.interests).slice(0, MAX_INTERESTS);
+  // Trimmed, de-duplicated by comparison key and count-capped here rather
+  // than trusted to the form: these are the only free-text fields the
+  // matcher reads, so a stray empty string or a near-duplicate would show
+  // up as a chip on somebody's card and as a phrase nothing can match.
+  const customCaps = { max: MAX_CUSTOM, maxLength: MAX_CUSTOM_LENGTH };
+  const customLookingFor = cleanCustom(body?.customLookingFor, customCaps);
+  const customCanHelpWith = cleanCustom(body?.customCanHelpWith, customCaps);
+  const customInterests = cleanCustom(body?.customInterests, customCaps);
   const stage = STAGE_BY_ID.has(body?.stage) ? (body.stage as string) : null;
 
   const locationLabel = str(body?.locationLabel, 160);
@@ -157,6 +176,12 @@ export async function POST(req: Request) {
       stage,
       openToMentor: Boolean(body?.openToMentor),
       seekingMentor: Boolean(body?.seekingMentor),
+      // Same rule as the alert preferences below: the full-page editor has
+      // no custom-entry controls, and a save from there must not wipe
+      // phrases somebody typed into the map panel.
+      ...("customLookingFor" in (body ?? {}) ? { customLookingFor } : {}),
+      ...("customCanHelpWith" in (body ?? {}) ? { customCanHelpWith } : {}),
+      ...("customInterests" in (body ?? {}) ? { customInterests } : {}),
       // Only written when the client actually sent them, so a save from a
       // surface that doesn't show these controls can't silently reset
       // somebody's alert preferences to the defaults.

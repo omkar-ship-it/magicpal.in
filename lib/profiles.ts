@@ -33,6 +33,13 @@ export type MapProfile = {
   canHelpWith: string[];
   /** Symmetric affinity — shared sectors, for people whose needs don't interlock. */
   interests: string[];
+  /**
+   * The same three answers in their own words. Matched by exact wording
+   * against other people's custom entries, never against the vocabulary.
+   */
+  customLookingFor: string[];
+  customCanHelpWith: string[];
+  customInterests: string[];
   stage: string | null;
   workingOn: string | null;
 
@@ -69,6 +76,9 @@ const PROFILE_COLUMNS = {
   lookingFor: users.lookingFor,
   canHelpWith: users.canHelpWith,
   interests: users.interests,
+  customLookingFor: users.customLookingFor,
+  customCanHelpWith: users.customCanHelpWith,
+  customInterests: users.customInterests,
   stage: users.stage,
   workingOn: users.workingOn,
   lat: users.lat,
@@ -166,6 +176,9 @@ type ProfileRow = {
   visibility: string;
   liveAt: Date | null;
   lastActiveAt: Date | null;
+  customLookingFor: string[] | null;
+  customCanHelpWith: string[] | null;
+  customInterests: string[] | null;
 };
 
 function toMapProfile(r: ProfileRow, centre?: { lat: number; lng: number }): MapProfile | null {
@@ -187,6 +200,9 @@ function toMapProfile(r: ProfileRow, centre?: { lat: number; lng: number }): Map
     lookingFor: r.lookingFor ?? [],
     canHelpWith: r.canHelpWith ?? [],
     interests: r.interests ?? [],
+    customLookingFor: r.customLookingFor ?? [],
+    customCanHelpWith: r.customCanHelpWith ?? [],
+    customInterests: r.customInterests ?? [],
     stage: r.stage,
     workingOn: r.workingOn,
     lat: placed.lat,
@@ -334,6 +350,9 @@ export async function getBoardMembers(
       lookingFor: r.lookingFor ?? [],
       canHelpWith: r.canHelpWith ?? [],
       interests: r.interests ?? [],
+      customLookingFor: r.customLookingFor ?? [],
+      customCanHelpWith: r.customCanHelpWith ?? [],
+      customInterests: r.customInterests ?? [],
       stage: r.stage,
       workingOn: r.workingOn,
       lat: 0,

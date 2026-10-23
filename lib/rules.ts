@@ -50,6 +50,23 @@ export const MAX_TOPICS = 4;
 export const MAX_INTERESTS = 5;
 
 /**
+ * Your own words, on top of the fixed vocabulary.
+ *
+ * The lists are deliberately short and they will never cover everybody —
+ * "a distribution partner in the Gulf" is not a checkbox and shouldn't be.
+ * So each of the three questions takes a few free-text entries as well,
+ * and they match each other by exact wording, which is a real overlap and
+ * writes its own sentence ("you both put down climate finance").
+ *
+ * Capped harder than the vocabulary, and kept short, for two reasons: a
+ * free-text field with room for ten entries becomes a CV, and an exact
+ * match only ever happens on a phrase short enough that two people would
+ * independently type it the same way.
+ */
+export const MAX_CUSTOM = 3;
+export const MAX_CUSTOM_LENGTH = 32;
+
+/**
  * How long a live position stays live without a refresh.
  *
  * Short on purpose. Nobody taps "stop sharing" — they close the tab — so

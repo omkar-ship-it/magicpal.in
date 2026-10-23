@@ -34,8 +34,16 @@ export default function PersonCard({
   /** Owner-only controls, hung under the card by the People window. */
   children?: React.ReactNode;
 }) {
-  const needs = person.lookingFor.map(topicById).filter(Boolean);
-  const offers = person.canHelpWith.map(topicById).filter(Boolean);
+  // Vocabulary chips and hand-typed ones in the same row: both are claims
+  // the same person made, and the card is not the place to rank them.
+  const needs = [
+    ...person.lookingFor.map((id) => topicById(id)?.need).filter(Boolean),
+    ...(person.customLookingFor ?? []),
+  ] as string[];
+  const offers = [
+    ...person.canHelpWith.map((id) => topicById(id)?.offer).filter(Boolean),
+    ...(person.customCanHelpWith ?? []),
+  ] as string[];
 
   return (
     <article className="card lift p-3.5">
@@ -79,10 +87,10 @@ export default function PersonCard({
       {!compact && (needs.length > 0 || offers.length > 0) && (
         <div className="mt-2.5 flex flex-col gap-1.5">
           {needs.length > 0 && (
-            <ChipRow label="Wants" items={needs.map((t) => t!.need)} tone="brand" />
+            <ChipRow label="Wants" items={needs} tone="brand" />
           )}
           {offers.length > 0 && (
-            <ChipRow label="Offers" items={offers.map((t) => t!.offer)} tone="good" />
+            <ChipRow label="Offers" items={offers} tone="good" />
           )}
         </div>
       )}

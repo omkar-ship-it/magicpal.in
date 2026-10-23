@@ -4,6 +4,8 @@ import { isActive, MEMBER_REMOVED } from "@/lib/membership";
 import { getProfileById } from "@/lib/profiles";
 import { getSessionUser } from "@/lib/session";
 import JoinButton from "@/components/JoinButton";
+import BoardLogo from "@/components/BoardLogo";
+import { boardBanner } from "@/lib/avatar";
 import { IconLock, IconPeople } from "@/components/Icons";
 
 /**
@@ -35,18 +37,31 @@ export default async function BoardPage({ params }: { params: Promise<{ slug: st
 
   return (
     <div className="mx-auto max-w-lg px-5 py-12">
-      <p className="label label-icon m-0">
-        {board.type === "event" ? "Event board" : "Community board"}
-      </p>
-      <h1 className="text-2xl font-bold leading-tight">{board.name}</h1>
-      <p className="mt-1.5 text-[13px] text-[var(--ink-soft)]">
+      {/* The same masthead the members' page uses, because this is the one
+          surface a stranger judges the group on — it arrives from a link
+          somebody they trust sent them, and it has one job: look like the
+          group it claims to be. */}
+      <div
+        className="rounded-2xl border p-5"
+        style={{ borderColor: "var(--line)", background: boardBanner(board.name) }}
+      >
+        {/* In the flow rather than absolutely placed: the mark sits above
+            the label, and nothing can slide under it at a width nobody
+            tested. */}
+        <BoardLogo name={board.name} logoUrl={board.logoUrl} size={64} ring />
+        <p className="label label-icon m-0 mt-3">
+          {board.type === "event" ? "Event board" : "Community board"}
+        </p>
+        <h1 className="text-2xl font-bold leading-tight text-balance">{board.name}</h1>
+        <p className="mt-1.5 text-[13px] text-[var(--ink-soft)]">
         {board.place ? `${board.place} · ` : ""}
         {board.startsAt
           ? `${board.startsAt.toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })} · `
           : ""}
-        Hosted by {host?.name ?? "a member"}
-      </p>
-      {board.blurb && <p className="mt-3 text-[14px] leading-[1.6]">{board.blurb}</p>}
+          Hosted by {host?.name ?? "a member"}
+        </p>
+        {board.blurb && <p className="mt-3 max-w-[48ch] text-[14px] leading-[1.6]">{board.blurb}</p>}
+      </div>
 
       <div className="card mt-6 p-5">
         <p className="flex items-center gap-2 text-[13.5px] font-semibold">

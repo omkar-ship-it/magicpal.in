@@ -48,8 +48,29 @@ export function characterUrl(style: string, seed: string): string {
 const TINTS = [198, 24, 150, 265, 42, 340, 96, 310, 14, 180];
 
 export function avatarTint(seed: string): string {
+  return `hsl(${seedHue(seed)} 68% 93%)`;
+}
+
+export function seedHue(seed: string): number {
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  const hue = TINTS[h % TINTS.length];
-  return `hsl(${hue} 68% 93%)`;
+  return TINTS[h % TINTS.length];
+}
+
+/**
+ * The banner behind a community's name, in that community's own colour.
+ *
+ * Mixed *into* `var(--card)` rather than stated as a flat light tint, which
+ * is what lets one expression work in both themes: the hue arrives at 16%
+ * over whatever the card colour is, so it tints a white page and a dark one
+ * without either going muddy. The seeded hue is what stops every group's
+ * page looking like the same template.
+ */
+export function boardBanner(seed: string): string {
+  const hue = seedHue(seed);
+  return (
+    `linear-gradient(135deg,` +
+    ` color-mix(in srgb, hsl(${hue} 70% 55%) 18%, var(--card)),` +
+    ` color-mix(in srgb, hsl(${(hue + 28) % 360} 70% 55%) 7%, var(--card)))`
+  );
 }

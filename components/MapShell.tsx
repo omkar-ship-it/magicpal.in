@@ -320,9 +320,14 @@ export default function MapShell({
         <CommunityHome
           scope={data.scope}
           events={data.events}
+          people={data.people}
           memberCount={data.people.length + 1}
           onOpenEvents={() => openWin("events")}
           onOpenPeople={() => openWin("people")}
+          onOpenPerson={(id) => {
+            setSelected(id);
+            openWin("person");
+          }}
           onChanged={() => void load({})}
         />
       </FloatWindow>
