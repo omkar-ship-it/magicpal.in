@@ -207,6 +207,10 @@ export default function MapShell({
   function switchNetwork(slug: string | null) {
     setFacets(NO_FACETS);
     setSelected(null);
+    // The open network has no front page, so a Home window left open on a
+    // board must not follow you onto it — the dock slot is gone and there
+    // would be no way to close what it had left behind.
+    if (slug === null) win("home", { open: false });
     // Belongs to the board being left — the panel remounts and reports the
     // new one, and until it does the payload's own count stands in.
     setForYouCount(null);
@@ -643,6 +647,7 @@ export default function MapShell({
           chats: data.waiting,
         }}
         signedIn={signedIn}
+        hasHome={!isOpenNet}
         me={me}
         onSelect={openTab}
         onProfile={() => openWin(signedIn ? "profile" : "signin")}

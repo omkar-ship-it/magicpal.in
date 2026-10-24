@@ -40,6 +40,7 @@ export default function MapDock({
   active,
   counts,
   signedIn,
+  hasHome,
   me,
   onSelect,
   onProfile,
@@ -48,6 +49,15 @@ export default function MapDock({
   /** Shown inline in the label. Absent or zero renders nothing. */
   counts: Partial<Record<Exclude<DockTab, null>, number>>;
   signedIn: boolean;
+  /**
+   * Whether this scope has a front page at all.
+   *
+   * The open network doesn't: it isn't a group, it's everyone who opted
+   * into the public map, so there is nobody to run it, no rules to publish
+   * and nothing to invite anybody to. The slot used to open a panel whose
+   * only content was an apology for existing.
+   */
+  hasHome: boolean;
   me: { name: string; photoUrl: string | null } | null;
   onSelect: (tab: Exclude<DockTab, null>) => void;
   /** Opens the profile overlay — or sign-in, when there's nobody yet. */
@@ -64,7 +74,7 @@ export default function MapDock({
           boxShadow: "var(--shadow-lift)",
         }}
       >
-        {SLOTS.map((s) => (
+        {SLOTS.filter((s) => s.id !== "home" || hasHome).map((s) => (
           <DockButton
             key={s.id}
             on={active === s.id}
