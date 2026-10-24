@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 // The default export of react-map-gl is named `Map`, which shadows the
 // global `Map` constructor used below for grouping. Aliased, not imported
 // bare — this exact collision has broken this file before.
@@ -30,6 +30,22 @@ function prefersDark(): boolean {
   if (stamped === "light") return false;
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
+
+/** Above this, faces are drawn individually; below it, co-located ones stack. */
+const PRECISE_ZOOM = 11;
+
+/**
+ * The one Earth, and the furthest anybody may travel on it.
+ *
+ * Mercator is undefined at the poles, so it is cut at the latitude Mapbox
+ * itself uses. Clamping the camera to this is what guarantees the frame is
+ * always full: with one world copy and no bound, panning east of New
+ * Zealand walks off the edge into empty background.
+ */
+const WORLD_BOUNDS: [[number, number], [number, number]] = [
+  [-180, -85.0511],
+  [180, 85.0511],
+];
 
 export type MapEvent = {
   slug: string;
@@ -153,7 +169,6 @@ export default function MapCanvas({
       ] as [[number, number], [number, number]],
     };
   });
-  const [zoom, setZoom] = useState(initialZoom);
   const highlighted = useMemo(() => new Set(highlightIds), [highlightIds]);
 
   /**
@@ -161,8 +176,61 @@ export default function MapCanvas({
    * people stack. The threshold is deliberately generous — a stack that
    * explodes into overlapping faces is worse than one that stays stacked a
    * level too long.
+   *
+   * Held as the *answer* rather than the zoom level, which is the whole
+   * point: `onMove` fires every animation frame of every pan and flight,
+   * and storing the float re-rendered every marker on the map sixty times
+   * a second. Storing the boolean means React bails out of all but the two
+   * frames where the threshold is actually crossed.
    */
-  const precise = zoom >= 11;
+  const [precise, setPrecise] = useState(initialZoom >= PRECISE_ZOOM);
+
+  /**
+   * How far out the viewer may zoom before the world stops filling the
+   * frame.
+   *
+   * With world copies off (see below) there is exactly one Earth, and
+   * zooming past the point where it covers the viewport leaves bands of
+   * empty background either side of it. Mapbox draws the world 512px wide
+   * at zoom 0 and doubles per level, so the zoom at which it just covers a
+   * box is log2(box / 512) — measured from the real element and recomputed
+   * on resize, because a phone in portrait and a desktop window are two
+   * very different numbers.
+   *
+   * `bottomInset` is added to the height rather than ignored: that padding
+   * moves the camera's centre up by half of it, so a world sized to the
+   * bare viewport sits high and leaves a band of background along the
+   * bottom edge. Sizing to the padded box is what makes "filled" true on a
+   * phone, where the dock is a tenth of the screen.
+   */
+  const [minZoom, setMinZoom] = useState(0);
+  const observed = useRef<ResizeObserver | null>(null);
+  // Measured from Mapbox's own container rather than a wrapper of our own:
+  // it is the element the projection actually uses, and there is no second
+  // box to keep in step with it.
+  const measureFrom = useCallback((el: HTMLElement) => {
+    const measure = () => {
+      const { width, height } = el.getBoundingClientRect();
+      if (width === 0 || height === 0) return;
+      // The larger side decides: filling the width while the height still
+      // shows background is no better than the other way round. The 1.02 is
+      // slack for sub-pixel rounding — a one-pixel seam of background along
+      // an edge is the kind of thing that only ever shows on someone else's
+      // screen.
+      const need = Math.max(width, height + bottomInset) * 1.02;
+      setMinZoom(Math.max(0, Math.log2(need / 512)));
+    };
+    measure();
+    observed.current?.disconnect();
+    observed.current = new ResizeObserver(measure);
+    observed.current.observe(el);
+  }, [bottomInset]);
+  useEffect(() => () => observed.current?.disconnect(), []);
+
+  const onMove = useCallback((e: ViewStateChangeEvent) => {
+    // Same value on most frames; React compares and does nothing.
+    setPrecise(e.viewState.zoom >= PRECISE_ZOOM);
+  }, []);
 
   const stacks = useMemo(() => {
     // Rounding to ~1km at precise zoom and ~10km below it. Both are coarse
@@ -213,9 +281,30 @@ export default function MapCanvas({
       // Mercator, always. The globe projection reprojects markers during
       // flight and the face stacks visibly slide off their coordinates.
       projection="mercator"
+      /**
+       * One Earth, not a filmstrip of them.
+       *
+       * Mercator tiles repeat horizontally by default, so zooming out far
+       * enough to see a country puts three copies of it on screen with
+       * three copies of every marker — and clicking the wrong India is a
+       * bug nobody can describe. Off, bounded, and floored at a zoom where
+       * the single copy still covers the frame.
+       */
+      renderWorldCopies={false}
+      maxBounds={WORLD_BOUNDS}
+      minZoom={minZoom}
+      // Tiles and labels cross-fade over 300ms by default, which on a map
+      // you pan constantly reads as lag rather than polish.
+      //
+      // Deliberately NOT `reuseMaps`: the shell remounts this on every
+      // network switch, and a reused instance keeps the old camera instead
+      // of applying the new `initialViewState` — which is exactly the
+      // framing `fitToPeople` exists to get right.
+      fadeDuration={120}
       mapStyle={dark ? "mapbox://styles/mapbox/dark-v11" : "mapbox://styles/mapbox/light-v11"}
       style={{ width: "100%", height: "100%" }}
-      onMove={(e: ViewStateChangeEvent) => setZoom(e.viewState.zoom)}
+      onLoad={(e) => measureFrom(e.target.getContainer())}
+      onMove={onMove}
       onMoveEnd={(e: ViewStateChangeEvent) =>
         onMoveEnd?.({ lat: e.viewState.latitude, lng: e.viewState.longitude, zoom: e.viewState.zoom })
       }

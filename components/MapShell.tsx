@@ -7,6 +7,7 @@ import type { MapProfile } from "@/lib/profiles";
 import type { FeedItem } from "@/lib/feed";
 import type { EventRef, ShellPayload } from "@/lib/shell";
 import { applyFacets, facetsActive, NO_FACETS, type Facets } from "@/lib/search";
+import { distanceKm } from "@/lib/geo";
 import MapCanvas from "./MapCanvas";
 import MapDock, { type DockTab } from "./MapDock";
 import FloatWindow, { DEFAULT_WINDOW, type WindowState } from "./FloatWindow";
@@ -275,10 +276,17 @@ export default function MapShell({
             openWin("events");
           }}
           onMoveEnd={(c) => {
+            const from = at.current;
             at.current = { lat: c.lat, lng: c.lng };
             // Only the open network is a radius query; a board's membership
             // doesn't change because you panned.
-            if (isOpenNet) void load({ lat: c.lat, lng: c.lng });
+            if (!isOpenNet) return;
+            // And not for every nudge. A drag that moves the centre a
+            // fraction of the search radius returns very nearly the same
+            // people, so refetching re-renders the whole map to show them
+            // again — which is felt as the map stuttering under the hand.
+            if (distanceKm(from.lat, from.lng, c.lat, c.lng) < radiusKm * 0.15) return;
+            void load({ lat: c.lat, lng: c.lng });
           }}
         />
       </div>
