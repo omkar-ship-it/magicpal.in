@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { validPoint } from "@/lib/geo";
 import { BRAND_NAME } from "@/lib/brand";
 
 type Result = { label: string; lat: number; lng: number };
@@ -24,18 +25,24 @@ export async function GET(req: Request) {
   // location", where the browser gives a precise point and the person still
   // needs to see somewhere recognisable before they commit to it — nobody
   // can check that 17.4435, 78.3772 is the right café.
-  const lat = Number(params.get("lat"));
-  const lng = Number(params.get("lng"));
-  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+  // `params.get` returns null for an absent parameter and `Number(null)` is
+  // 0, which is finite — so the obvious guard treated every *text* search as
+  // a reverse-geocode of 0°, 0° and the branch below was unreachable. Every
+  // place search on the deployment returned "0.0000, 0.0000", and the people
+  // who picked it are pinned in the Gulf of Guinea.
+  const here = validPoint(params.get("lat"), params.get("lng"));
+  if (here) {
     try {
       const results = mapboxToken
-        ? await reverseMapbox(lat, lng, mapboxToken)
-        : await reverseNominatim(lat, lng);
+        ? await reverseMapbox(here.lat, here.lng, mapboxToken)
+        : await reverseNominatim(here.lat, here.lng);
       return NextResponse.json({ results });
     } catch {
       // A point with no name is still a usable pin, so fall back to the
       // coordinates rather than failing the whole flow.
-      return NextResponse.json({ results: [{ label: `${lat.toFixed(4)}, ${lng.toFixed(4)}`, lat, lng }] });
+      return NextResponse.json({
+        results: [{ label: `${here.lat.toFixed(4)}, ${here.lng.toFixed(4)}`, lat: here.lat, lng: here.lng }],
+      });
     }
   }
 

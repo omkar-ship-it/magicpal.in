@@ -4,6 +4,7 @@ import { db, hasDb } from "@/lib/db";
 import { consents, users } from "@/lib/db/schema";
 import { getSessionUser } from "@/lib/session";
 import { getProfileById } from "@/lib/profiles";
+import { validPoint } from "@/lib/geo";
 import { cleanCustom, STAGE_BY_ID, validSectors, validTopics } from "@/lib/intents";
 import {
   ALERT_RADIUS_OPTIONS_KM,
@@ -118,20 +119,40 @@ export async function POST(req: Request) {
   const customInterests = cleanCustom(body?.customInterests, customCaps);
   const stage = STAGE_BY_ID.has(body?.stage) ? (body.stage as string) : null;
 
+  // Parsed through `validPoint`, not `Number.isFinite(Number(x))`: a null
+  // coordinate coerces to 0, which is finite, so the naive guard stores a
+  // missing position as a real one at 0°, 0°. See lib/geo.
   const locationLabel = str(body?.locationLabel, 160);
-  const lat = Number(body?.lat);
-  const lng = Number(body?.lng);
+  const exactPoint = validPoint(body?.lat, body?.lng);
   const baseLabel = str(body?.baseLabel, 160);
-  const baseLat = Number(body?.baseLat);
-  const baseLng = Number(body?.baseLng);
+  const basePoint = validPoint(body?.baseLat, body?.baseLng);
 
   const visibility: Visibility = VISIBILITIES.includes(body?.visibility) ? body.visibility : "off";
 
   if (name.length < 2) return NextResponse.json({ error: "Tell us your name." }, { status: 400 });
   if (headline.length < 2) return NextResponse.json({ error: "Add a one-line headline." }, { status: 400 });
 
-  const hasExact = Number.isFinite(lat) && Number.isFinite(lng) && locationLabel.length > 0;
-  const hasBase = Number.isFinite(baseLat) && Number.isFinite(baseLng) && baseLabel.length > 0;
+  const hasExact = exactPoint !== null && locationLabel.length > 0;
+  const hasBase = basePoint !== null && baseLabel.length > 0;
+
+  // Sending nothing leaves the stored pin alone, which is how a form that
+  // doesn't show these fields saves safely. Sending something that isn't a
+  // usable point is a different thing entirely, and answering it with
+  // "Saved" while quietly keeping the old pin is the reassuring kind of
+  // lie — the person believes they have moved and they have not.
+  const sent = (v: unknown) => v !== null && v !== undefined && v !== "";
+  if (sent(body?.lat) && sent(body?.lng) && exactPoint === null) {
+    return NextResponse.json(
+      { error: "That location didn't come through — pick it from the list again." },
+      { status: 400 }
+    );
+  }
+  if (sent(body?.baseLat) && sent(body?.baseLng) && basePoint === null) {
+    return NextResponse.json(
+      { error: "That city didn't come through — pick it from the list again." },
+      { status: 400 }
+    );
+  }
 
   // The saved row, not the session: a visibility choice has to be checked
   // against coordinates that may have been set on an earlier save, and the
@@ -147,6 +168,18 @@ export async function POST(req: Request) {
   }
   if (visibility === "base" && !hasBase && existing?.baseLat == null) {
     return NextResponse.json({ error: "Pick the city you want to show in." }, { status: 400 });
+  }
+  // Live decays to the city on purpose (see place() in lib/profiles), so a
+  // live profile without one disappears from the map entirely the moment
+  // the tab closes — which is what happened to a real member who had
+  // picked the *most* visible setting there is. The picker already refuses
+  // this combination; the server has to as well, or the one path that
+  // skips the picker reintroduces it.
+  if (visibility === "live" && !hasBase && existing?.baseLat == null) {
+    return NextResponse.json(
+      { error: "Pick your city first — live sharing falls back to it when you close the app." },
+      { status: 400 }
+    );
   }
 
   const skills = Array.isArray(body?.skills)
@@ -194,8 +227,8 @@ export async function POST(req: Request) {
       // Locations are only ever set from a geocoded result, so a request
       // with no valid coordinates leaves whatever was there — it never
       // wipes an existing pin to null.
-      ...(hasExact ? { lat, lng, locationLabel } : {}),
-      ...(hasBase ? { baseLat, baseLng, baseLabel } : {}),
+      ...(hasExact ? { lat: exactPoint.lat, lng: exactPoint.lng, locationLabel } : {}),
+      ...(hasBase ? { baseLat: basePoint.lat, baseLng: basePoint.lng, baseLabel } : {}),
       visibility,
     })
     .where(eq(users.id, user.id));

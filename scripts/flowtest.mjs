@@ -699,6 +699,87 @@ async function main() {
       body: { name: "Flow Carol", headline: "Curious stranger", lookingFor: ["peers"], canHelpWith: ["peers"],
               customLookingFor: [], visibility: "off" },
     });
+    console.log("\nA missing coordinate is missing, not the Gulf of Guinea");
+    // The bug this covers shipped: `Number(null)` is 0 and 0 is finite, so
+    // every place search read as a reverse-geocode of 0°, 0° and the text
+    // branch was unreachable. Real members ended up pinned at Null Island.
+    const textSearch = await api("/api/geocode?q=Hyderabad");
+    assert(textSearch.status === 200, "a text search answers");
+    assert(
+      !textSearch.data.results?.some((r) => r.lat === 0 && r.lng === 0),
+      "…and never answers a place name with 0,0"
+    );
+    assert(
+      !textSearch.data.results?.some((r) => /^-?\d+\.\d+, *-?\d+\.\d+$/.test(r.label ?? "")),
+      "…nor with a label that is just the coordinates it failed to find"
+    );
+
+    const nullIsland = await api("/api/profile", {
+      method: "POST", jar: a.jar,
+      body: {
+        name: "Flow Alice", headline: "Founder, test co",
+        lookingFor: ["funding"], canHelpWith: ["product"], interests: ["fintech"], stage: "founder",
+        lat: 0, lng: 0, locationLabel: "0.0000, 0.0000", visibility: "exact",
+      },
+    });
+    assert(nullIsland.status === 400, "0,0 is refused as a location — it is the sentinel for 'none'");
+    const { rows: stillPlaced } = await pool.query("select lat, lng from users where email = $1", [emailA]);
+    assert(stillPlaced[0].lat !== 0, "…and the real pin that was already there survives the attempt");
+
+    const nullCoords = await api("/api/profile", {
+      method: "POST", jar: a.jar,
+      body: {
+        name: "Flow Alice", headline: "Founder, test co",
+        lookingFor: ["funding"], canHelpWith: ["product"], interests: ["fintech"], stage: "founder",
+        lat: null, lng: null, locationLabel: "Somewhere", visibility: "exact",
+      },
+    });
+    assert(nullCoords.status === 200, "a save with no coordinates is allowed — the old pin stands");
+    const { rows: untouched } = await pool.query("select lat, lng from users where email = $1", [emailA]);
+    assert(
+      untouched[0].lat !== 0 && untouched[0].lat !== null,
+      "…and a null coordinate never coerces into a pin at zero"
+    );
+
+    console.log("\nLive sharing has to have somewhere to fall back to");
+    // Live decays to the city by design, so a live profile with no city
+    // vanishes from the map the moment the tab closes — which happened to a
+    // real member who had picked the most visible setting there is.
+    const d = await signUp(`flowtest.d.${stamp}@example.com`);
+    emails.push(`flowtest.d.${stamp}@example.com`);
+    const liveNoCity = await api("/api/profile", {
+      method: "POST", jar: d.jar,
+      body: {
+        name: "Flow Dana", headline: "Nomad", lookingFor: ["peers"], canHelpWith: ["peers"],
+        lat: HERE.lat, lng: HERE.lng, locationLabel: HERE.label, visibility: "live",
+      },
+    });
+    assert(liveNoCity.status === 400, "live without a city is refused");
+    assert(/city/i.test(liveNoCity.data.error ?? ""), "…and says which thing is missing");
+
+    const liveWithCity = await api("/api/profile", {
+      method: "POST", jar: d.jar,
+      body: {
+        name: "Flow Dana", headline: "Nomad", lookingFor: ["peers"], canHelpWith: ["peers"],
+        lat: HERE.lat, lng: HERE.lng, locationLabel: HERE.label,
+        baseLat: CITY.lat, baseLng: CITY.lng, baseLabel: CITY.label, visibility: "live",
+      },
+    });
+    assert(liveWithCity.status === 200, "live with a city is fine");
+    const nullLivePush = await api("/api/live", { method: "POST", jar: d.jar, body: { lat: null, lng: null } });
+    assert(nullLivePush.status === 400, "a live push with no coordinates is refused, not stored at 0,0");
+    const { rows: notMoved } = await pool.query("select lat from users where email = $1", [
+      `flowtest.d.${stamp}@example.com`,
+    ]);
+    assert(notMoved[0].lat !== 0, "…and the position already there is not overwritten with zero");
+    // And the fallback actually works: age the heartbeat past the window.
+    await pool.query("update users set live_at = now() - interval '1 day' where email = $1", [
+      `flowtest.d.${stamp}@example.com`,
+    ]);
+    const staleLive = await api(`/api/map?lat=${CITY.lat}&lng=${CITY.lng}&radiusKm=50`, { jar: a.jar });
+    const dana = staleLive.data.people.find((p) => p.name === "Flow Dana");
+    assert(Boolean(dana), "somebody whose live session lapsed is still on the map, at their city");
+    assert(dana.placed === "base", "…shown at city precision, never at the stale street-level pin");
     console.log("\nFeed is scoped and private");
     const openFeed = await api("/api/feed", { jar: a.jar });
     assert(openFeed.status === 200, "the open network's feed loads");

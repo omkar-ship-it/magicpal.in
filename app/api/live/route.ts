@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db, hasDb } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { getSessionUser } from "@/lib/session";
+import { validPoint } from "@/lib/geo";
 import { runProximityScan } from "@/lib/alerts";
 
 /**
@@ -23,13 +24,16 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json().catch(() => null);
-  const lat = Number(body?.lat);
-  const lng = Number(body?.lng);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
-    return NextResponse.json({ error: "Bad coordinates." }, { status: 400 });
-  }
+  // `validPoint`, not a finite check on `Number(body.lat)`: a missing
+  // coordinate coerces to 0 and would push this person to 0°, 0°. See
+  // lib/geo — this trap has now been found in four routes.
+  const point = validPoint(body?.lat, body?.lng);
+  if (!point) return NextResponse.json({ error: "Bad coordinates." }, { status: 400 });
 
-  await db.update(users).set({ lat, lng, liveAt: new Date() }).where(eq(users.id, user.id));
+  await db
+    .update(users)
+    .set({ lat: point.lat, lng: point.lng, liveAt: new Date() })
+    .where(eq(users.id, user.id));
 
   // Moving is the whole trigger: proximity is perishable, so the moment
   // somebody's position changes is the moment to ask who should know. The

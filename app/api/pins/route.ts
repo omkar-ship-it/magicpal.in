@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";
+import { validPoint } from "@/lib/geo";
 import { dropPin, livePinsFor } from "@/lib/pins";
 import { DEFAULT_PIN_REACH_KM, MAX_PIN_MESSAGE, PIN_DURATIONS, PIN_REACH_OPTIONS_KM } from "@/lib/rules";
 import { TOPIC_BY_ID } from "@/lib/intents";
@@ -8,14 +9,15 @@ import { TOPIC_BY_ID } from "@/lib/intents";
 export async function GET(req: Request) {
   const user = await getSessionUser();
   const url = new URL(req.url);
-  const lat = Number(url.searchParams.get("lat"));
-  const lng = Number(url.searchParams.get("lng"));
+  // Absent means "no centre to measure from", which is not the same as a
+  // centre at 0,0 — and `Number(null)` is 0. See lib/geo.
+  const centre = validPoint(url.searchParams.get("lat"), url.searchParams.get("lng"));
 
   return NextResponse.json({
     pins: await livePinsFor({
       viewerId: user?.id,
-      centerLat: Number.isFinite(lat) ? lat : undefined,
-      centerLng: Number.isFinite(lng) ? lng : undefined,
+      centerLat: centre?.lat,
+      centerLng: centre?.lng,
     }),
   });
 }
@@ -36,8 +38,9 @@ export async function POST(req: Request) {
 
   const body = await req.json().catch(() => null);
   const message = typeof body?.message === "string" ? body.message.trim().slice(0, MAX_PIN_MESSAGE) : "";
-  const lat = Number(body?.lat);
-  const lng = Number(body?.lng);
+  const point = validPoint(body?.lat, body?.lng);
+  const lat = point?.lat ?? NaN;
+  const lng = point?.lng ?? NaN;
   const minutes = PIN_DURATIONS.find((d) => d.minutes === Number(body?.minutes))?.minutes ?? 180;
   const audience = body?.audience === "communities" ? "communities" : "open";
   // Only a value off the published ladder, so a reach is always something

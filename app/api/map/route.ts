@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";
+import { validPoint } from "@/lib/geo";
 import { parseScope, shellPayload } from "@/lib/shell";
 import { DEFAULT_RADIUS_KM, RADIUS_OPTIONS_KM } from "@/lib/rules";
 
@@ -17,15 +18,16 @@ export async function GET(req: Request) {
   const user = await getSessionUser();
   const url = new URL(req.url);
 
-  const lat = Number(url.searchParams.get("lat"));
-  const lng = Number(url.searchParams.get("lng"));
+  // A missing centre is a missing centre, not the Gulf of Guinea: the
+  // open map requires one, and `Number(null)` is 0. See lib/geo.
+  const centre = validPoint(url.searchParams.get("lat"), url.searchParams.get("lng"));
   const radiusParam = Number(url.searchParams.get("radiusKm"));
   const radiusKm = (RADIUS_OPTIONS_KM as readonly number[]).includes(radiusParam)
     ? radiusParam
     : DEFAULT_RADIUS_KM;
 
   const scope = parseScope(url.searchParams.get("net"));
-  if (scope.kind === "open" && (!Number.isFinite(lat) || !Number.isFinite(lng))) {
+  if (scope.kind === "open" && !centre) {
     return NextResponse.json({ error: "A map centre is required." }, { status: 400 });
   }
 
@@ -33,8 +35,8 @@ export async function GET(req: Request) {
     await shellPayload({
       userId: user?.id,
       scope,
-      lat: Number.isFinite(lat) ? lat : undefined,
-      lng: Number.isFinite(lng) ? lng : undefined,
+      lat: centre?.lat,
+      lng: centre?.lng,
       radiusKm,
     })
   );

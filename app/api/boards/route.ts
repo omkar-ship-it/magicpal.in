@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";
+import { validPoint } from "@/lib/geo";
 import { liveBoardBySlug, createBoard, membershipOf } from "@/lib/boards";
 import { isActive } from "@/lib/membership";
 
@@ -38,8 +39,10 @@ export async function POST(req: Request) {
   const url = normalizeUrl(body?.url);
   const capRaw = Number(body?.capacity);
   const capacity = Number.isFinite(capRaw) && capRaw > 0 ? Math.min(Math.round(capRaw), 100_000) : null;
-  const lat = Number(body?.lat);
-  const lng = Number(body?.lng);
+  // Null rather than 0,0 when absent: a board with half a pin is a board in
+  // the Gulf of Guinea, and `place` on the map has no way to tell the
+  // difference. See lib/geo.
+  const venue = validPoint(body?.lat, body?.lng);
 
   if (name.length < 3) {
     return NextResponse.json({ error: "Give it a name people will recognise." }, { status: 400 });
@@ -89,8 +92,8 @@ export async function POST(req: Request) {
     address: address || null,
     url: url || null,
     capacity,
-    lat: Number.isFinite(lat) ? lat : null,
-    lng: Number.isFinite(lng) ? lng : null,
+    lat: venue?.lat ?? null,
+    lng: venue?.lng ?? null,
     startsAt,
     endsAt,
     parentBoardId,

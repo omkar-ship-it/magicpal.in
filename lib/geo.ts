@@ -48,3 +48,36 @@ export function jitterLocation(userId: string, lat: number, lng: number): { lat:
     lng: lng + (radius * Math.sin(angle)) / (metersPerDegreeLng || 1),
   };
 }
+
+/**
+ * A coordinate from untrusted input, or null.
+ *
+ * Exists because `Number(null)` is `0` and `Number("")` is `0`, and zero is
+ * a perfectly finite number — so the obvious
+ * `Number.isFinite(Number(input))` guard reads a *missing* coordinate as a
+ * real position at 0°, 0°. That is not a theoretical trap: it silently
+ * pinned real members in the Gulf of Guinea and made the place search
+ * return "0.0000, 0.0000" for every query, because an absent `lat` param
+ * made a text search look like a reverse-geocode request.
+ *
+ * Null Island is rejected outright for the same reason. It is the
+ * canonical sentinel for "no data", nobody is standing there, and a
+ * coordinate that means "missing" must never be stored as if it meant a
+ * place.
+ */
+export function coordOf(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isFinite(n)) return null;
+  return n;
+}
+
+/** Both coordinates present, in range, and not the missing-data sentinel. */
+export function validPoint(lat: unknown, lng: unknown): { lat: number; lng: number } | null {
+  const a = coordOf(lat);
+  const b = coordOf(lng);
+  if (a === null || b === null) return null;
+  if (Math.abs(a) > 90 || Math.abs(b) > 180) return null;
+  if (a === 0 && b === 0) return null;
+  return { lat: a, lng: b };
+}
