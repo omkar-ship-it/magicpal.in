@@ -1142,6 +1142,29 @@ async function main() {
     assert(typeof counted.data.connections === "number", "the payload carries a connection count");
     assert(counted.data.connections >= 1, "…and it counts the accepted one from earlier");
 
+    // "My network" is a filter over the payload, so what it needs from the
+    // server is that every person says whether they're connected to the
+    // reader — and that `connected` is the word, since `accepted` is a
+    // status this never emits.
+    const everyone = counted.data.people;
+    assert(
+      everyone.every((p) => ["connected", "pending", "none"].includes(p.connectionStatus)),
+      "every person on the open map carries their connection status to the reader"
+    );
+    const connectedToAlice = everyone.filter((p) => p.connectionStatus === "connected");
+    assert(connectedToAlice.length >= 1, "…and somebody Alice accepted reads as connected");
+    assert(
+      connectedToAlice.every((p) => p.id !== counted.data.you?.id),
+      "…never the reader themselves, who is not in the list at all"
+    );
+
+    // Signed out there is no such thing as "my network".
+    const anonStatus = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}&radiusKm=25`);
+    assert(
+      anonStatus.data.people.every((p) => p.connectionStatus === "none"),
+      "a signed-out visitor is connected to nobody, rather than inheriting somebody else's network"
+    );
+
     console.log("\nCommunities are networks; events happen inside them");
     const nets = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}&radiusKm=25`, { jar: a.jar });
     assert(

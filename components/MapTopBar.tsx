@@ -140,6 +140,28 @@ export default function MapTopBar({
             )}
           </div>
 
+          {/* Out in the chrome rather than inside Filters, because this one
+              isn't a way of narrowing a search — it's a different question
+              about the same map, and the answer is the only thing here
+              that belongs to the person looking. Open network only: inside
+              a community everyone is already a deliberate set. */}
+          {isOpen && signedIn && (
+            <button
+              type="button"
+              onClick={() => onFacets({ ...facets, connectedOnly: !facets.connectedOnly })}
+              aria-pressed={facets.connectedOnly}
+              className="flex flex-none items-center gap-1 rounded-full border px-2.5 py-1.5 text-[12px] font-semibold tap"
+              style={
+                facets.connectedOnly
+                  ? { borderColor: "var(--brand)", background: "var(--brand)", color: "#fff" }
+                  : { borderColor: "var(--chrome-line)", color: "var(--chrome-ink)" }
+              }
+            >
+              <IconPeople size={13} />
+              My network
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => setFiltering((v) => !v)}

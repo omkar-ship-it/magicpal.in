@@ -104,6 +104,12 @@ export type ShellPerson = MapProfile & {
   /** This board's own claim — what the owner manages, not what others see. */
   verifiedHere?: boolean;
   role?: string;
+  /**
+   * Attached by `attachConnectionStatus`, and declared here because the
+   * "My network" filter reads it. `connected` is the only value that means
+   * an accepted connection — `accepted` is never emitted.
+   */
+  connectionStatus?: "connected" | "pending" | "none";
 };
 
 export type ShellPayload = {

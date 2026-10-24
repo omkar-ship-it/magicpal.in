@@ -30,6 +30,15 @@ export type Facets = {
    * of them follows the viewport and the other does not.
    */
   withinKm: number | null;
+  /**
+   * Open network only: just the people you're actually connected to.
+   *
+   * The one view in this product that is about *you* rather than about who
+   * happens to be nearby — your own network, on the map, wherever it has
+   * got to. A filter rather than a scope, because everything else on the
+   * surface has to keep meaning what it meant.
+   */
+  connectedOnly: boolean;
   /** Board surfaces only: in the room right now. */
   hereNow: boolean;
   /** Only people who agreed to a street-level pin. */
@@ -42,6 +51,7 @@ export const NO_FACETS: Facets = {
   sectors: [],
   stage: "",
   withinKm: null,
+  connectedOnly: false,
   hereNow: false,
   exactOnly: false,
 };
@@ -53,6 +63,7 @@ export function facetsActive(f: Facets): number {
     f.sectors.length +
     (f.stage ? 1 : 0) +
     (f.withinKm != null ? 1 : 0) +
+    (f.connectedOnly ? 1 : 0) +
     (f.hereNow ? 1 : 0) +
     (f.exactOnly ? 1 : 0)
   );
@@ -93,7 +104,15 @@ function haystack(p: MapProfile): string {
     .toLowerCase();
 }
 
-export function matchesFacets(p: MapProfile & { hereNow?: boolean }, f: Facets): boolean {
+export function matchesFacets(
+  p: MapProfile & { hereNow?: boolean; connectionStatus?: string | null },
+  f: Facets
+): boolean {
+  // Checked first and cheaply: when it's on it removes most of the list,
+  // and everything below it is a more expensive question about somebody
+  // who is about to be dropped anyway.
+  if (f.connectedOnly && p.connectionStatus !== "connected") return false;
+
   const q = f.q.trim().toLowerCase();
   if (q) {
     const hay = haystack(p);

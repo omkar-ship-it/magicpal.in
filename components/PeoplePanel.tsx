@@ -24,6 +24,7 @@ export default function PeoplePanel({
   scopeName,
   isOpenNet,
   filtering,
+  connectedOnly,
   unverifiedCount,
   showUnverified,
   onOpenPerson,
@@ -31,6 +32,8 @@ export default function PeoplePanel({
   people: ShellPerson[];
   scopeName: string;
   isOpenNet: boolean;
+  /** "My network" is on — the empty case means something different. */
+  connectedOnly: boolean;
   /** Whether the top bar's facets are already narrowing this list. */
   filtering: boolean;
   unverifiedCount: number;
@@ -100,13 +103,24 @@ export default function PeoplePanel({
     >
       {shown.length === 0 ? (
         <PanelNote
-          title={q || city !== "all" || filtering ? "Nothing matches that" : `Nobody on ${scopeName} yet`}
+          title={
+            // An empty network isn't a failed search, and telling somebody
+            // to "try a different search" when they simply haven't met
+            // anyone yet reads as the product not knowing what it did.
+            connectedOnly && !q && city === "all"
+              ? "Your network starts here"
+              : q || city !== "all" || filtering
+                ? "Nothing matches that"
+                : `Nobody on ${scopeName} yet`
+          }
         >
-          {q || city !== "all" || filtering
-            ? "Try a different search, or widen the filters."
-            : isOpenNet
-              ? "Most people arrive through a board first and opt into the public map afterwards."
-              : "Share the board's QR code and it fills as people scan it."}
+          {connectedOnly && !q && city === "all"
+            ? "Nobody you're connected to yet. Turn this off to see everyone on the map — every connection starts as a stranger on it."
+            : q || city !== "all" || filtering
+              ? "Try a different search, or widen the filters."
+              : isOpenNet
+                ? "Most people arrive through a board first and opt into the public map afterwards."
+                : "Share the board's QR code and it fills as people scan it."}
         </PanelNote>
       ) : (
         <ul className="stagger flex flex-col">

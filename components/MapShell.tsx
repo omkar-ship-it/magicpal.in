@@ -443,6 +443,7 @@ export default function MapShell({
           scopeName={data.scope.name}
           isOpenNet={isOpenNet}
           filtering={filtering}
+          connectedOnly={facets.connectedOnly}
           unverifiedCount={unverified}
           showUnverified={ownsScope}
           onOpenPerson={(id) => {
