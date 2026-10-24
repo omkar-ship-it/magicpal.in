@@ -324,11 +324,27 @@ export async function shellPayload(opts: {
           ? { lat: me.baseLat, lng: me.baseLng }
           : { lat: 17.4065, lng: 78.4772 };
 
+  /**
+   * Everybody on the open network, nearest first — not everybody *near*.
+   *
+   * The radius used to cut this set server-side, so the People directory
+   * was really "people near wherever the map happens to be pointing": pan
+   * two cities over and the person you were reading about was gone. The
+   * map is a spatial question and the directory is a list of people, and
+   * only one of those should follow the viewport.
+   *
+   * "How close" still exists, as a filter the reader applies (see
+   * lib/search) — which also means it narrows the pins and the list
+   * together instead of one of them.
+   *
+   * Still capped at MAX_MAP_RESULTS, and the nearest-first sort is what
+   * makes the cap defensible when it eventually bites: the people it drops
+   * are the furthest away.
+   */
   const placed = await getOpenMapProfiles({
     excludeUserId: opts.userId,
     centerLat: centre.lat,
     centerLng: centre.lng,
-    radiusKm,
   });
 
   /**

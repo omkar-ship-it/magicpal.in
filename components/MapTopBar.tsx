@@ -22,8 +22,6 @@ export default function MapTopBar({
   activeSlug,
   facets,
   onFacets,
-  radiusKm,
-  onRadius,
   alerts,
   signedIn,
   onAlerts,
@@ -37,8 +35,6 @@ export default function MapTopBar({
   activeSlug: string | null;
   facets: Facets;
   onFacets: (f: Facets) => void;
-  radiusKm: number;
-  onRadius: (km: number) => void;
   countLabel: string;
   /** Unread proximity alerts, badged on the bell. */
   alerts: number;
@@ -324,22 +320,38 @@ export default function MapTopBar({
                 <div className="w-full">
                   <p className="label">How close</p>
                   <div className="flex flex-wrap gap-1.5">
+                    {/* Everybody, and it is the default. Narrowing is a
+                        thing the reader chooses; it is not the state they
+                        are put in before they have asked for anything. */}
+                    <button
+                      type="button"
+                      className="chip-toggle tap"
+                      data-on={facets.withinKm == null ? "true" : "false"}
+                      aria-pressed={facets.withinKm == null}
+                      onClick={() => onFacets({ ...facets, withinKm: null })}
+                    >
+                      {facets.withinKm == null && <IconCheck size={11} />}
+                      Anywhere
+                    </button>
                     {PROXIMITY_STEPS.map((step) => {
                       const needsLive = "needsLive" in step && step.needsLive && !isLive;
+                      const on = facets.withinKm === step.km;
                       return (
                         <button
                           key={step.km}
                           type="button"
                           className="chip-toggle tap"
-                          data-on={radiusKm === step.km ? "true" : "false"}
-                          aria-pressed={radiusKm === step.km}
+                          data-on={on ? "true" : "false"}
+                          aria-pressed={on}
                           // Not disabled: tapping it turns live sharing on,
                           // which is the thing the person actually wants.
-                          onClick={() => (needsLive ? onGoLive() : onRadius(step.km))}
+                          onClick={() =>
+                            needsLive ? onGoLive() : onFacets({ ...facets, withinKm: on ? null : step.km })
+                          }
                           title={needsLive ? "Needs your live location" : undefined}
                           style={needsLive ? { opacity: 0.6 } : undefined}
                         >
-                          {radiusKm === step.km && <IconCheck size={11} />}
+                          {on && <IconCheck size={11} />}
                           {step.label}
                         </button>
                       );

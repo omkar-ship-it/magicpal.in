@@ -32,6 +32,15 @@ import { IconChat, IconHidden } from "./Icons";
 export type Overlay = "signin" | "profile" | null;
 
 /**
+ * How far the map must move before the payload is worth fetching again.
+ *
+ * Matched to the tightest distance filter anybody can pick that doesn't
+ * require live location, so the numbers behind "within 2 km" are never
+ * more than one step stale.
+ */
+const REFETCH_AFTER_KM = 2;
+
+/**
  * The whole app, on top of a map.
  *
  * Every dock panel answers the same question about a different set of
@@ -71,7 +80,6 @@ export default function MapShell({
   me: { name: string; photoUrl: string | null } | null;
 }) {
   const [data, setData] = useState<ShellPayload>(initial);
-  const [radiusKm, setRadiusKm] = useState(initial.radiusKm);
   const [facets, setFacets] = useState<Facets>(NO_FACETS);
   /**
    * One window per panel, all independent. The dock opens them; it doesn't
@@ -139,15 +147,18 @@ export default function MapShell({
   const seq = useRef(0);
 
   const load = useCallback(
-    async (opts: { lat?: number; lng?: number; radius?: number; net?: string | null }) => {
+    async (opts: { lat?: number; lng?: number; net?: string | null }) => {
       const mine = ++seq.current;
       setLoading(true);
       const params = new URLSearchParams();
       const slug = opts.net === undefined ? data.scope.slug : opts.net;
       if (slug) params.set("net", slug);
+      // The centre is all the server needs: it decides distances and the
+      // nearest-first order, and nothing is cut by a radius any more. "How
+      // close" is a filter applied here, over everybody. (The server still
+      // keeps its own bound on how far pins are fetched.)
       params.set("lat", String(opts.lat ?? at.current.lat));
       params.set("lng", String(opts.lng ?? at.current.lng));
-      params.set("radiusKm", String(opts.radius ?? radiusKm));
       try {
         const res = await fetch(`/api/map?${params}`);
         const next = (await res.json()) as ShellPayload;
@@ -158,7 +169,7 @@ export default function MapShell({
         if (mine === seq.current) setLoading(false);
       }
     },
-    [data.scope.slug, radiusKm]
+    [data.scope.slug]
   );
 
   const loadFeed = useCallback(async (slug: string | null) => {
@@ -281,11 +292,12 @@ export default function MapShell({
             // Only the open network is a radius query; a board's membership
             // doesn't change because you panned.
             if (!isOpenNet) return;
-            // And not for every nudge. A drag that moves the centre a
-            // fraction of the search radius returns very nearly the same
-            // people, so refetching re-renders the whole map to show them
-            // again — which is felt as the map stuttering under the hand.
-            if (distanceKm(from.lat, from.lng, c.lat, c.lng) < radiusKm * 0.15) return;
+            // And not for every nudge. Panning no longer changes *who* is
+            // returned — only their distances and the order — so a drag of
+            // a couple of kilometres buys nothing and costs a re-render of
+            // every marker, which is felt as the map stuttering under the
+            // hand.
+            if (distanceKm(from.lat, from.lng, c.lat, c.lng) < REFETCH_AFTER_KM) return;
             void load({ lat: c.lat, lng: c.lng });
           }}
         />
@@ -296,11 +308,6 @@ export default function MapShell({
         activeSlug={data.scope.slug}
         facets={facets}
         onFacets={setFacets}
-        radiusKm={radiusKm}
-        onRadius={(km) => {
-          setRadiusKm(km);
-          void load({ radius: km });
-        }}
         // Said where the count lives rather than as a spinner over the map:
         // the numbers beside it are the thing going stale, and a pan that
         // hasn't landed yet should say so next to them.

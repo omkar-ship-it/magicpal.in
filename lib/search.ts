@@ -20,13 +20,31 @@ export type Facets = {
   sectors: string[];
   /** A single stage id, or empty for any. */
   stage: string;
+  /**
+   * Narrow to people within this many km, or null for everybody.
+   *
+   * A *filter*, not a boundary on what exists. It used to be a server-side
+   * radius, which meant the directory silently changed as the map moved and
+   * somebody you had just been reading about vanished because you panned.
+   * The map is a spatial question; the directory is a list of people. One
+   * of them follows the viewport and the other does not.
+   */
+  withinKm: number | null;
   /** Board surfaces only: in the room right now. */
   hereNow: boolean;
   /** Only people who agreed to a street-level pin. */
   exactOnly: boolean;
 };
 
-export const NO_FACETS: Facets = { q: "", topics: [], sectors: [], stage: "", hereNow: false, exactOnly: false };
+export const NO_FACETS: Facets = {
+  q: "",
+  topics: [],
+  sectors: [],
+  stage: "",
+  withinKm: null,
+  hereNow: false,
+  exactOnly: false,
+};
 
 export function facetsActive(f: Facets): number {
   return (
@@ -34,6 +52,7 @@ export function facetsActive(f: Facets): number {
     f.topics.length +
     f.sectors.length +
     (f.stage ? 1 : 0) +
+    (f.withinKm != null ? 1 : 0) +
     (f.hereNow ? 1 : 0) +
     (f.exactOnly ? 1 : 0)
   );
@@ -96,6 +115,15 @@ export function matchesFacets(p: MapProfile & { hereNow?: boolean }, f: Facets):
   if (f.stage && p.stage !== f.stage) return false;
 
   if (f.hereNow && !p.hereNow) return false;
+  if (f.withinKm != null) {
+    // Somebody with no published position cannot answer a question about
+    // distance — the same rule the recommendation ladder applies. Absent is
+    // not "far away", it is unknown, so they drop out of a distance filter
+    // rather than being guessed at.
+    if (p.distanceKm == null) return false;
+    if (p.distanceKm > f.withinKm) return false;
+  }
+
   if (f.exactOnly && p.placed !== "exact") return false;
   return true;
 }

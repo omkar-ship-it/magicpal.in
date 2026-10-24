@@ -851,6 +851,52 @@ async function main() {
       afterOff.data.people.some((p) => p.name === "Flow Evan"),
       "…while the person who simply never answered is still listed"
     );
+    console.log("\nThe directory is a list of people, not a list of people nearby");
+    // Bob at a distance: far enough that any sane radius would have cut him,
+    // close enough that this doesn't depend on which default is in force.
+    const FAR = { lat: 19.076, lng: 72.8777, label: "Mumbai" }; // ~710km from Delhi
+    await api("/api/profile", {
+      method: "POST", jar: b.jar,
+      body: {
+        name: "Flow Bob", headline: "Angel investor",
+        lookingFor: ["product"], canHelpWith: ["funding"],
+        lat: FAR.lat, lng: FAR.lng, locationLabel: FAR.label,
+        baseLat: FAR.lat, baseLng: FAR.lng, baseLabel: FAR.label,
+        visibility: "exact",
+      },
+    });
+
+    const near = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}&radiusKm=2`, { jar: a.jar });
+    const farBob = near.data.people.find((p) => p.name === "Flow Bob");
+    assert(Boolean(farBob), "somebody 700km away is still in the directory");
+    assert(farBob.distanceKm > 500, "…carrying the real distance, so a filter can act on it");
+
+    // And the map's own centre doesn't decide who exists.
+    const fromMumbai = await api(`/api/map?lat=${FAR.lat}&lng=${FAR.lng}`, { jar: a.jar });
+    const sameFromThere = fromMumbai.data.people.find((p) => p.name === "Flow Bob");
+    assert(Boolean(sameFromThere), "…and he's there whichever way the map is pointed");
+    assert(
+      sameFromThere.distanceKm < 5,
+      "…with the distance recomputed from wherever the reader is looking"
+    );
+
+    // Nearest-first is what makes the result cap defensible when it bites.
+    const placedOnly = fromMumbai.data.people.filter((p) => p.distanceKm != null);
+    const ordered = placedOnly.every(
+      (p, i) => i === 0 || placedOnly[i - 1].distanceKm <= p.distanceKm
+    );
+    assert(ordered, "the list comes back nearest-first");
+
+    // Put Bob back where the rest of the suite expects him.
+    await api("/api/profile", {
+      method: "POST", jar: b.jar,
+      body: {
+        name: "Flow Bob", headline: "Angel investor",
+        lookingFor: ["product"], canHelpWith: ["funding"],
+        lat: HERE.lat + 0.004, lng: HERE.lng + 0.004, locationLabel: "Barakhamba, Delhi",
+        baseLat: CITY.lat, baseLng: CITY.lng, baseLabel: CITY.label, visibility: "off",
+      },
+    });
     console.log("\nFeed is scoped and private");
     const openFeed = await api("/api/feed", { jar: a.jar });
     assert(openFeed.status === 200, "the open network's feed loads");
