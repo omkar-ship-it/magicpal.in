@@ -1,6 +1,6 @@
-import { and, eq, inArray, isNotNull, isNull, lt, ne, or } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, lt, ne, notInArray, or } from "drizzle-orm";
 import { db, hasDb } from "./db";
-import { memberships, users } from "./db/schema";
+import { consents, memberships, users } from "./db/schema";
 import { isActiveMember } from "./membership";
 import { distanceKm } from "./geo";
 import { ACTIVE_WINDOW_MINUTES, LIVE_STALE_MINUTES, MAX_MAP_RESULTS } from "./rules";
@@ -211,6 +211,83 @@ function toMapProfile(r: ProfileRow, centre?: { lat: number; lng: number }): Map
     distanceKm: centre ? distanceKm(centre.lat, centre.lng, placed.lat, placed.lng) : null,
     active: Boolean(r.lastActiveAt && new Date(r.lastActiveAt) > activeSince),
   };
+}
+
+/**
+ * Onboarded people on the open network who have no position to show.
+ *
+ * They belong in the *directory* and nowhere near the map. The distinction
+ * this function turns on is the one that matters, and it is not visible in
+ * `users.visibility` alone:
+ *
+ *   never answered — `visibility` is `off` because that is the column's
+ *                    default and they closed the app before reaching the
+ *                    location step. They have declined nothing. Leaving
+ *                    them out means a network that looks empty while real
+ *                    members with stated needs sit in it, unreachable.
+ *   actively declined — they opened the control and turned the map off,
+ *                    which appends a row to `consents`. That is a promise,
+ *                    and it is kept: they are not in this result.
+ *
+ * The consents log is what makes the two separable, which is most of the
+ * reason it is append-only rather than a boolean on the user.
+ *
+ * Returned `unplaced`, with coordinates that are deliberately meaningless:
+ * every surface must decide what to do with somebody who has no location,
+ * and MapCanvas's answer is to skip them.
+ */
+export async function getUnplacedOpenProfiles(opts: {
+  excludeUserId?: string;
+}): Promise<Array<MapProfile & { unplaced: true }>> {
+  if (!hasDb || !db) return [];
+
+  const declined = db
+    .select({ userId: consents.userId })
+    .from(consents)
+    .where(eq(consents.kind, "open_map_off"));
+
+  const rows = await db
+    .select(PROFILE_COLUMNS)
+    .from(users)
+    .where(
+      and(
+        eq(users.visibility, "off"),
+        isNotNull(users.name),
+        notInArray(users.id, declined),
+        opts.excludeUserId ? ne(users.id, opts.excludeUserId) : undefined
+      )
+    )
+    .limit(MAX_MAP_RESULTS);
+
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name!,
+    headline: r.headline,
+    company: r.company,
+    bio: r.bio,
+    skills: r.skills ?? [],
+    photoUrl: r.photoUrl,
+    // Null, not a guess. They have not told anybody where they are, and a
+    // blank is the honest rendering of that.
+    locationLabel: null,
+    linkedinUrl: r.linkedinUrl,
+    instagramUrl: r.instagramUrl,
+    websiteUrl: r.websiteUrl,
+    lookingFor: r.lookingFor ?? [],
+    canHelpWith: r.canHelpWith ?? [],
+    interests: r.interests ?? [],
+    customLookingFor: r.customLookingFor ?? [],
+    customCanHelpWith: r.customCanHelpWith ?? [],
+    customInterests: r.customInterests ?? [],
+    stage: r.stage,
+    workingOn: r.workingOn,
+    lat: 0,
+    lng: 0,
+    placed: "base" as const,
+    distanceKm: null,
+    active: false,
+    unplaced: true as const,
+  }));
 }
 
 /**

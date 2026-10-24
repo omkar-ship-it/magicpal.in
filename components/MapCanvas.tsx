@@ -90,7 +90,7 @@ export default function MapCanvas({
   onSelectEvent,
   onMoveEnd,
 }: {
-  people: Array<MapProfile & { hereNow?: boolean; verified?: boolean }>;
+  people: Array<MapProfile & { hereNow?: boolean; verified?: boolean; unplaced?: boolean }>;
   /** The viewer, drawn distinctly so they can verify their own visibility. */
   you?: SelfMarker | null;
   events?: MapEvent[];
@@ -239,6 +239,11 @@ export default function MapCanvas({
     const digits = precise ? 2 : 1;
     const groups = new Map<string, Array<MapProfile & { hereNow?: boolean }>>();
     for (const p of people) {
+      // Somebody who has not published a position has no pin. `unplaced`
+      // was written for exactly this and nothing read it, so board members
+      // with no location were being drawn at 0°, 0° in the Gulf of Guinea
+      // — the coordinate pair is the carrier for "absent", not a place.
+      if (p.unplaced || (p.lat === 0 && p.lng === 0)) continue;
       const key = `${p.lat.toFixed(digits)},${p.lng.toFixed(digits)}`;
       const list = groups.get(key);
       if (list) list.push(p);

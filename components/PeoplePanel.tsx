@@ -85,9 +85,15 @@ export default function PeoplePanel({
         ) : offMap > 0 ? (
           // Said out loud so the list never reads as the whole group when
           // it isn't: these people are here, they're just not on the map.
+          //
+          // "haven't said where they are" rather than "keep themselves off
+          // the map", which was a claim about their intent the product
+          // can't make — almost everyone in this state simply closed the
+          // app before the location step, and anybody who did deliberately
+          // turn the map off is not in this list at all.
           <>
-            {offMap} of these {people.length} keep themselves off the map. They&rsquo;re still here, and you can still
-            message them.
+            {offMap} of these {people.length} haven&rsquo;t said where they are, so they have no pin. They&rsquo;re
+            still here, and you can still reach them.
           </>
         ) : null
       }

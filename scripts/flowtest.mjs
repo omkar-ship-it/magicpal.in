@@ -780,6 +780,77 @@ async function main() {
     const dana = staleLive.data.people.find((p) => p.name === "Flow Dana");
     assert(Boolean(dana), "somebody whose live session lapsed is still on the map, at their city");
     assert(dana.placed === "base", "…shown at city precision, never at the stale street-level pin");
+    console.log("\nNot having answered is not the same as having said no");
+    // Almost everybody sitting at `off` never reached the location step —
+    // `off` is the column default. They have declined nothing, and leaving
+    // them out of the directory makes the network look empty while real
+    // members with stated needs sit in it unreachable. Somebody who
+    // *actually* turned the map off is a different person, and the consents
+    // log is what separates them.
+    const emailE = `flowtest.e.${stamp}@example.com`;
+    emails.push(emailE);
+    const e = await signUp(emailE);
+    await api("/api/profile", {
+      method: "POST", jar: e.jar,
+      body: {
+        name: "Flow Evan", headline: "Never finished onboarding",
+        lookingFor: ["funding"], canHelpWith: ["technical"], interests: ["ai"],
+        // No coordinates at all, and visibility left at the default.
+      },
+    });
+    const { rows: evanRow } = await pool.query(
+      "select visibility, lat, base_lat from users where email = $1", [emailE]
+    );
+    assert(evanRow[0].visibility === "off", "the default really is off");
+    assert(evanRow[0].lat === null && evanRow[0].base_lat === null, "…with no position of any kind");
+    const { rows: evanConsent } = await pool.query(
+      "select count(*)::int n from consents where kind = 'open_map_off' and user_id = (select id from users where email = $1)",
+      [emailE]
+    );
+    assert(evanConsent[0].n === 0, "…and no consent row, because no choice was ever made");
+
+    const dir = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}&radiusKm=25`, { jar: a.jar });
+    const evan = dir.data.people.find((p) => p.name === "Flow Evan");
+    assert(Boolean(evan), "somebody who never answered is listed in the directory");
+    assert(evan.unplaced === true, "…flagged as having no pin, so no surface tries to draw one");
+    assert(evan.locationLabel === null, "…with no invented location label");
+    assert(evan.lat === 0 && evan.lng === 0, "…and coordinates that are a carrier for 'absent'");
+    assert(
+      !dir.data.matches.some((m) => m.id === evan.id),
+      "…but not recommended on the open map, where proximity is the whole bond"
+    );
+
+    // The promise, kept. Carol turns the map off on purpose.
+    await api("/api/profile", {
+      method: "POST", jar: c.jar,
+      body: {
+        name: "Flow Carol", headline: "Curious stranger", lookingFor: ["peers"], canHelpWith: ["peers"],
+        baseLat: CITY.lat, baseLng: CITY.lng, baseLabel: CITY.label, visibility: "base",
+      },
+    });
+    const visible = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}&radiusKm=50`, { jar: a.jar });
+    assert(visible.data.people.some((p) => p.name === "Flow Carol"), "Carol is on the map while she says so");
+    await api("/api/profile", {
+      method: "POST", jar: c.jar,
+      body: {
+        name: "Flow Carol", headline: "Curious stranger", lookingFor: ["peers"], canHelpWith: ["peers"],
+        baseLat: CITY.lat, baseLng: CITY.lng, baseLabel: CITY.label, visibility: "off",
+      },
+    });
+    const { rows: carolConsent } = await pool.query(
+      "select granted from consents where kind = 'open_map_off' and user_id = (select id from users where email = $1)",
+      [emailC]
+    );
+    assert(carolConsent.length > 0 && carolConsent[0].granted === false, "turning it off is logged as a refusal");
+    const afterOff = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}&radiusKm=50`, { jar: a.jar });
+    assert(
+      !afterOff.data.people.some((p) => p.name === "Flow Carol"),
+      "somebody who turned the map off is gone from the directory too, not merely from the pins"
+    );
+    assert(
+      afterOff.data.people.some((p) => p.name === "Flow Evan"),
+      "…while the person who simply never answered is still listed"
+    );
     console.log("\nFeed is scoped and private");
     const openFeed = await api("/api/feed", { jar: a.jar });
     assert(openFeed.status === 200, "the open network's feed loads");

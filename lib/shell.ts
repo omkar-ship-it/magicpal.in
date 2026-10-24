@@ -1,7 +1,14 @@
 import { boardById, boardsForUser, childEvents, isLive, liveBoardBySlug, membershipOf, publicEvents, rsvpSummary, type Board } from "./boards";
 import { isActive } from "./membership";
 import { attachVouches } from "./vouch";
-import { getBoardMembers, getOpenMapProfiles, getProfileById, touchActivity, type MapProfile } from "./profiles";
+import {
+  getBoardMembers,
+  getOpenMapProfiles,
+  getProfileById,
+  getUnplacedOpenProfiles,
+  touchActivity,
+  type MapProfile,
+} from "./profiles";
 import { matchesFor, type Surface } from "./matching";
 import { attachConnectionStatus } from "./connections";
 import { waitingCount } from "./messages";
@@ -317,12 +324,27 @@ export async function shellPayload(opts: {
           ? { lat: me.baseLat, lng: me.baseLng }
           : { lat: 17.4065, lng: 78.4772 };
 
-  const people = await getOpenMapProfiles({
+  const placed = await getOpenMapProfiles({
     excludeUserId: opts.userId,
     centerLat: centre.lat,
     centerLng: centre.lng,
     radiusKm,
   });
+
+  /**
+   * Members who never got as far as answering where they are.
+   *
+   * They are in the directory and never on the map — there is no position
+   * to draw, and inventing one would be the same bug as Null Island. Anyone
+   * who *actively* turned the map off is excluded inside the query, where
+   * it can't be forgotten; see getUnplacedOpenProfiles.
+   *
+   * Not subject to the radius either, for the obvious reason: a radius is a
+   * question about a position, and these people have none. Ordered after
+   * the placed ones so the map's own list still reads nearest-first.
+   */
+  const unplaced = await getUnplacedOpenProfiles({ excludeUserId: opts.userId });
+  const people = [...placed, ...unplaced];
 
   const matches = me?.name
     ? matchesFor({
@@ -333,7 +355,12 @@ export async function shellPayload(opts: {
             customLookingFor: me.customLookingFor,
             customCanHelpWith: me.customCanHelpWith,
             customInterests: me.customInterests,
-          }, people, {
+          // `placed`, not `people`: on the open network proximity is the
+          // entire bond, and "worth meeting, somewhere, unreachable" is a
+          // recommendation nobody can act on. They are discoverable in the
+          // directory and through search, which is what being listed is
+          // for.
+          }, placed, {
         surface: "open",
         limit: MATCHES_SHOWN,
       }).map((m) => ({ id: m.other.id, reason: m.reason, twoWay: m.twoWay }))
