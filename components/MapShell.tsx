@@ -22,12 +22,14 @@ import FeedPanel from "./FeedPanel";
 import EventsPanel from "./EventsPanel";
 import ChatsPanel from "./ChatsPanel";
 import CommunityHome from "./CommunityHome";
+import OpenHome from "./OpenHome";
 import PinsPanel from "./PinsPanel";
 import SignInPanel from "./SignInPanel";
 import ProfilePanel from "./ProfilePanel";
 import PublicOptIn from "./PublicOptIn";
 import ForYouPanel from "./ForYouPanel";
 import { IconChat, IconHidden } from "./Icons";
+import { BRAND_NAME } from "@/lib/brand";
 
 export type Overlay = "signin" | "profile" | null;
 
@@ -86,10 +88,22 @@ export default function MapShell({
    * own them, so several can be up at once and each remembers where it was
    * dragged to.
    */
+  /**
+   * Whether there is anything left to do before this product can work for
+   * them: no account, nothing stated to match on, or no pin.
+   *
+   * Decides what is already open on arrival. Somebody in that state opening
+   * on "For you" is shown an empty panel explaining what they haven't done,
+   * which is a worse version of the page that exists to help them do it —
+   * so they land on Home instead, and everybody else lands on the
+   * recommendations, which is what they came back for.
+   */
+  const needsSetup = !signedIn || !initial.hasSignals || myVisibility === "off";
+
   const [wins, setWins] = useState<Record<string, WindowState>>(() => ({
     // `?panel=` from /you or /login decides what's already up on arrival.
-    home: { ...DEFAULT_WINDOW, x: 16, y: 72 },
-    forYou: { ...DEFAULT_WINDOW, open: initialOverlay === null, x: 16, y: 72, z: 2 },
+    home: { ...DEFAULT_WINDOW, open: initialOverlay === null && needsSetup, x: 16, y: 72, z: 2 },
+    forYou: { ...DEFAULT_WINDOW, open: initialOverlay === null && !needsSetup, x: 16, y: 72, z: 2 },
     feed: { ...DEFAULT_WINDOW, x: 56, y: 112 },
     people: { ...DEFAULT_WINDOW, x: 96, y: 152 },
     pins: { ...DEFAULT_WINDOW, x: 116, y: 172 },
@@ -207,10 +221,6 @@ export default function MapShell({
   function switchNetwork(slug: string | null) {
     setFacets(NO_FACETS);
     setSelected(null);
-    // The open network has no front page, so a Home window left open on a
-    // board must not follow you onto it — the dock slot is gone and there
-    // would be no way to close what it had left behind.
-    if (slug === null) win("home", { open: false });
     // Belongs to the board being left — the panel remounts and reports the
     // new one, and until it does the payload's own count stands in.
     setForYouCount(null);
@@ -329,26 +339,48 @@ export default function MapShell({
 
       {/* ------------------------------------------------ the windows */}
       <FloatWindow
-        title={data.scope.slug ? data.scope.name : "Open network"}
+        title={data.scope.slug ? data.scope.name : `About ${BRAND_NAME}`}
         state={visible("home") ? wins.home : { ...wins.home, open: false }}
         onChange={(n) => win("home", n)}
         onClose={() => win("home", { open: false })}
         onFocus={() => focus("home")}
         width={400}
       >
-        <CommunityHome
-          scope={data.scope}
-          events={data.events}
-          people={data.people}
-          memberCount={data.people.length + 1}
-          onOpenEvents={() => openWin("events")}
-          onOpenPeople={() => openWin("people")}
-          onOpenPerson={(id) => {
-            setSelected(id);
-            openWin("person");
-          }}
-          onChanged={() => void load({})}
-        />
+        {/* Two different pages behind one slot, because they answer the
+            same question — "what is this place" — about two kinds of
+            place. A community has an owner, rules and a roster; the open
+            network has none of those and has to explain itself instead. */}
+        {isOpenNet ? (
+          <OpenHome
+            signedIn={signedIn}
+            hasSignals={data.hasSignals}
+            visibility={myVisibility}
+            peopleCount={data.people.length}
+            hereNowCount={data.pins.length}
+            eventCount={data.events.length}
+            communityCount={data.networks.filter((n) => n.slug !== null).length}
+            onProfile={() => openWin(signedIn ? "profile" : "signin")}
+            onSignIn={() => openWin("signin")}
+            onOpenPeople={() => openWin("people")}
+            onOpenEvents={() => openWin("events")}
+            onOpenForYou={() => openWin("forYou")}
+            onOpenPins={() => openWin("pins")}
+          />
+        ) : (
+          <CommunityHome
+            scope={data.scope}
+            events={data.events}
+            people={data.people}
+            memberCount={data.people.length + 1}
+            onOpenEvents={() => openWin("events")}
+            onOpenPeople={() => openWin("people")}
+            onOpenPerson={(id) => {
+              setSelected(id);
+              openWin("person");
+            }}
+            onChanged={() => void load({})}
+          />
+        )}
       </FloatWindow>
 
       <FloatWindow
@@ -647,7 +679,6 @@ export default function MapShell({
           chats: data.waiting,
         }}
         signedIn={signedIn}
-        hasHome={!isOpenNet}
         me={me}
         onSelect={openTab}
         onProfile={() => openWin(signedIn ? "profile" : "signin")}
