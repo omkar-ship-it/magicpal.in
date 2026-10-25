@@ -28,6 +28,9 @@ const COUNTRYISH = new Set([
   "france",
 ]);
 
+/** A postcode, a house number, half a coordinate — never a place name. */
+const NUMERIC = /^[\d\s.,-]+$/;
+
 export function cityLabel(label: string | null | undefined): string {
   if (!label) return "";
   const parts = label
@@ -39,11 +42,17 @@ export function cityLabel(label: string | null | undefined): string {
   for (let i = parts.length - 1; i >= 0; i--) {
     const p = parts[i];
     if (COUNTRYISH.has(p.toLowerCase())) continue;
-    // A postcode, a house number, anything that is mostly digits.
-    if (/^[\d\s-]+$/.test(p)) continue;
+    // A postcode, a house number, a stray coordinate — anything that is
+    // only digits. The decimal point is in the class deliberately: without
+    // it "0.0000" survived as a city and two real members were filed under
+    // it in the directory.
+    if (NUMERIC.test(p)) continue;
     return p;
   }
-  // Everything looked like a country or a number — fall back to what we were
-  // given rather than returning nothing.
-  return parts[parts.length - 1];
+  // Everything looked like a country or a number. A country is still a
+  // useful chip, so fall back to it — but a number never is, and falling
+  // back to one is how "0.0000" became a city with two people filed under
+  // it. No name is the right answer there.
+  const last = parts[parts.length - 1];
+  return NUMERIC.test(last) ? "" : last;
 }

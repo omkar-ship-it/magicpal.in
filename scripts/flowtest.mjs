@@ -897,6 +897,40 @@ async function main() {
         baseLat: CITY.lat, baseLng: CITY.lng, baseLabel: CITY.label, visibility: "off",
       },
     });
+    console.log("\nCoordinates are not a place name");
+    // Rows carrying 0,0 and a "0.0000, 0.0000" label predate the parsing
+    // fix in lib/geo. They were real members filed under a "0.0000" city
+    // chip in the directory, which is both wrong and looks broken.
+    const emailF = `flowtest.f.${stamp}@example.com`;
+    emails.push(emailF);
+    const f = await signUp(emailF);
+    await api("/api/profile", {
+      method: "POST", jar: f.jar,
+      body: {
+        name: "Flow Finn", headline: "Arrived before the geocoder worked",
+        lookingFor: ["peers"], canHelpWith: ["peers"],
+        baseLat: CITY.lat, baseLng: CITY.lng, baseLabel: CITY.label, visibility: "base",
+      },
+    });
+    // Corrupt the row the way the old geocoder did — the API refuses this
+    // now, so it has to be written directly.
+    await pool.query(
+      `update users set lat = 0, lng = 0, location_label = '0.0000, 0.0000',
+         base_lat = 0, base_lng = 0, base_label = '0.0000, 0.0000', visibility = 'exact'
+       where email = $1`,
+      [emailF]
+    );
+
+    const nulled = await api(`/api/map?lat=${HERE.lat}&lng=${HERE.lng}`, { jar: a.jar });
+    const finn = nulled.data.people.find((p) => p.name === "Flow Finn");
+    assert(Boolean(finn), "the person is still listed — the row is wrong, they aren't");
+    assert(finn.locationLabel === null, "…with no location label, rather than a pair of numbers");
+    assert(finn.unplaced === true, "…marked as having no position, like anybody who never gave one");
+    assert(finn.distanceKm === null, "…and no distance, rather than one measured from the Atlantic");
+    assert(
+      !JSON.stringify(nulled.data.people).includes("0.0000"),
+      "no coordinate string reaches the client as a place name"
+    );
     console.log("\nFeed is scoped and private");
     const openFeed = await api("/api/feed", { jar: a.jar });
     assert(openFeed.status === 200, "the open network's feed loads");

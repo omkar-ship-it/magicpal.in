@@ -59,6 +59,11 @@ export type MapProfile = {
   active: boolean;
   /** Board surfaces only: physically present right now. */
   hereNow?: boolean;
+  /**
+   * No position to draw. Set for somebody who never published one, and for
+   * a stored position that is really a missing one — see `toMapProfile`.
+   */
+  unplaced?: boolean;
 };
 
 const PROFILE_COLUMNS = {
@@ -181,10 +186,59 @@ type ProfileRow = {
   customInterests: string[] | null;
 };
 
+/**
+ * A place *name*, or nothing.
+ *
+ * A label that is just a pair of numbers is what the geocoder produced when
+ * it could not name a point, and it is not a place: it grouped real members
+ * under a "0.0000" city chip in the directory. Showing coordinates where a
+ * reader expects a place name tells them nothing and looks broken, so the
+ * honest rendering of "we don't know what this place is called" is blank.
+ */
+function placeName(label: string | null): string | null {
+  if (!label) return null;
+  return /^\s*-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?\s*$/.test(label) ? null : label;
+}
+
 function toMapProfile(r: ProfileRow, centre?: { lat: number; lng: number }): MapProfile | null {
   const placed = place(r);
   if (!placed || r.name == null) return null;
   const activeSince = new Date(Date.now() - ACTIVE_WINDOW_MINUTES * 60_000);
+
+  // 0,0 is the sentinel for "no coordinate", not a spot in the Gulf of
+  // Guinea — rows carrying it predate the parsing fix in lib/geo. Treated
+  // as what it means: this person has no position, same as somebody who
+  // never gave one, so no pin and no distance rather than a wrong one.
+  if (placed.lat === 0 && placed.lng === 0) {
+    return {
+      id: r.id,
+      name: r.name,
+      headline: r.headline,
+      company: r.company,
+      bio: r.bio,
+      skills: r.skills ?? [],
+      photoUrl: r.photoUrl,
+      locationLabel: null,
+      linkedinUrl: r.linkedinUrl,
+      instagramUrl: r.instagramUrl,
+      websiteUrl: r.websiteUrl,
+      lookingFor: r.lookingFor ?? [],
+      canHelpWith: r.canHelpWith ?? [],
+      interests: r.interests ?? [],
+      customLookingFor: r.customLookingFor ?? [],
+      customCanHelpWith: r.customCanHelpWith ?? [],
+      customInterests: r.customInterests ?? [],
+      stage: r.stage,
+      workingOn: r.workingOn,
+      lat: 0,
+      lng: 0,
+      placed: "base",
+      distanceKm: null,
+      active: Boolean(r.lastActiveAt && new Date(r.lastActiveAt) > activeSince),
+      unplaced: true,
+    };
+  }
+
   return {
     id: r.id,
     name: r.name,
@@ -193,7 +247,7 @@ function toMapProfile(r: ProfileRow, centre?: { lat: number; lng: number }): Map
     bio: r.bio,
     skills: r.skills ?? [],
     photoUrl: r.photoUrl,
-    locationLabel: placed.label,
+    locationLabel: placeName(placed.label),
     linkedinUrl: r.linkedinUrl,
     instagramUrl: r.instagramUrl,
     websiteUrl: r.websiteUrl,
