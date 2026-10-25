@@ -9,6 +9,7 @@ const OPTIONS: Array<{
   label: string;
   detail: string;
   icon: React.ReactNode;
+  recommended?: boolean;
 }> = [
   {
     id: "off",
@@ -25,8 +26,24 @@ const OPTIONS: Array<{
   {
     id: "exact",
     label: "A fixed location",
-    detail: "A pin at the place you chose, street level. For a conference or a co-working day, when being findable is the point.",
+    detail:
+      "A pin at the place you chose, street level — and it stays there until you move it. For a conference or a co-working day, when being findable is the point.",
     icon: <IconPin size={15} />,
+    /**
+     * The one setting this product actually works at.
+     *
+     * A city circle makes you discoverable but not findable, and nothing
+     * downstream can answer a question about metres from it — not a pin's
+     * reach, not "within 2 km", not the distance steps in For you. Live is
+     * better still while you're out, and worse the rest of the time,
+     * because it lapses and leaves you on your city.
+     *
+     * Marked rather than defaulted: the default stays `off`, because a
+     * location setting that picks itself is not consent. This is a
+     * recommendation with the reason attached, which is the most a privacy
+     * control should do.
+     */
+    recommended: true,
   },
   {
     id: "live",
@@ -38,7 +55,7 @@ const OPTIONS: Array<{
 ];
 
 /**
- * The location promise, as three choices rather than a toggle and some
+ * The location promise, as four choices rather than a toggle and some
  * fine print.
  *
  * Each option states the consequence in the words a person would use to
@@ -46,6 +63,11 @@ const OPTIONS: Array<{
  * reader's ability to predict what it does. "City only" in particular has
  * to say *why* it's safe — a circle rather than a blurred pin — or people
  * assume it's a pin with the label removed.
+ *
+ * Listed in order of increasing exposure, which is what makes the list
+ * scannable — so the recommended option is *badged* where it sits rather
+ * than promoted to the top, where it would break the ladder and read as
+ * the product steering rather than advising.
  *
  * Defaults to off. The prototype defaulted to visible on the grounds that
  * an empty map sells nothing; boards solve the empty map now, so this
@@ -90,9 +112,20 @@ export default function VisibilityPicker({
                 onChange={() => onChange(o.id)}
               />
               <span className="min-w-0">
-                <span className="flex items-center gap-1.5 text-[13.5px] font-semibold">
+                <span className="flex flex-wrap items-center gap-1.5 text-[13.5px] font-semibold">
                   {o.icon}
                   {o.label}
+                  {o.recommended && (
+                    <span
+                      className="pill"
+                      style={{
+                        background: "color-mix(in srgb, var(--brand) 13%, transparent)",
+                        color: "var(--brand)",
+                      }}
+                    >
+                      Recommended
+                    </span>
+                  )}
                 </span>
                 <span className="mt-0.5 block text-[12px] leading-[1.45] text-[var(--ink-soft)]">{o.detail}</span>
                 {/* Said here rather than by disabling the option, so the
