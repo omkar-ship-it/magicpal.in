@@ -4,15 +4,108 @@ import { BRAND_NAME } from "@/lib/brand";
 import { Page, Section, Stat, Stats } from "./Panel";
 import {
   IconBeacon,
+  IconBriefcase,
   IconCalendar,
   IconCheck,
   IconGlobe,
   IconLock,
+  IconMeetup,
   IconPeople,
   IconPin,
+  IconPlane,
   IconSparkle,
   IconUser,
 } from "./Icons";
+
+/**
+ * The cases, each in its own colour.
+ *
+ * A grid of six identical cards is a wall of text that gets skimmed to
+ * nothing; a hue and a mark per card give the eye somewhere to land, and
+ * make "the travel one" findable on the second visit without reading.
+ *
+ * The hues are mixed *into* `var(--card)` rather than stated as literal
+ * pastels, which is what lets one definition work in both themes: 12% of a
+ * saturated hue over white is the pastel you'd hand-pick, and the same
+ * expression over the dark card is a quiet tint rather than a glare. The
+ * mark mixes toward `--ink` for the same reason — it darkens on a pale
+ * ground and lightens on a dark one, instead of disappearing into one of
+ * them. Brand orange (~10°) is left out, so nothing here competes with the
+ * buttons.
+ */
+const USES: Array<{ hue: number; icon: React.ReactNode; title: string; body: React.ReactNode }> = [
+  {
+    hue: 265,
+    icon: <IconMeetup size={16} />,
+    title: "At a conference",
+    body: (
+      <>
+        Eight hundred badges over three days, and the one person who&rsquo;d change your quarter is in the next
+        room. Drop a fixed pin so people can find you at the venue, then run <strong>For you</strong> over the
+        attendee list: five names at a time, each with the reason, refilling as you work through them. Whoever you
+        didn&rsquo;t get to is kept as a follow-up list for the train home.
+      </>
+    ),
+  },
+  {
+    hue: 205,
+    icon: <IconBriefcase size={16} />,
+    title: "In a co-working space",
+    body: (
+      <>
+        You sit next to forty people for six months and speak to two. Set a pin for the day and narrow to{" "}
+        <strong>this building</strong> — it needs live location, because a city pin can&rsquo;t tell who is on
+        your floor. You get the handful worth interrupting, not a staff directory.
+      </>
+    ),
+  },
+  {
+    hue: 152,
+    icon: <IconPeople size={16} />,
+    title: "Your community's own map",
+    body: (
+      <>
+        An alumni network, a company, a meetup group — a private board with its own map, members, events and feed.
+        See where your people have actually ended up in the world, and reach them as one of their own rather than
+        as a stranger. Members see each other there even when they&rsquo;re off the public map.
+      </>
+    ),
+  },
+  {
+    hue: 38,
+    icon: <IconPlane size={16} />,
+    title: "Let serendipity work for you",
+    body: (
+      <>
+        Flights, trains, long bus rides, the airport lounge at 6am. Turn live sharing on while you&rsquo;re moving
+        and it stops by itself when you close the app. Open it while you&rsquo;re waiting and see who else is —
+        the people you&rsquo;d never have spoken to are the ones sitting four seats away.
+      </>
+    ),
+  },
+  {
+    hue: 188,
+    icon: <IconGlobe size={16} />,
+    title: "Landing in a new city",
+    body: (
+      <>
+        Switch on <strong>My network</strong> before you book anything and see who you already know there. The
+        map keeps the answer to &ldquo;do I know anyone in Dubai&rdquo; so you don&rsquo;t have to.
+      </>
+    ),
+  },
+  {
+    hue: 330,
+    icon: <IconBeacon size={16} />,
+    title: "Something happening right now",
+    body: (
+      <>
+        Drop a pin that expires — &ldquo;working from here till six, say hello&rdquo; — and choose how far it
+        carries, from this building to the whole city. Gone by morning, with nothing left on your profile.
+      </>
+    ),
+  },
+];
 
 /**
  * The open network's front page.
@@ -204,29 +297,17 @@ export default function OpenHome({
         </Section>
 
         {/* ----------------------------------------------- where to use it */}
-        <Section title="Where this is worth opening" icon={<IconPin size={12} />} hint="A map of people isn't a use. These are.">
-          <ul className="grid gap-2 sm:grid-cols-2">
-            <Use title="At a conference">
-              Eight hundred badges and no idea who to talk to. Drop a fixed pin, run For you, and get five names
-              with reasons.
-            </Use>
-            <Use title="A co-working day">
-              You&rsquo;re working from a café anyway. See who else in the building is open to a coffee.
-            </Use>
-            <Use title="Landing in a new city">
-              Switch on &ldquo;My network&rdquo; and see who you already know there before you book anything.
-            </Use>
-            <Use title="Your alumni or company group">
-              Communities are private boards inside this. Members see each other whether or not they&rsquo;re on
-              the public map — joining one is its own kind of consent.
-            </Use>
-            <Use title="Something happening tonight">
-              Drop a pin that expires. &ldquo;Working from here till six, say hello&rdquo; — gone by morning.
-            </Use>
-            <Use title="Hiring, raising, or stuck">
-              Say it once in your profile and it works in both directions, to everyone, without you posting
-              anything.
-            </Use>
+        <Section
+          title="Where this is worth opening"
+          icon={<IconPin size={12} />}
+          hint="A map of people isn't a use. These are."
+        >
+          <ul className="stagger grid gap-2 sm:grid-cols-2">
+            {USES.map((u) => (
+              <Use key={u.title} hue={u.hue} icon={u.icon} title={u.title}>
+                {u.body}
+              </Use>
+            ))}
           </ul>
         </Section>
 
@@ -297,11 +378,39 @@ function Beat({ n, title, children }: { n: number; title: string; children: Reac
   );
 }
 
-function Use({ title, children }: { title: string; children: React.ReactNode }) {
+function Use({
+  hue,
+  icon,
+  title,
+  children,
+}: {
+  hue: number;
+  icon: React.ReactNode;
+  title: string;
+  children: React.ReactNode;
+}) {
+  const base = `hsl(${hue} 75% 55%)`;
   return (
-    <li className="rounded-2xl border p-3" style={{ borderColor: "var(--line)", background: "var(--card)" }}>
-      <p className="text-[12.5px] font-semibold">{title}</p>
-      <p className="mt-0.5 text-[11.5px] leading-[1.5] text-[var(--ink-soft)]">{children}</p>
+    <li
+      className="lift rounded-2xl border p-3.5"
+      style={{
+        borderColor: `color-mix(in srgb, ${base} 26%, var(--card))`,
+        background: `color-mix(in srgb, ${base} 11%, var(--card))`,
+      }}
+    >
+      <span
+        className="grid h-8 w-8 place-items-center rounded-xl"
+        style={{
+          background: `color-mix(in srgb, ${base} 22%, var(--card))`,
+          // Mixed toward the ink so the mark darkens on a pale ground and
+          // lightens on a dark one, rather than vanishing into either.
+          color: `color-mix(in srgb, ${base} 80%, var(--ink))`,
+        }}
+      >
+        {icon}
+      </span>
+      <p className="mt-2 text-[12.5px] font-semibold">{title}</p>
+      <p className="mt-1 text-[11.5px] leading-[1.55] text-[var(--ink-soft)]">{children}</p>
     </li>
   );
 }
