@@ -4,6 +4,7 @@ import type { ShellPerson } from "@/lib/shell";
 import Avatar from "./Avatar";
 import VerifiedBadge from "./VerifiedBadge";
 import { IconCity, IconHidden, IconPin } from "./Icons";
+import { tagsOf } from "@/lib/directory";
 
 /**
  * One person as a line, not a card.
@@ -21,11 +22,22 @@ import { IconCity, IconHidden, IconPin } from "./Icons";
  */
 export default function PersonRow({
   person,
+  showTags,
   onOpen,
 }: {
   person: ShellPerson;
+  /**
+   * Inside a cluster, where the row has to carry a reason.
+   *
+   * Four hundred people in one building filtered by what they offer and
+   * need is only useful if the rows say which of those they are. Without
+   * the two lines a directory of four hundred is four hundred job titles,
+   * and the chips above it have nothing to land on.
+   */
+  showTags?: boolean;
   onOpen: () => void;
 }) {
+  const tags = showTags ? tagsOf(person) : null;
   const placed = person.unplaced ? "off" : person.placed;
   const icon =
     placed === "off" ? (
@@ -67,6 +79,14 @@ export default function PersonRow({
           {person.headline}
           {person.company ? ` · ${person.company}` : ""}
         </span>
+        {tags?.offers && (
+          <span className="block truncate text-[11px] text-[var(--ink-soft)]">Offers {tags.offers}</span>
+        )}
+        {tags?.needs && (
+          <span className="block truncate text-[11px]" style={{ color: "var(--brand)" }}>
+            Needs {tags.needs}
+          </span>
+        )}
       </span>
 
       <span className="flex-none text-[var(--ink-soft)]" title={placeTitle} aria-label={placeTitle}>

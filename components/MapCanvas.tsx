@@ -89,6 +89,7 @@ export default function MapCanvas({
   onSelectPerson,
   onSelectEvent,
   onMoveEnd,
+  onOpenStack,
 }: {
   people: Array<MapProfile & { hereNow?: boolean; verified?: boolean; unplaced?: boolean }>;
   /** The viewer, drawn distinctly so they can verify their own visibility. */
@@ -131,6 +132,8 @@ export default function MapCanvas({
   onSelectPerson?: (id: string) => void;
   onSelectEvent?: (slug: string) => void;
   onMoveEnd?: (c: { lat: number; lng: number; zoom: number }) => void;
+  /** A whole stack of co-located people, opened as a directory. */
+  onOpenStack?: (ids: string[]) => void;
 }) {
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
@@ -410,7 +413,7 @@ export default function MapCanvas({
       {!eventsOnly &&
         stacks.map((s) => (
           <Marker key={s.key} latitude={s.lat} longitude={s.lng} anchor="center">
-            <FaceStack group={s.group} highlighted={highlighted} onSelect={onSelectPerson} />
+            <FaceStack group={s.group} highlighted={highlighted} onSelect={onSelectPerson} onOpenStack={onOpenStack} />
           </Marker>
         ))}
     </MapGL>
@@ -514,10 +517,13 @@ function FaceStack({
   group,
   highlighted,
   onSelect,
+  onOpenStack,
 }: {
   group: Array<MapProfile & { hereNow?: boolean; verified?: boolean }>;
   highlighted: Set<string>;
   onSelect?: (id: string) => void;
+  /** The whole pile, handed to the directory. See the +N button below. */
+  onOpenStack?: (ids: string[]) => void;
 }) {
   // A recommended face is pulled to the front of its own stack — otherwise
   // the one person the surface just told you to meet can end up as the
@@ -567,8 +573,20 @@ function FaceStack({
           type="button"
           className="map-pin grid h-[40px] w-[40px] place-items-center rounded-full text-[12px] font-semibold"
           style={{ background: "var(--card)", color: "var(--ink-soft)", boxShadow: "0 0 0 2px var(--card), var(--shadow)" }}
-          onClick={() => onSelect?.(sorted[faces.length].id)}
-          aria-label={`${extra} more people here`}
+          /**
+           * The pile, not the fourth person in it.
+           *
+           * This used to open whoever happened to be sorted fourth, which
+           * is an arbitrary answer to "who else is here" and no answer at
+           * all once a stack is forty deep. It opens the directory scoped
+           * to this stack instead, filtered by what people offer and need
+           * rather than by city — every one of them is in the same city,
+           * which is why they stacked.
+           */
+          onClick={() =>
+            onOpenStack ? onOpenStack(sorted.map((p) => p.id)) : onSelect?.(sorted[faces.length].id)
+          }
+          aria-label={`${extra} more people here — open the directory`}
         >
           +{extra}
         </button>

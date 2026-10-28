@@ -116,6 +116,15 @@ export default function MapShell({
   }));
   const topZ = useRef(3);
   const [selected, setSelected] = useState<string | null>(null);
+  /**
+   * The stack of co-located people the viewer opened from the map, if any.
+   *
+   * Held as ids rather than as the people themselves so it survives a
+   * refresh of the payload — the list re-resolves against whatever is
+   * current, and anybody who has since left the board simply drops out
+   * instead of lingering as a stale row.
+   */
+  const [clusterIds, setClusterIds] = useState<string[] | null>(null);
   /** Whose thread Chats should land on, set when Message is tapped. */
   const [chatWith, setChatWith] = useState<string | null>(null);
   const [activeEvent, setActiveEvent] = useState<string | null>(initialEvent);
@@ -235,6 +244,13 @@ export default function MapShell({
   const unverified = ownsScope ? data.people.filter((p) => !p.verifiedHere).length : 0;
 
   const shown = useMemo(() => applyFacets(data.people, facets), [data.people, facets]);
+  const cluster = useMemo(() => {
+    if (!clusterIds) return null;
+    const want = new Set(clusterIds);
+    const list = data.people.filter((p) => want.has(p.id));
+    return list.length > 0 ? list : null;
+  }, [clusterIds, data.people]);
+  const matchIds = useMemo(() => new Set(data.matches.map((m) => m.id)), [data.matches]);
   const byId = useMemo(() => new Map(data.people.map((p) => [p.id, p])), [data.people]);
   const selectedPerson = selected ? byId.get(selected) : null;
   const filtering = facetsActive(facets) > 0;
@@ -292,6 +308,10 @@ export default function MapShell({
           bottomInset={110}
           showZoom
           highlightIds={data.matches.map((m) => m.id)}
+          onOpenStack={(ids) => {
+            setClusterIds(ids);
+            openWin("people");
+          }}
           onSelectPerson={(id) => {
             setSelected(id);
             openWin("person");
@@ -468,10 +488,17 @@ export default function MapShell({
       </FloatWindow>
 
       <FloatWindow
-        title={`People · ${shown.length}`}
+        /* In a cluster the title is the pile, not the board: the window is
+           answering "who is in this building" and a count of the whole
+           network above it would contradict every row underneath. */
+        title={cluster ? `Here · ${cluster.length}` : `People · ${shown.length}`}
         state={visible("people") ? wins.people : { ...wins.people, open: false }}
         onChange={(n) => win("people", n)}
-        onClose={() => win("people", { open: false })}
+        onClose={() => {
+          win("people", { open: false });
+          // Closing releases the pile, so the next open is the whole board.
+          setClusterIds(null);
+        }}
         onFocus={() => focus("people")}
       >
         <PeoplePanel
@@ -482,6 +509,9 @@ export default function MapShell({
           connectedOnly={facets.connectedOnly}
           unverifiedCount={unverified}
           showUnverified={ownsScope}
+          cluster={cluster}
+          matchIds={matchIds}
+          onClearCluster={() => setClusterIds(null)}
           onOpenPerson={(id) => {
             setSelected(id);
             openWin("person");
