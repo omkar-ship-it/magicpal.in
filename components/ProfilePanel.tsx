@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SECTORS, STAGES } from "@/lib/intents";
 import { ALERT_KINDS, ALERT_RADII, DEFAULT_ALERT_RADIUS_KM, MAX_INTERESTS } from "@/lib/rules";
@@ -105,6 +105,7 @@ export default function ProfilePanel({
    */
   const [termsAccepted, setTermsAccepted] = useState<boolean | null>(null);
   const [agreed, setAgreed] = useState(false);
+  const consentRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let alive = true;
@@ -189,6 +190,29 @@ export default function ProfilePanel({
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
+
+    /**
+     * Checked here rather than by disabling the button.
+     *
+     * It *was* a disabled button, and that shipped a profile form nobody
+     * could submit: a new member filled in their name, their city and their
+     * visibility, pressed a grey button that did nothing, and left. Every
+     * account created after it went out has no name and no location, and
+     * one of them is a member of a live board who was reported as "joined
+     * but not on the map".
+     *
+     * A disabled control states that an action is unavailable and never
+     * says why. The fix is the ordinary one: let the button be pressed, and
+     * answer the press — with the reason, at the control that needs
+     * attention, focused so the next keystroke acts on it.
+     */
+    if (termsAccepted === false && !agreed) {
+      setError("Please accept the Terms & Conditions and Privacy Policy to continue.");
+      consentRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+      consentRef.current?.focus();
+      return;
+    }
+
     setBusy(true);
     setError("");
     try {
@@ -548,9 +572,13 @@ export default function ProfilePanel({
             style={{ borderColor: agreed ? "var(--brand)" : "var(--line)", background: "var(--sunk)" }}
           >
             <input
+              ref={consentRef}
               type="checkbox"
               checked={agreed}
-              onChange={(e) => setAgreed(e.target.checked)}
+              onChange={(e) => {
+                setAgreed(e.target.checked);
+                if (e.target.checked) setError("");
+              }}
               className="mt-0.5 h-4 w-4 flex-none accent-[var(--brand)]"
             />
             <span className="text-[12.5px] leading-[1.5]">
@@ -574,18 +602,26 @@ export default function ProfilePanel({
         {error && <p className="text-[12.5px] font-medium text-[var(--warn)]">{error}</p>}
 
         <div className="sticky bottom-0 flex items-center gap-3 border-t border-[var(--line)] bg-[var(--card)] py-2.5">
-          <button
-            type="submit"
-            disabled={busy || termsAccepted === null || (termsAccepted === false && !agreed)}
-            className="btn btn-primary btn-sm"
-          >
+          {/* Disabled only while a save is actually in flight. Anything
+              else the form wants is answered when it is pressed. */}
+          <button type="submit" disabled={busy} className="btn btn-primary btn-sm">
             {busy ? "Saving…" : "Save profile"}
           </button>
-          {saved && (
-            <span className="flex items-center gap-1.5 text-[12.5px] font-medium" style={{ color: "var(--good)" }}>
-              <IconCheck size={13} /> Saved
-            </span>
-          )}
+          {saved &&
+            (d.visibility === "off" ? (
+              /* Saved, and still invisible. Worth saying out loud: the
+                 default is off, so a member who never opened this section
+                 has done everything the form asked and is on no map at all
+                 — which is exactly how it looks from the outside when
+                 somebody "joined but isn't showing up". */
+              <span className="text-[12.5px] font-medium" style={{ color: "var(--warn)" }}>
+                Saved — but you&rsquo;re off the public map. Pick a city above to appear on it.
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 text-[12.5px] font-medium" style={{ color: "var(--good)" }}>
+                <IconCheck size={13} /> Saved
+              </span>
+            ))}
         </div>
       </form>
 
