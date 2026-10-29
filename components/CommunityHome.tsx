@@ -7,6 +7,7 @@ import { whenLabel } from "@/lib/time";
 import Avatar from "./Avatar";
 import BoardLogo from "./BoardLogo";
 import BoardQR from "./BoardQR";
+import InstallApp from "./InstallApp";
 import LegalFooter from "./LegalFooter";
 import PanelNote from "./PanelNote";
 import { Page, Row, Section, Stat, Stats } from "./Panel";
@@ -319,6 +320,7 @@ export default function CommunityHome({
         {/* The agreement, where somebody can actually find it again.
             A consent taken once at sign-up and then buried is a consent
             nobody can act on — withdrawing one starts with reading it. */}
+        <InstallApp />
         <LegalFooter />
       </Page>
     </div>
