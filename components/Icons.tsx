@@ -283,6 +283,16 @@ export function IconCopy(p: Props) {
   );
 }
 
+export function IconDownload(p: Props) {
+  return (
+    <Svg {...p}>
+      <path d="M12 3v12" />
+      <path d="M7.5 10.5 12 15l4.5-4.5" />
+      <path d="M4 17.5v1A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5v-1" />
+    </Svg>
+  );
+}
+
 export function IconClock(p: Props) {
   return (
     <Svg {...p}>
