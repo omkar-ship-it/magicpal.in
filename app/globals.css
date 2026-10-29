@@ -887,3 +887,14 @@ h1, h2, h3 {
 @media (prefers-reduced-motion: reduce) {
   .pin-drop-glow { animation: none; opacity: 0.28; }
 }
+
+/* Faces shrink as the map pulls out and grow as it comes in.
+   The factor is one inherited custom property set on the map container
+   during `move`, so a pinch costs the compositor a transform and React
+   nothing at all — see applyPinScale in MapCanvas.
+   No transition: this tracks a live gesture, and an easing curve behind a
+   finger reads as lag rather than as smoothing. */
+.pin-scale {
+  transform: scale(var(--pin-scale, 1));
+  transform-origin: center;
+}

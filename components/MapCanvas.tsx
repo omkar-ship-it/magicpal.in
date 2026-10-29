@@ -35,6 +35,41 @@ function prefersDark(): boolean {
 const PRECISE_ZOOM = 11;
 
 /**
+ * How big a face is drawn, as a multiple of its natural size.
+ *
+ * A fixed 40px avatar is two different mistakes at the two ends of the
+ * zoom. Pulled right out, forty pins at 40px is a continent made of faces
+ * and you cannot see the land underneath; pushed right in, the same 40px
+ * on a phone is a small target for a thumb, looking at the one street you
+ * actually care about.
+ *
+ * So it tracks the zoom. The range is deliberately narrow — people still
+ * have to read as the same object at both ends — and eased rather than
+ * linear, so most of the change happens across the middle zooms where the
+ * reader is actually navigating rather than in the last few levels.
+ */
+const PIN_MIN = 0.62;
+const PIN_MAX = 1.25;
+const PIN_FROM = 2;
+const PIN_TO = 14;
+
+/**
+ * Written straight to the DOM, never through state.
+ *
+ * `move` fires on every frame of every pan, flight and pinch. Putting the
+ * zoom in React state would re-render every marker on the map sixty times
+ * a second, which is the exact mistake `precise` is a boolean to avoid —
+ * so this sets one inherited custom property on the map container and lets
+ * the compositor do the rest.
+ */
+function applyPinScale(el: HTMLElement | undefined | null, zoom: number) {
+  if (!el) return;
+  const t = Math.min(1, Math.max(0, (zoom - PIN_FROM) / (PIN_TO - PIN_FROM)));
+  const eased = t * t * (3 - 2 * t);
+  el.style.setProperty("--pin-scale", (PIN_MIN + (PIN_MAX - PIN_MIN) * eased).toFixed(3));
+}
+
+/**
  * The one Earth, and the furthest anybody may travel on it.
  *
  * Mercator is undefined at the poles, so it is cut at the latitude Mapbox
@@ -233,6 +268,7 @@ export default function MapCanvas({
   const onMove = useCallback((e: ViewStateChangeEvent) => {
     // Same value on most frames; React compares and does nothing.
     setPrecise(e.viewState.zoom >= PRECISE_ZOOM);
+    applyPinScale(e.target?.getContainer(), e.viewState.zoom);
   }, []);
 
   const stacks = useMemo(() => {
@@ -311,7 +347,13 @@ export default function MapCanvas({
       fadeDuration={120}
       mapStyle={dark ? "mapbox://styles/mapbox/dark-v11" : "mapbox://styles/mapbox/light-v11"}
       style={{ width: "100%", height: "100%" }}
-      onLoad={(e) => measureFrom(e.target.getContainer())}
+      onLoad={(e) => {
+        measureFrom(e.target.getContainer());
+        // Before the first move there is nothing to inherit, and the
+        // fallback in the stylesheet is 1 — which at world zoom is the
+        // wrong end of the range.
+        applyPinScale(e.target.getContainer(), e.target.getZoom());
+      }}
       onMove={onMove}
       onMoveEnd={(e: ViewStateChangeEvent) =>
         onMoveEnd?.({ lat: e.viewState.latitude, lng: e.viewState.longitude, zoom: e.viewState.zoom })
@@ -373,7 +415,7 @@ export default function MapCanvas({
 
       {!eventsOnly && you && (
         <Marker latitude={you.lat} longitude={you.lng} anchor="center">
-          <span className="relative flex items-center">
+          <span className="pin-scale relative flex items-center">
             <span
               className="map-pin"
               title={
@@ -536,7 +578,7 @@ function FaceStack({
   const extra = sorted.length - faces.length;
 
   return (
-    <span className="flex items-center -space-x-3">
+    <span className="pin-scale flex items-center -space-x-3">
       {faces.map((p) => (
         <span key={p.id} className="hover-host relative">
           <button
