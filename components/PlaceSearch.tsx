@@ -220,7 +220,12 @@ export default function PlaceSearch({
     };
     // Capture, so a panel scrolling under the menu moves it rather than
     // leaving it hanging over the page where the field used to be.
-    const follow = () => measure();
+    const follow = (e: Event) => {
+      // Scrolling *inside* the menu does not move the field it hangs from,
+      // so re-measuring is pointless work on every frame of that gesture.
+      if (e.target instanceof Node && list.current?.contains(e.target)) return;
+      measure();
+    };
     document.addEventListener("pointerdown", away);
     window.addEventListener("scroll", follow, true);
     window.addEventListener("resize", follow);
@@ -417,6 +422,12 @@ export default function PlaceSearch({
             top: at.top,
             bottom: at.bottom,
             maxHeight: MENU_MAX,
+            // The menu scrolls when there are more results than fit, so the
+            // gesture has to belong to it: `contain` stops a flick running
+            // on to scroll the page behind once the list hits its end.
+            overscrollBehavior: "contain",
+            touchAction: "pan-y",
+            WebkitOverflowScrolling: "touch",
             // Above the floating panels, which sit at 30 + their stack index.
             zIndex: 3000,
             boxShadow: "var(--shadow-lift)",
@@ -431,14 +442,28 @@ export default function PlaceSearch({
                 aria-selected={i === active}
                 className="flex w-full items-start gap-2.5 px-3 py-2 text-left"
                 style={{ background: i === active ? "var(--sunk)" : undefined }}
-                // Pointer rather than mouse enter, so the highlight follows
-                // a finger dragging down the list on a phone too.
-                onPointerEnter={() => setActive(i)}
-                // Fires before blur closes the list, which click does not.
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  choose(r);
-                }}
+                // Mouse only. A finger moving down the list is scrolling it,
+                // not hovering, and treating that as a highlight makes the
+                // selection chase the drag.
+                onMouseEnter={() => setActive(i)}
+                /**
+                 * Click, not pointerdown.
+                 *
+                 * These were pointerdown handlers that called
+                 * preventDefault, to beat the input's blur closing the menu
+                 * before the choice registered. On a touchscreen that makes
+                 * the list unscrollable twice over: the instant a finger
+                 * lands to scroll, pointerdown fires on whatever option is
+                 * under it and picks that one — and preventDefault cancels
+                 * the browser's pan gesture, so the list could not have
+                 * moved anyway. Searching anything with more than a screen
+                 * of results was unusable on a phone.
+                 *
+                 * Nothing needs beating any more: the menu is a portal and
+                 * is closed by the pointerdown-away listener above, which
+                 * already ignores anything inside it.
+                 */
+                onClick={() => choose(r)}
               >
                 <IconPin size={13} className="mt-0.5 flex-none text-[var(--ink-soft)]" />
                 <span className="min-w-0">
@@ -460,10 +485,7 @@ export default function PlaceSearch({
             <button
               type="button"
               className="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-[var(--sunk)]"
-              onPointerDown={(e) => {
-                e.preventDefault();
-                locateMe();
-              }}
+              onClick={() => locateMe()}
             >
               {locating ? (
                 <IconCheck size={13} className="flex-none" style={{ color: "var(--brand)" }} />
