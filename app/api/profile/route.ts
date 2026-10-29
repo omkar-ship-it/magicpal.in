@@ -191,7 +191,7 @@ export async function POST(req: Request) {
   // against coordinates that may have been set on an earlier save, and the
   // session deliberately doesn't carry them.
   const existing = await getProfileById(user.id);
-  const publicOptIn = publicSent ? body.publicOptIn === true : (existing?.publicOptIn ?? false);
+  const publicOptIn = publicSent ? body.publicOptIn === true : (existing?.publicOptIn ?? true);
 
   // Refuse the combination rather than silently downgrading it. Saving
   // "exact" with no pin would leave the person believing they are on the
@@ -283,7 +283,7 @@ export async function POST(req: Request) {
    * Appending only on a change is what lets the log answer "when did they
    * agree to this" — a row written on every profile save answers nothing.
    */
-  if (publicOptIn !== (existing?.publicOptIn ?? false)) {
+  if (publicOptIn !== (existing?.publicOptIn ?? true)) {
     await db.insert(consents).values({
       userId: user.id,
       kind: publicOptIn ? "open_map_on" : "open_map_off",

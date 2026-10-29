@@ -145,7 +145,7 @@ export default function ProfilePanel({
           baseLat: p.baseLat,
           baseLng: p.baseLng,
           visibility: p.visibility,
-          publicOptIn: p.publicOptIn ?? false,
+          publicOptIn: p.publicOptIn ?? true,
           openToMentor: p.openToMentor,
           seekingMentor: p.seekingMentor,
         });
@@ -602,7 +602,8 @@ export default function ProfilePanel({
                 </span>
                 <span className="mt-0.5 block text-[12px] leading-[1.45] text-[var(--ink-soft)]">
                   Anybody can see your profile and, if you&rsquo;ve set one, your location — not only the
-                  boards you&rsquo;ve joined. Off by default, and you can turn it off again at any time.
+                  boards you&rsquo;ve joined. Untick it and you&rsquo;re visible only inside the boards you
+                  joined; you can change it back whenever you like.
                 </span>
               </span>
             </label>

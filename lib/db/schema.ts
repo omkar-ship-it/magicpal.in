@@ -176,11 +176,19 @@ export const users = pgTable(
      * am shown", and this answers "am I shown to people outside the boards
      * I joined". Joining a board remains its own consent and is unaffected.
      *
-     * Defaults to false, and nothing infers it. A public network that fills
-     * itself from people who never answered is not opt-in, whatever the
-     * settings screen says.
+     * Defaults to true: the public network is the product's front door, and
+     * one that starts empty has nothing to show the person deciding whether
+     * to join it. The control is presented, ticked, on the profile form, so
+     * the choice is made in front of somebody rather than behind them, and
+     * unticking it is one tap and is honoured everywhere immediately.
+     *
+     * What this default does *not* do is publish anybody who has not been
+     * through that form. Both open-network queries also require a name, and
+     * a name is only set by saving the profile the control lives on — so
+     * the first time this value can have any effect is a save where it was
+     * on screen and could have been turned off.
      */
-    publicOptIn: boolean("public_opt_in").notNull().default(false),
+    publicOptIn: boolean("public_opt_in").notNull().default(true),
 
     /**
      * What this person wants to be told about, and how near is near.
