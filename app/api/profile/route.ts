@@ -3,8 +3,9 @@ import { eq } from "drizzle-orm";
 import { db, hasDb } from "@/lib/db";
 import { consents, users } from "@/lib/db/schema";
 import { getSessionUser } from "@/lib/session";
-import { getProfileById } from "@/lib/profiles";
+import { getProfileById, hasAcceptedTerms } from "@/lib/profiles";
 import { validPoint } from "@/lib/geo";
+import { LEGAL_VERSION, TERMS_CONSENT_KIND } from "@/lib/legal";
 import { cleanCustom, STAGE_BY_ID, validSectors, validTopics } from "@/lib/intents";
 import {
   ALERT_RADIUS_OPTIONS_KM,
@@ -37,7 +38,10 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
   const row = await getProfileById(user.id);
   if (!row) return NextResponse.json({ error: "No profile." }, { status: 404 });
+  // Drives the consent checkbox: the form has to know whether to ask.
+  const termsAccepted = await hasAcceptedTerms(user.id);
   return NextResponse.json({
+    termsAccepted,
     profile: {
       // Shown on the sign-out confirmation, so somebody can see which
       // account they're about to leave before they leave it.
@@ -95,6 +99,25 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
 
   const body = await req.json().catch(() => null);
+
+  /**
+   * Agreement to the terms and the privacy policy, taken once and recorded
+   * with the version of the wording the person was actually shown.
+   *
+   * Enforced on the server rather than only in the form. A checkbox is a
+   * prompt; the thing that makes it a consent is that the save is refused
+   * without it and that a row lands saying which text was agreed to — a
+   * client-side gate proves nothing afterwards, which is the only time
+   * anybody ever asks.
+   */
+  const alreadyAccepted = await hasAcceptedTerms(user.id);
+  if (!alreadyAccepted && body?.acceptTerms !== true) {
+    return NextResponse.json(
+      { error: "Please accept the Terms & Conditions and Privacy Policy to continue." },
+      { status: 400 }
+    );
+  }
+
   const name = str(body?.name, 80);
   const headline = str(body?.headline, 120);
   const company = str(body?.company, 120);
@@ -232,6 +255,15 @@ export async function POST(req: Request) {
       visibility,
     })
     .where(eq(users.id, user.id));
+
+  if (!alreadyAccepted) {
+    await db.insert(consents).values({
+      userId: user.id,
+      kind: TERMS_CONSENT_KIND,
+      granted: true,
+      copyVersion: LEGAL_VERSION,
+    });
+  }
 
   // Append-only, and only when the setting actually moved: a log that gets
   // a row on every profile save can't answer "when did they agree to this",

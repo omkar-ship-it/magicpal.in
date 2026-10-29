@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SECTORS, STAGES } from "@/lib/intents";
 import { ALERT_KINDS, ALERT_RADII, DEFAULT_ALERT_RADIUS_KM, MAX_INTERESTS } from "@/lib/rules";
+import Link from "next/link";
+import { LEGAL } from "@/lib/legal";
 import OwnWords from "./OwnWords";
 import BoardLogo from "./BoardLogo";
 import type { NetworkOption } from "@/lib/shell";
@@ -95,6 +97,14 @@ export default function ProfilePanel({
   const [creating, setCreating] = useState(false);
   const [shareSlug, setShareSlug] = useState<string | null>(null);
   const [email, setEmail] = useState("");
+  /**
+   * Whether this person has already agreed to the current terms and privacy
+   * policy. Null while we are still asking the server — the checkbox must
+   * not flash into view for somebody who accepted months ago, and must not
+   * be skippable for somebody who hasn't.
+   */
+  const [termsAccepted, setTermsAccepted] = useState<boolean | null>(null);
+  const [agreed, setAgreed] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -104,6 +114,7 @@ export default function ProfilePanel({
         if (!alive || !json.profile) return;
         const p = json.profile;
         setEmail(p.email ?? "");
+        setTermsAccepted(Boolean(json.termsAccepted));
         setD({
           name: p.name,
           headline: p.headline,
@@ -184,10 +195,14 @@ export default function ProfilePanel({
       const res = await fetch("/api/profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(d),
+        body: JSON.stringify({ ...d, acceptTerms: termsAccepted === true ? undefined : agreed }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Couldn't save that.");
+      // The row has landed, so stop asking. Without this the agreement
+      // block stayed on screen after a successful save, which reads as the
+      // tick not having registered and invites a second, pointless one.
+      setTermsAccepted(true);
       setSaved(true);
       router.refresh();
       onSaved();
@@ -517,10 +532,53 @@ export default function ProfilePanel({
           </div>
         </section>
 
+        {/* ------------------------------------------------- the agreement
+
+            Asked once, here, because this form is also the onboarding step —
+            the account exists from the moment a sign-in code is verified,
+            but nothing is published until a profile is saved, and this is
+            that moment. Unticked, the save is refused by the server as well
+            as by the button: a gate only the browser enforces is a prompt,
+            not a consent.
+
+            It reappears, already unticked, when the wording changes. */}
+        {termsAccepted === false && (
+          <label
+            className="flex cursor-pointer items-start gap-2.5 rounded-xl border p-3"
+            style={{ borderColor: agreed ? "var(--brand)" : "var(--line)", background: "var(--sunk)" }}
+          >
+            <input
+              type="checkbox"
+              checked={agreed}
+              onChange={(e) => setAgreed(e.target.checked)}
+              className="mt-0.5 h-4 w-4 flex-none accent-[var(--brand)]"
+            />
+            <span className="text-[12.5px] leading-[1.5]">
+              I am {LEGAL.minimumAge} or older, and I agree to the{" "}
+              <Link href="/terms" target="_blank" className="underline font-medium">
+                Terms &amp; Conditions
+              </Link>{" "}
+              and the{" "}
+              <Link href="/privacy" target="_blank" className="underline font-medium">
+                Privacy Policy
+              </Link>
+              .
+              <span className="mt-1 block text-[11.5px] text-[var(--ink-soft)]">
+                Worth two minutes of your time: the privacy policy is where it says exactly what other members
+                can see, and how to take any of it back.
+              </span>
+            </span>
+          </label>
+        )}
+
         {error && <p className="text-[12.5px] font-medium text-[var(--warn)]">{error}</p>}
 
         <div className="sticky bottom-0 flex items-center gap-3 border-t border-[var(--line)] bg-[var(--card)] py-2.5">
-          <button type="submit" disabled={busy} className="btn btn-primary btn-sm">
+          <button
+            type="submit"
+            disabled={busy || termsAccepted === null || (termsAccepted === false && !agreed)}
+            className="btn btn-primary btn-sm"
+          >
             {busy ? "Saving…" : "Save profile"}
           </button>
           {saved && (

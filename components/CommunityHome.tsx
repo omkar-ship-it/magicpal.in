@@ -7,6 +7,7 @@ import { whenLabel } from "@/lib/time";
 import Avatar from "./Avatar";
 import BoardLogo from "./BoardLogo";
 import BoardQR from "./BoardQR";
+import LegalFooter from "./LegalFooter";
 import PanelNote from "./PanelNote";
 import { Page, Row, Section, Stat, Stats } from "./Panel";
 import EditCommunity from "./EditCommunity";
@@ -314,6 +315,11 @@ export default function CommunityHome({
             <LeaveCommunity slug={scope.slug} name={scope.name} onLeft={onChanged} />
           </div>
         )}
+
+        {/* The agreement, where somebody can actually find it again.
+            A consent taken once at sign-up and then buried is a consent
+            nobody can act on — withdrawing one starts with reading it. */}
+        <LegalFooter />
       </Page>
     </div>
   );

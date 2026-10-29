@@ -2,6 +2,7 @@
 
 import { BRAND_NAME } from "@/lib/brand";
 import { Page, Section, Stat, Stats } from "./Panel";
+import LegalFooter from "./LegalFooter";
 import {
   IconBeacon,
   IconBriefcase,
@@ -354,6 +355,7 @@ export default function OpenHome({
             </button>
           )}
         </Section>
+        <LegalFooter />
       </Page>
     </div>
   );

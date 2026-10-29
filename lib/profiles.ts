@@ -4,6 +4,7 @@ import { consents, memberships, users } from "./db/schema";
 import { isActiveMember } from "./membership";
 import { distanceKm } from "./geo";
 import { ACTIVE_WINDOW_MINUTES, LIVE_STALE_MINUTES, MAX_MAP_RESULTS } from "./rules";
+import { LEGAL_VERSION, TERMS_CONSENT_KIND } from "./legal";
 
 export type Visibility = "off" | "base" | "exact" | "live";
 
@@ -528,4 +529,29 @@ export async function getProfileById(id: string) {
 export async function getProfilesByIds(ids: string[]) {
   if (!hasDb || !db || ids.length === 0) return [];
   return db.select(PROFILE_COLUMNS).from(users).where(inArray(users.id, ids));
+}
+
+/**
+ * Whether this person has accepted the *current* terms and privacy policy.
+ *
+ * Keyed on the version, not merely on the kind: a consent to wording that
+ * has since been rewritten is a record of something that no longer exists,
+ * and treating it as live agreement to the new text is exactly the move
+ * that makes a consent log worthless. Raising LEGAL_VERSION therefore asks
+ * everybody again, which is the intended cost of changing the words.
+ */
+export async function hasAcceptedTerms(userId: string): Promise<boolean> {
+  if (!hasDb || !db) return true;
+  const rows = await db
+    .select({ granted: consents.granted })
+    .from(consents)
+    .where(
+      and(
+        eq(consents.userId, userId),
+        eq(consents.kind, TERMS_CONSENT_KIND),
+        eq(consents.copyVersion, LEGAL_VERSION)
+      )
+    )
+    .limit(1);
+  return rows.length > 0 && rows[0].granted;
 }
