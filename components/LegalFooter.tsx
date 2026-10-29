@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LEGAL, LEGAL_EFFECTIVE } from "@/lib/legal";
+import { LEGAL, LEGAL_EFFECTIVE, copyrightLine } from "@/lib/legal";
 
 /**
  * The two documents, at the bottom of the home panel.
@@ -26,6 +26,7 @@ export default function LegalFooter() {
       <p className="mt-1.5 leading-[1.5]">
         In effect from {LEGAL_EFFECTIVE}. {LEGAL.brand} is operated by {LEGAL.operator}.
       </p>
+      <p className="mt-1">{copyrightLine()}</p>
     </footer>
   );
 }

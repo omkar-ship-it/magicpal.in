@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LEGAL, LEGAL_EFFECTIVE, LEGAL_VERSION } from "@/lib/legal";
+import { LEGAL, LEGAL_EFFECTIVE, LEGAL_VERSION, copyrightLine } from "@/lib/legal";
 
 /**
  * Shared chrome for the two documents nobody reads until they need to.
@@ -36,6 +36,9 @@ export default function LegalDoc({
       </p>
       <hr className="mt-6 border-[var(--line)]" />
       {children}
+      <p className="mt-12 border-t border-[var(--line)] pt-4 text-[12px] text-[var(--ink-soft)]">
+        {copyrightLine()}
+      </p>
     </article>
   );
 }

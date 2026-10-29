@@ -8,40 +8,40 @@ import { BRAND_NAME } from "./brand";
  * apart — and so that updating a contact address is one edit rather than a
  * search across prose.
  *
- * ── MUST BE CONFIRMED BEFORE RELYING ON THESE DOCUMENTS ───────────────
+ * ── STILL OUTSTANDING ─────────────────────────────────────────────────
  *
- * Three things below are operator facts nothing in this repository knows,
- * and each is a legal requirement rather than a nicety:
- *
- *   `operator`         — the legal person these documents bind. If the
- *                        product is run by a registered company rather than
- *                        an individual, this is the company's registered
- *                        name, and `registeredAddress` must be filled in.
- *   `contactEmail`     — must be a mailbox that is actually read. DPDP
- *                        requires a published point of contact.
- *   `grievanceOfficer` — India's IT Rules 2021 require an intermediary to
- *                        publish a named grievance officer and a working
- *                        address for them, and DPDP requires a route for
- *                        data-principal complaints. A name and a mailbox
- *                        that bounces is worse than none.
+ * `registeredAddress` is null. India's IT Rules 2021 require an
+ * intermediary to publish a working address for its grievance officer, and
+ * a private limited company has a registered office precisely so that one
+ * exists. Until it is filled in, every clause that would print the address
+ * simply omits it rather than inventing one.
  *
  * None of this is legal advice, and nothing here has been reviewed by a
  * lawyer. The documents are drafted to match what the code actually does,
  * which is the half a lawyer cannot write without reading it.
  */
 export const LEGAL = {
-  /** The legal person who runs the service. */
-  operator: "Omkar Bandi",
+  /** The legal person who runs the service, and holds copyright in it. */
+  operator: "Bandico Ventures Pvt Ltd",
   /** Null until there is a registered entity with an address to publish. */
   registeredAddress: null as string | null,
   jurisdiction: "India",
   /** Courts with exclusive jurisdiction over disputes. */
   venue: "Hyderabad, Telangana",
-  contactEmail: "privacy@opennetworks.in",
-  supportEmail: "hello@opennetworks.in",
+  /**
+   * One address for everything.
+   *
+   * Deliberately not three — a privacy@, a support@ and a grievance@ that
+   * all land in the same inbox are three ways for a person to feel they
+   * wrote to the wrong one, and three addresses to keep alive. The fields
+   * stay separate so a larger operator can split them later without
+   * touching the prose.
+   */
+  contactEmail: "support@bandicoventures.com",
+  supportEmail: "support@bandicoventures.com",
   grievanceOfficer: {
     name: "Omkar Bandi",
-    email: "grievance@opennetworks.in",
+    email: "support@bandicoventures.com",
   },
   /** Minimum age. Enforced as a representation at sign-up, not verified. */
   minimumAge: 18,
@@ -50,15 +50,30 @@ export const LEGAL = {
 } as const;
 
 /**
+ * The copyright line, with the year resolved when the page renders.
+ *
+ * Computed rather than written down: a footer that still says 2026 in
+ * March 2027 is the single most common sign that nobody is home.
+ */
+export function copyrightLine(): string {
+  return `© ${new Date().getFullYear()} ${LEGAL.operator}. All rights reserved.`;
+}
+
+/**
  * Bumped whenever the wording of either document changes in a way that
  * affects what somebody agreed to.
+ *
+ * Raised from .1 to .2 when the operator changed from an individual to
+ * Bandico Ventures Pvt Ltd: the identity of the party holding the data is
+ * the most material fact in a privacy policy, so an agreement to the
+ * earlier wording was an agreement with somebody else.
  *
  * The version is written into the consent row, so "when did they agree, and
  * to what" is answerable from the log alone — which is the only question an
  * audit, a complaint or a deletion request ever asks of it. Never reuse a
  * version after editing the text.
  */
-export const LEGAL_VERSION = "2026-10-29.1";
+export const LEGAL_VERSION = "2026-10-29.2";
 
 /** Shown on both documents. Human-readable twin of LEGAL_VERSION. */
 export const LEGAL_EFFECTIVE = "29 October 2026";

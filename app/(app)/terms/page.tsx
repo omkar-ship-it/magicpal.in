@@ -237,7 +237,20 @@ export default function TermsPage() {
         </p>
       </Clause>
 
-      <Clause n={17} title="General">
+      <Clause n={17} title="Our intellectual property">
+        <p>
+          {LEGAL.brand}, its name, its design, its software and everything in it other than content members
+          contribute is owned by {LEGAL.operator} and protected by copyright and other laws. Nothing in these
+          terms transfers any of it to you.
+        </p>
+        <p>
+          You get a personal, non-transferable, revocable licence to use the service while you have an
+          account, for its intended purpose. You must not copy, resell, reverse-engineer or build a competing
+          service out of it, and you must not use our name or marks without permission.
+        </p>
+      </Clause>
+
+      <Clause n={18} title="General">
         <p>
           If a clause is held unenforceable, the rest stands. Our not enforcing something is not a waiver of
           it. You may not transfer your rights under these terms; we may transfer ours as part of a
@@ -252,7 +265,7 @@ export default function TermsPage() {
         </p>
       </Clause>
 
-      <Clause n={18} title="Contact">
+      <Clause n={19} title="Contact">
         <p>
           {LEGAL.operator}
           {LEGAL.registeredAddress ? `, ${LEGAL.registeredAddress}` : ""} —{" "}
