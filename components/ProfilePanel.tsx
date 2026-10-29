@@ -246,6 +246,19 @@ export default function ProfilePanel({
 
   const myBoards = networks.filter((n) => n.slug !== null);
 
+  /**
+   * Somewhere to rank place results around: their city if they have one,
+   * otherwise their pin. Null on a first profile, which is correct — there
+   * is nothing to bias towards yet and guessing from an IP would be a
+   * worse answer stated with more confidence.
+   */
+  const near =
+    d.baseLat != null && d.baseLng != null
+      ? { lat: d.baseLat, lng: d.baseLng }
+      : d.lat != null && d.lng != null
+        ? { lat: d.lat, lng: d.lng }
+        : null;
+
   const visibilityLine =
     d.visibility === "off"
       ? "Not on the public map"
@@ -535,8 +548,13 @@ export default function ProfilePanel({
               <label className="label" htmlFor="p-city">
                 Your city
               </label>
+              {/* Biased towards wherever they already are, if anywhere —
+                  a returning member correcting their city should not have
+                  to disambiguate it from the same name on another
+                  continent. */}
               <PlaceSearch
                 id="p-city"
+                near={near}
                 value={d.baseLabel}
                 placeholder="Hyderabad"
                 onPick={(p: Place) => setD((prev) => (prev ? { ...prev, baseLabel: p.label, baseLat: p.lat, baseLng: p.lng } : prev))}
@@ -548,6 +566,7 @@ export default function ProfilePanel({
               </label>
               <PlaceSearch
                 id="p-exact"
+                near={near}
                 value={d.locationLabel}
                 placeholder="A venue, an office, a neighbourhood"
                 onPick={(p: Place) => setD((prev) => (prev ? { ...prev, locationLabel: p.label, lat: p.lat, lng: p.lng } : prev))}

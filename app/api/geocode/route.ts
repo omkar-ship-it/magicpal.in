@@ -2,7 +2,31 @@ import { NextResponse } from "next/server";
 import { validPoint } from "@/lib/geo";
 import { BRAND_NAME } from "@/lib/brand";
 
-type Result = { label: string; lat: number; lng: number };
+type Result = {
+  /** The whole thing, for callers that store one string. */
+  label: string;
+  /**
+   * The same address split the way a result list wants to read it: the
+   * thing you searched for on top, where it is underneath.
+   *
+   * One line of grey text is the difference between five results that all
+   * look identical and five you can tell apart at a glance — "Gachibowli"
+   * over "Hyderabad, Telangana" rather than a single run-on string whose
+   * distinguishing half is past the truncation.
+   */
+  name: string;
+  context: string | null;
+  lat: number;
+  lng: number;
+};
+
+/** Splits a one-string address into its first part and the rest. */
+function split(label: string, lat: number, lng: number): Result {
+  const i = label.indexOf(",");
+  return i === -1
+    ? { label, name: label, context: null, lat, lng }
+    : { label, name: label.slice(0, i).trim(), context: label.slice(i + 1).trim(), lat, lng };
+}
 
 /**
  * Turns "Koramangala, Bengaluru" into a lat/lng. Mapbox's Geocoding API when
@@ -41,7 +65,7 @@ export async function GET(req: Request) {
       // A point with no name is still a usable pin, so fall back to the
       // coordinates rather than failing the whole flow.
       return NextResponse.json({
-        results: [{ label: `${here.lat.toFixed(4)}, ${here.lng.toFixed(4)}`, lat: here.lat, lng: here.lng }],
+        results: [split(`${here.lat.toFixed(4)}, ${here.lng.toFixed(4)}`, here.lat, here.lng)],
       });
     }
   }
@@ -49,8 +73,20 @@ export async function GET(req: Request) {
   const q = params.get("q")?.trim();
   if (!q || q.length < 2) return NextResponse.json({ results: [] });
 
+  /**
+   * Where to bias results towards.
+   *
+   * Without it the geocoder is answering "where in the world is a place
+   * called this", and the honest answer to "Gachibowli" includes a road in
+   * one city and a neighbourhood in another, ordered by nothing the person
+   * typing cares about. With it, the answer is the one within reach —
+   * which is what every map search anybody has used does, and why this felt
+   * worse than the thing people compare it to.
+   */
+  const near = validPoint(params.get("nearLat"), params.get("nearLng"));
+
   try {
-    const results = mapboxToken ? await geocodeMapbox(q, mapboxToken) : await geocodeNominatim(q);
+    const results = mapboxToken ? await geocodeMapbox(q, mapboxToken, near) : await geocodeNominatim(q, near);
     return NextResponse.json({ results });
   } catch {
     return NextResponse.json({ results: [] });
@@ -72,7 +108,7 @@ async function reverseMapbox(lat: number, lng: number, token: string): Promise<R
   // The caller's own coordinates, not the geocoder's: a reverse lookup
   // snaps to the nearest named thing, and somebody who picked "here" meant
   // here rather than the building across the road.
-  return [{ label: f?.properties.full_address ?? f?.properties.name ?? `${lat.toFixed(4)}, ${lng.toFixed(4)}`, lat, lng }];
+  return [split(f?.properties.full_address ?? f?.properties.name ?? `${lat.toFixed(4)}, ${lng.toFixed(4)}`, lat, lng)];
 }
 
 async function reverseNominatim(lat: number, lng: number): Promise<Result[]> {
@@ -86,37 +122,61 @@ async function reverseNominatim(lat: number, lng: number): Promise<Result[]> {
   });
   if (!res.ok) return [];
   const d = (await res.json()) as { display_name?: string };
-  return [{ label: d.display_name ?? `${lat.toFixed(4)}, ${lng.toFixed(4)}`, lat, lng }];
+  return [split(d.display_name ?? `${lat.toFixed(4)}, ${lng.toFixed(4)}`, lat, lng)];
 }
 
-async function geocodeMapbox(q: string, token: string): Promise<Result[]> {
+async function geocodeMapbox(
+  q: string,
+  token: string,
+  near: { lat: number; lng: number } | null
+): Promise<Result[]> {
   const url = new URL("https://api.mapbox.com/search/geocode/v6/forward");
   url.searchParams.set("q", q);
-  url.searchParams.set("limit", "5");
+  url.searchParams.set("limit", "6");
   url.searchParams.set("access_token", token);
+  if (near) url.searchParams.set("proximity", `${near.lng},${near.lat}`);
 
   const res = await fetch(url);
   if (!res.ok) return [];
   const data = await res.json();
-  type Feature = { properties: { full_address?: string; name?: string }; geometry: { coordinates: [number, number] } };
-  return ((data.features ?? []) as Feature[]).map((f) => ({
-    label: f.properties.full_address ?? f.properties.name ?? q,
-    lng: f.geometry.coordinates[0],
-    lat: f.geometry.coordinates[1],
-  }));
+  type Feature = {
+    properties: { full_address?: string; name?: string; place_formatted?: string };
+    geometry: { coordinates: [number, number] };
+  };
+  return ((data.features ?? []) as Feature[]).map((f) => {
+    const lng = f.geometry.coordinates[0];
+    const lat = f.geometry.coordinates[1];
+    // Mapbox already hands back the two halves separately; splitting its
+    // own full_address back up would be re-deriving what it just told us.
+    const name = f.properties.name;
+    const label = f.properties.full_address ?? f.properties.name ?? q;
+    return name
+      ? { label, name, context: f.properties.place_formatted ?? null, lat, lng }
+      : split(label, lat, lng);
+  });
 }
 
-async function geocodeNominatim(q: string): Promise<Result[]> {
+async function geocodeNominatim(q: string, near: { lat: number; lng: number } | null): Promise<Result[]> {
   const url = new URL("https://nominatim.openstreetmap.org/search");
   url.searchParams.set("q", q);
   url.searchParams.set("format", "jsonv2");
-  url.searchParams.set("limit", "5");
+  url.searchParams.set("limit", "6");
   url.searchParams.set("addressdetails", "0");
+  // Nominatim has no proximity parameter; a generous box around the same
+  // point is the nearest equivalent, and unbounded so it still answers when
+  // the place genuinely is somewhere else.
+  if (near) {
+    const d = 1.5;
+    url.searchParams.set(
+      "viewbox",
+      `${near.lng - d},${near.lat + d},${near.lng + d},${near.lat - d}`
+    );
+  }
 
   const res = await fetch(url, {
     headers: { "User-Agent": `${BRAND_NAME}/1.0 (networking app; contact admin@bandicoventures.com)` },
   });
   if (!res.ok) return [];
   const data = (await res.json()) as Array<{ display_name: string; lat: string; lon: string }>;
-  return data.map((d) => ({ label: d.display_name, lat: Number(d.lat), lng: Number(d.lon) }));
+  return data.map((d) => split(d.display_name, Number(d.lat), Number(d.lon)));
 }
