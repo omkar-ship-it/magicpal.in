@@ -14,6 +14,19 @@ export type Place = {
 };
 
 /**
+ * A result before it has a point.
+ *
+ * Venue search is two calls: suggesting is cheap and runs per keystroke,
+ * resolving costs a billable lookup and runs once, when somebody picks.
+ * Until then a suggestion is a name and a handle.
+ */
+type Suggestion = Omit<Place, "lat" | "lng"> & {
+  id?: string | null;
+  lat: number | null;
+  lng: number | null;
+};
+
+/**
  * Type a place, pick from results, done — held to the standard everybody
  * already has in their pocket.
  *
@@ -49,7 +62,7 @@ const DEBOUNCE_MS = 160;
  * switches between the city and exact fields, reopens the panel — and a
  * repeat lookup is latency nobody needs to pay twice.
  */
-const cache = new Map<string, Place[]>();
+const cache = new Map<string, Suggestion[]>();
 
 /** Tall enough for six results and the location row, short enough to place. */
 const MENU_MAX = 268;
@@ -79,7 +92,7 @@ export default function PlaceSearch({
   near?: { lat: number; lng: number } | null;
 }) {
   const [q, setQ] = useState("");
-  const [results, setResults] = useState<Place[]>([]);
+  const [results, setResults] = useState<Suggestion[]>([]);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [active, setActive] = useState(-1);
@@ -91,8 +104,26 @@ export default function PlaceSearch({
    * straight back out by the derivation below and the button would look
    * like it had done nothing.
    */
-  const [located, setLocated] = useState<Place | null>(null);
+  const [located, setLocated] = useState<Suggestion | null>(null);
   const [geoError, setGeoError] = useState("");
+  /**
+   * One token per search, reset the moment a pick resolves.
+   *
+   * Mapbox bills a Search Box session rather than a request, so every
+   * keystroke sharing one token is one search; carrying the same token into
+   * the next search would instead be a single session that never ends.
+   */
+  const session = useRef<string>("");
+  function sessionToken() {
+    if (!session.current) {
+      session.current =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `s-${Math.random().toString(36).slice(2)}-${Date.now()}`;
+    }
+    return session.current;
+  }
+
   const seq = useRef(0);
   const abort = useRef<AbortController | null>(null);
   const box = useRef<HTMLDivElement>(null);
@@ -156,7 +187,7 @@ export default function PlaceSearch({
       abort.current = controller;
       setBusy(true);
       try {
-        const params = new URLSearchParams({ q: term });
+        const params = new URLSearchParams({ q: term, session: sessionToken() });
         if (near) {
           params.set("nearLat", String(near.lat));
           params.set("nearLng", String(near.lng));
@@ -164,7 +195,7 @@ export default function PlaceSearch({
         const res = await fetch(`/api/geocode?${params}`, { signal: controller.signal });
         const data = await res.json();
         if (mine !== seq.current) return;
-        const list: Place[] = data.results ?? [];
+        const list: Suggestion[] = data.results ?? [];
         cache.set(key, list);
         setResults(list);
         setOpen(true);
@@ -200,7 +231,7 @@ export default function PlaceSearch({
     };
   }, [open]);
 
-  function choose(p: Place) {
+  function settle(p: Place) {
     onPick(p);
     setLocated(null);
     setQ("");
@@ -208,6 +239,38 @@ export default function PlaceSearch({
     setOpen(false);
     setActive(-1);
     setGeoError("");
+    // The session ends with the pick it paid for.
+    session.current = "";
+  }
+
+  async function choose(s: Suggestion) {
+    if (s.lat != null && s.lng != null) {
+      settle({ ...s, lat: s.lat, lng: s.lng });
+      return;
+    }
+    if (!s.id) return;
+    // Closed immediately: the choice is made, and leaving the menu open
+    // through a network round-trip invites a second, different pick.
+    setOpen(false);
+    setBusy(true);
+    try {
+      const res = await fetch(
+        `/api/geocode?retrieve=${encodeURIComponent(s.id)}&session=${encodeURIComponent(sessionToken())}`
+      );
+      const data = await res.json();
+      const got = data.results?.[0];
+      if (got?.lat != null && got?.lng != null) {
+        settle(got as Place);
+      } else {
+        setOpen(true);
+        setGeoError("Couldn't pin that one down. Try another result.");
+      }
+    } catch {
+      setOpen(true);
+      setGeoError("Couldn't pin that one down. Try another result.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   /**
@@ -231,7 +294,7 @@ export default function PlaceSearch({
             `/api/geocode?lat=${pos.coords.latitude}&lng=${pos.coords.longitude}`
           );
           const data = await res.json();
-          const first: Place | undefined = data.results?.[0];
+          const first: Suggestion | undefined = data.results?.[0];
           if (first) {
             setLocated(first);
             setOpen(true);

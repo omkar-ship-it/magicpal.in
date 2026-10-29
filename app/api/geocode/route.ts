@@ -3,6 +3,16 @@ import { validPoint } from "@/lib/geo";
 import { BRAND_NAME } from "@/lib/brand";
 
 type Result = {
+  /**
+   * Mapbox's handle for a suggestion that has not been resolved to a point
+   * yet. Null for anything that already carries coordinates.
+   *
+   * The Search Box API is deliberately two-step: suggesting is cheap and
+   * happens per keystroke, resolving costs a billable lookup and happens
+   * once, when somebody actually picks. Carrying the id through the list is
+   * what lets the second step wait until it is earned.
+   */
+  id?: string | null;
   /** The whole thing, for callers that store one string. */
   label: string;
   /**
@@ -16,16 +26,17 @@ type Result = {
    */
   name: string;
   context: string | null;
-  lat: number;
-  lng: number;
+  /** Null on a suggestion that still needs resolving. See `id`. */
+  lat: number | null;
+  lng: number | null;
 };
 
 /** Splits a one-string address into its first part and the rest. */
 function split(label: string, lat: number, lng: number): Result {
   const i = label.indexOf(",");
   return i === -1
-    ? { label, name: label, context: null, lat, lng }
-    : { label, name: label.slice(0, i).trim(), context: label.slice(i + 1).trim(), lat, lng };
+    ? { id: null, label, name: label, context: null, lat, lng }
+    : { id: null, label, name: label.slice(0, i).trim(), context: label.slice(i + 1).trim(), lat, lng };
 }
 
 /**
@@ -70,6 +81,59 @@ export async function GET(req: Request) {
     }
   }
 
+  /**
+   * Second step of a Search Box lookup: an id in, a point out.
+   *
+   * The session token has to be the same one the suggestions were fetched
+   * with — that is what makes the whole interaction one billable search
+   * rather than one per keystroke — so the client generates it and passes
+   * it through both calls.
+   */
+  const retrieve = params.get("retrieve");
+  if (retrieve && mapboxToken) {
+    try {
+      const url = new URL(`https://api.mapbox.com/search/searchbox/v1/retrieve/${encodeURIComponent(retrieve)}`);
+      url.searchParams.set("session_token", params.get("session") ?? "");
+      url.searchParams.set("access_token", mapboxToken);
+      const res = await fetch(url);
+      if (!res.ok) return NextResponse.json({ results: [] });
+      const data = await res.json();
+      type F = {
+        properties: { name?: string; place_formatted?: string; full_address?: string };
+        geometry: { coordinates: [number, number] };
+      };
+      const f = (data.features ?? [])[0] as F | undefined;
+      if (!f) return NextResponse.json({ results: [] });
+      const [lng, lat] = f.geometry.coordinates;
+      const name = f.properties.name ?? f.properties.full_address ?? "";
+      /**
+       * Led by the venue's name, not its postal address.
+       *
+       * `full_address` for a point of interest is the building it sits in —
+       * searching "2gethr" and picking it saved "Purva Premiere Prestige
+       * Poseidon, Bengaluru", which is the right coordinates under a name
+       * the person never typed and would not recognise on their own profile.
+       */
+      const label = name
+        ? [name, f.properties.place_formatted].filter(Boolean).join(", ")
+        : (f.properties.full_address ?? "");
+      return NextResponse.json({
+        results: [
+          {
+            id: null,
+            label,
+            name,
+            context: f.properties.place_formatted ?? null,
+            lat,
+            lng,
+          },
+        ],
+      });
+    } catch {
+      return NextResponse.json({ results: [] });
+    }
+  }
+
   const q = params.get("q")?.trim();
   if (!q || q.length < 2) return NextResponse.json({ results: [] });
 
@@ -85,12 +149,71 @@ export async function GET(req: Request) {
    */
   const near = validPoint(params.get("nearLat"), params.get("nearLng"));
 
+  const session = params.get("session");
+
   try {
-    const results = mapboxToken ? await geocodeMapbox(q, mapboxToken, near) : await geocodeNominatim(q, near);
+    /**
+     * Search Box over plain geocoding, because the thing people type into a
+     * location box is usually a *place* — "2gethr HSR", "Starbucks Jubilee
+     * Hills", the name of the venue they are standing in. The Geocoding API
+     * does not index those at all: it answers with addresses, roads and
+     * neighbourhoods, so a venue search returned either the road it is on
+     * or nothing, and the picker looked broken to anybody who tried the
+     * most obvious thing.
+     *
+     * Falls back to geocoding without a session token, and to Nominatim
+     * without a Mapbox one — which does index OSM points of interest, so
+     * venue search survives the fallback rather than silently degrading to
+     * streets.
+     */
+    const results = mapboxToken
+      ? session
+        ? await suggestMapbox(q, mapboxToken, near, session)
+        : await geocodeMapbox(q, mapboxToken, near)
+      : await geocodeNominatim(q, near);
     return NextResponse.json({ results });
   } catch {
     return NextResponse.json({ results: [] });
   }
+}
+
+async function suggestMapbox(
+  q: string,
+  token: string,
+  near: { lat: number; lng: number } | null,
+  session: string
+): Promise<Result[]> {
+  const url = new URL("https://api.mapbox.com/search/searchbox/v1/suggest");
+  url.searchParams.set("q", q);
+  url.searchParams.set("limit", "6");
+  url.searchParams.set("session_token", session);
+  url.searchParams.set("access_token", token);
+  if (near) url.searchParams.set("proximity", `${near.lng},${near.lat}`);
+
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  const data = await res.json();
+  type S = {
+    mapbox_id: string;
+    name: string;
+    place_formatted?: string;
+    full_address?: string;
+    feature_type?: string;
+  };
+  return ((data.suggestions ?? []) as S[])
+    // A category suggestion ("coffee shops") resolves to a list rather than
+    // a place, and there is nowhere to put a list in a field that wants one
+    // pin.
+    .filter((x) => x.feature_type !== "category" && x.mapbox_id)
+    .map((x) => ({
+      id: x.mapbox_id,
+      label: x.full_address ?? [x.name, x.place_formatted].filter(Boolean).join(", "),
+      name: x.name,
+      context: x.place_formatted ?? null,
+      // Resolved on pick, not now.
+      lat: null,
+      lng: null,
+    }));
 }
 
 async function reverseMapbox(lat: number, lng: number, token: string): Promise<Result[]> {
@@ -151,7 +274,7 @@ async function geocodeMapbox(
     const name = f.properties.name;
     const label = f.properties.full_address ?? f.properties.name ?? q;
     return name
-      ? { label, name, context: f.properties.place_formatted ?? null, lat, lng }
+      ? { id: null, label, name, context: f.properties.place_formatted ?? null, lat, lng }
       : split(label, lat, lng);
   });
 }

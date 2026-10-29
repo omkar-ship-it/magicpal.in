@@ -163,6 +163,26 @@ export const users = pgTable(
     visibility: text("visibility").notNull().default("off"),
 
     /**
+     * Whether this person appears on the open, public network at all.
+     *
+     * Separate from `visibility`, and the separation is the point. Those
+     * were one column, and that quietly made two different consents into
+     * one switch: a board member who wanted a pin on their own board had to
+     * set a visibility, and setting a visibility put them on the public map
+     * of strangers — which they had never been asked about and could not
+     * decline without also removing themselves from the board they joined.
+     *
+     * So `visibility` now answers "how precise is my location, wherever I
+     * am shown", and this answers "am I shown to people outside the boards
+     * I joined". Joining a board remains its own consent and is unaffected.
+     *
+     * Defaults to false, and nothing infers it. A public network that fills
+     * itself from people who never answered is not opt-in, whatever the
+     * settings screen says.
+     */
+    publicOptIn: boolean("public_opt_in").notNull().default(false),
+
+    /**
      * What this person wants to be told about, and how near is near.
      *
      * Opt-in per case rather than one master switch: "a friend is in town"

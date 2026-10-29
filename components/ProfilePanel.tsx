@@ -18,7 +18,7 @@ import BoardQR from "./BoardQR";
 import SignOut from "./SignOut";
 import PanelNote from "./PanelNote";
 import Avatar from "./Avatar";
-import { IconBeacon, IconCheck, IconPeople, IconPin, IconPlus, IconSparkle, IconUser } from "./Icons";
+import { IconBeacon, IconCheck, IconGlobe, IconPeople, IconPin, IconPlus, IconSparkle, IconUser } from "./Icons";
 
 /** One heading shape for every section, so the long form reads as a list. */
 function SectionTitle({ icon, title, hint }: { icon: React.ReactNode; title: string; hint?: string }) {
@@ -62,6 +62,7 @@ type Draft = {
   baseLat: number | null;
   baseLng: number | null;
   visibility: Visibility;
+  publicOptIn: boolean;
   openToMentor: boolean;
   seekingMentor: boolean;
 };
@@ -144,6 +145,7 @@ export default function ProfilePanel({
           baseLat: p.baseLat,
           baseLng: p.baseLng,
           visibility: p.visibility,
+          publicOptIn: p.publicOptIn ?? false,
           openToMentor: p.openToMentor,
           seekingMentor: p.seekingMentor,
         });
@@ -535,7 +537,7 @@ export default function ProfilePanel({
           <SectionTitle
             icon={<IconPin size={13} />}
             title="Where you appear"
-            hint="The public map only. Networks you join always show you — that's what joining one means."
+            hint="Your location is shown to the boards you've joined. The public network is a separate choice, below."
           />
           <div className="mt-3 flex flex-col gap-3">
             <VisibilityPicker
@@ -572,6 +574,38 @@ export default function ProfilePanel({
                 onPick={(p: Place) => setD((prev) => (prev ? { ...prev, locationLabel: p.label, lat: p.lat, lng: p.lng } : prev))}
               />
             </div>
+
+            {/* A second consent, asked as one.
+
+                Joining a board is agreeing to be seen by that room. Being
+                on the open network is agreeing to be seen by strangers, and
+                it used to be the same switch as the location precision
+                above — so anybody who wanted a pin on their own board was
+                published to the public map without being asked. */}
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-xl border p-3 tap"
+              style={{
+                borderColor: d.publicOptIn ? "var(--brand)" : "var(--line)",
+                background: d.publicOptIn ? "var(--sunk)" : "var(--card)",
+              }}
+            >
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 flex-none accent-[var(--brand)]"
+                checked={d.publicOptIn}
+                onChange={(e) => set("publicOptIn", e.target.checked)}
+              />
+              <span className="min-w-0">
+                <span className="flex items-center gap-1.5 text-[13.5px] font-semibold">
+                  <IconGlobe size={15} />
+                  Also show me on the public network
+                </span>
+                <span className="mt-0.5 block text-[12px] leading-[1.45] text-[var(--ink-soft)]">
+                  Anybody can see your profile and, if you&rsquo;ve set one, your location — not only the
+                  boards you&rsquo;ve joined. Off by default, and you can turn it off again at any time.
+                </span>
+              </span>
+            </label>
           </div>
         </section>
 

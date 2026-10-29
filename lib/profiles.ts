@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, isNull, lt, ne, notInArray, or } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, lt, ne, or } from "drizzle-orm";
 import { db, hasDb } from "./db";
 import { consents, memberships, users } from "./db/schema";
 import { isActiveMember } from "./membership";
@@ -269,23 +269,21 @@ function toMapProfile(r: ProfileRow, centre?: { lat: number; lng: number }): Map
 }
 
 /**
- * Onboarded people on the open network who have no position to show.
+ * People on the open network who have opted in but have no position to show.
  *
- * They belong in the *directory* and nowhere near the map. The distinction
- * this function turns on is the one that matters, and it is not visible in
- * `users.visibility` alone:
+ * They belong in the *directory* and nowhere near the map: somebody can
+ * reasonably want to be reachable by strangers without publishing where
+ * they are, and dropping them would make a network look empty while real
+ * members with stated needs sit in it unreachable.
  *
- *   never answered — `visibility` is `off` because that is the column's
- *                    default and they closed the app before reaching the
- *                    location step. They have declined nothing. Leaving
- *                    them out means a network that looks empty while real
- *                    members with stated needs sit in it, unreachable.
- *   actively declined — they opened the control and turned the map off,
- *                    which appends a row to `consents`. That is a promise,
- *                    and it is kept: they are not in this result.
- *
- * The consents log is what makes the two separable, which is most of the
- * reason it is append-only rather than a boolean on the user.
+ * What changed here is who qualifies. This used to include everybody whose
+ * `visibility` was `off` *unless* they had explicitly refused, on the
+ * reasoning that the column's default means "never answered" rather than
+ * "no". That reasoning is wrong, and it published the name, role, company
+ * and stated needs of every person who signed up and closed the app before
+ * reaching the location step — to a public network they had not heard of.
+ * Silence is not consent, and a default is not an answer. The question is
+ * now asked, and only a yes counts.
  *
  * Returned `unplaced`, with coordinates that are deliberately meaningless:
  * every surface must decide what to do with somebody who has no location,
@@ -296,19 +294,14 @@ export async function getUnplacedOpenProfiles(opts: {
 }): Promise<Array<MapProfile & { unplaced: true }>> {
   if (!hasDb || !db) return [];
 
-  const declined = db
-    .select({ userId: consents.userId })
-    .from(consents)
-    .where(eq(consents.kind, "open_map_off"));
-
   const rows = await db
     .select(PROFILE_COLUMNS)
     .from(users)
     .where(
       and(
         eq(users.visibility, "off"),
+        eq(users.publicOptIn, true),
         isNotNull(users.name),
-        notInArray(users.id, declined),
         opts.excludeUserId ? ne(users.id, opts.excludeUserId) : undefined
       )
     )
@@ -372,6 +365,9 @@ export async function getOpenMapProfiles(opts: {
     .from(users)
     .where(
       and(
+        // The public network is entered by answering yes, never by failing
+        // to answer. See users.publicOptIn.
+        eq(users.publicOptIn, true),
         ne(users.visibility, "off"),
         isNotNull(users.name), // onboarded
         // Either an exact pin or a base city must actually be present, or

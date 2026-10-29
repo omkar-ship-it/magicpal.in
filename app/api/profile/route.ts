@@ -69,6 +69,7 @@ export async function GET() {
       baseLat: row.baseLat,
       baseLng: row.baseLng,
       visibility: row.visibility,
+      publicOptIn: row.publicOptIn,
       openToMentor: row.openToMentor,
       seekingMentor: row.seekingMentor,
       notifyConnections: row.notifyConnections,
@@ -151,6 +152,15 @@ export async function POST(req: Request) {
   const basePoint = validPoint(body?.baseLat, body?.baseLng);
 
   const visibility: Visibility = VISIBILITIES.includes(body?.visibility) ? body.visibility : "off";
+  /**
+   * Absent means "leave it as it is", the same contract as the pin.
+   *
+   * It matters more here than anywhere else in this handler: a form that
+   * does not render this control must not be able to publish somebody to
+   * the open network by omission, and `body?.x === true` on an absent field
+   * would read every partial save as a retraction instead.
+   */
+  const publicSent = typeof body?.publicOptIn === "boolean";
 
   if (name.length < 2) return NextResponse.json({ error: "Tell us your name." }, { status: 400 });
   if (headline.length < 2) return NextResponse.json({ error: "Add a one-line headline." }, { status: 400 });
@@ -181,6 +191,7 @@ export async function POST(req: Request) {
   // against coordinates that may have been set on an earlier save, and the
   // session deliberately doesn't carry them.
   const existing = await getProfileById(user.id);
+  const publicOptIn = publicSent ? body.publicOptIn === true : (existing?.publicOptIn ?? false);
 
   // Refuse the combination rather than silently downgrading it. Saving
   // "exact" with no pin would leave the person believing they are on the
@@ -253,6 +264,7 @@ export async function POST(req: Request) {
       ...(hasExact ? { lat: exactPoint.lat, lng: exactPoint.lng, locationLabel } : {}),
       ...(hasBase ? { baseLat: basePoint.lat, baseLng: basePoint.lng, baseLabel } : {}),
       visibility,
+      publicOptIn,
     })
     .where(eq(users.id, user.id));
 
@@ -262,6 +274,21 @@ export async function POST(req: Request) {
       kind: TERMS_CONSENT_KIND,
       granted: true,
       copyVersion: LEGAL_VERSION,
+    });
+  }
+
+  /**
+   * The public network is a second consent, logged like the first.
+   *
+   * Appending only on a change is what lets the log answer "when did they
+   * agree to this" — a row written on every profile save answers nothing.
+   */
+  if (publicOptIn !== (existing?.publicOptIn ?? false)) {
+    await db.insert(consents).values({
+      userId: user.id,
+      kind: publicOptIn ? "open_map_on" : "open_map_off",
+      granted: publicOptIn,
+      copyVersion: CONSENT_COPY_VERSION,
     });
   }
 

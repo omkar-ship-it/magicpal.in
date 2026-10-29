@@ -14,7 +14,7 @@ const OPTIONS: Array<{
   {
     id: "off",
     label: "Off the map",
-    detail: "Nobody sees you on the public map. Boards you join still show you — that's what joining them means.",
+    detail: "No pin anywhere. You're still listed in the boards you've joined, and people there can still reach you.",
     icon: <IconHidden size={15} />,
   },
   {
@@ -87,7 +87,7 @@ export default function VisibilityPicker({
 }) {
   return (
     <fieldset>
-      <legend className="label">On the public map, show</legend>
+      <legend className="label">Show my location as</legend>
       <div className="flex flex-col gap-2">
         {OPTIONS.map((o) => {
           // Live needs a city too — it's where the pin falls back to when

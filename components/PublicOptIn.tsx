@@ -35,7 +35,14 @@ export default function PublicOptIn({
       const res = await fetch("/api/profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...current.profile, visibility: "base" }),
+        // The flag is the consent; the city is only so there is something
+        // to draw once it is given. Somebody who already has a pin keeps the
+        // precision they chose rather than being quietly widened to a city.
+        body: JSON.stringify({
+          ...current.profile,
+          publicOptIn: true,
+          visibility: current.profile.visibility === "off" ? "base" : current.profile.visibility,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Couldn't update that.");
