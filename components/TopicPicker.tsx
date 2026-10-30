@@ -16,6 +16,12 @@ import { IconCheck } from "./Icons";
  * The cap is shown as a count rather than by disabling the remaining
  * options: a greyed-out checkbox reads as broken, a "3 of 4" reads as a
  * budget you're spending.
+ *
+ * No paragraph under the chips explaining what they are for. There were
+ * two, one per side, plus a third under the interests below and a fourth
+ * under each own-words box — five explanations stacked in one section,
+ * which is how a form starts reading as homework. The section's own line
+ * says it once: every recommendation is built from these.
  */
 export default function TopicPicker({
   side,
@@ -67,11 +73,6 @@ export default function TopicPicker({
         })}
       </div>
 
-      <p className="mt-2 text-[12px] leading-4 text-[var(--ink-soft)]">
-        {side === "need"
-          ? "This is what your recommendations are built from. Pick the thing you'd actually cross a room for."
-          : "What someone else gets out of meeting you — the other half of every match."}
-      </p>
     </div>
   );
 }

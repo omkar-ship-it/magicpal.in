@@ -17,6 +17,13 @@ import { IconPlus, IconX } from "./Icons";
  * Added on Enter or on the + button, never on blur: a half-typed phrase
  * becoming a permanent tag because somebody tabbed away is the standard
  * failure of this control.
+ *
+ * Folded away until asked for. Three of these under three chip rows meant
+ * three text boxes and three lines of explanation on a form whose whole
+ * problem was looking like work — and the chips are the front door anyway,
+ * because a typed phrase only ever matches somebody who typed the same
+ * phrase. Anyone who has already written one sees it open, since there is
+ * something in it to see.
  */
 export default function OwnWords({
   values,
@@ -31,6 +38,7 @@ export default function OwnWords({
 }) {
   const [draft, setDraft] = useState("");
   const [note, setNote] = useState("");
+  const [open, setOpen] = useState(values.length > 0);
   const atCap = values.length >= MAX_CUSTOM;
 
   function add() {
@@ -55,6 +63,19 @@ export default function OwnWords({
     onChange([...values, label]);
     setDraft("");
     setNote("");
+  }
+
+  if (!open && values.length === 0) {
+    return (
+      <button
+        type="button"
+        className="tap mt-1.5 inline-flex items-center gap-1 text-[12px] font-medium"
+        style={{ color: "var(--brand)" }}
+        onClick={() => setOpen(true)}
+      >
+        <IconPlus size={11} /> Add your own
+      </button>
+    );
   }
 
   return (

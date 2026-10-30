@@ -518,11 +518,6 @@ export default function ProfilePanel({
                   );
                 })}
               </div>
-              {/* The only symmetric signal: it finds people worth meeting
-                  even when neither of you needs what the other offers. */}
-              <p className="mt-2 text-[12px] leading-[1.45] text-[var(--ink-soft)]">
-                Finds people worth an hour even when neither of you needs what the other offers.
-              </p>
               <OwnWords
                 values={d.customInterests}
                 placeholder="Carnatic music"
@@ -532,7 +527,11 @@ export default function ProfilePanel({
             </div>
 
             <div>
-              <p className="label">Where you are right now</p>
+              {/* "Where you are right now" in a form that also asks for your
+                  city and your exact location read as a third location
+                  question. It was never one — the options are Founder,
+                  Investor, Between things. */}
+              <p className="label">Your role</p>
               <div className="flex flex-wrap gap-1.5">
                 {STAGES.map((s) => (
                   <button
