@@ -66,6 +66,16 @@ export default function PersonRow({
         <span className="flex items-center gap-1.5">
           <span className="min-w-0 truncate text-[13px] font-semibold">{person.name}</span>
           {person.verified && <VerifiedBadge size={13} label="Verified by this community" />}
+          {/* So a list of people you are scanning for strangers does not
+              make you stop on your own face wondering who that is. */}
+          {person.self && (
+            <span
+              className="pill flex-none"
+              style={{ background: "color-mix(in srgb, var(--brand) 14%, transparent)", color: "var(--brand)" }}
+            >
+              You
+            </span>
+          )}
           {person.hereNow && (
             <span
               className="pill flex-none"

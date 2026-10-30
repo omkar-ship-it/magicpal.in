@@ -138,7 +138,7 @@ export default function MapCanvas({
   onOpenStack,
   focus = null,
 }: {
-  people: Array<MapProfile & { hereNow?: boolean; verified?: boolean; unplaced?: boolean }>;
+  people: Array<MapProfile & { hereNow?: boolean; verified?: boolean; unplaced?: boolean; self?: boolean }>;
   /** The viewer, drawn distinctly so they can verify their own visibility. */
   you?: SelfMarker | null;
   events?: MapEvent[];
@@ -338,7 +338,10 @@ export default function MapCanvas({
       // was written for exactly this and nothing read it, so board members
       // with no location were being drawn at 0°, 0° in the Gulf of Guinea
       // — the coordinate pair is the carrier for "absent", not a place.
-      if (p.unplaced || (p.lat === 0 && p.lng === 0)) continue;
+      // The viewer is in this list so the directory can show them, and is
+      // skipped here because they already have a marker of their own —
+      // drawn from their real position rather than their published one.
+      if (p.self || p.unplaced || (p.lat === 0 && p.lng === 0)) continue;
       const key = `${p.lat.toFixed(digits)},${p.lng.toFixed(digits)}`;
       const list = groups.get(key);
       if (list) list.push(p);

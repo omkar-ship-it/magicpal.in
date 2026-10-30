@@ -10,6 +10,7 @@ import {
   type MapProfile,
 } from "./profiles";
 import { matchesFor, type Surface } from "./matching";
+import { validPoint } from "./geo";
 import { attachConnectionStatus } from "./connections";
 import { waitingCount } from "./messages";
 import { listAcceptedConnections } from "./connections";
@@ -110,7 +111,92 @@ export type ShellPerson = MapProfile & {
    * an accepted connection — `accepted` is never emitted.
    */
   connectionStatus?: "connected" | "pending" | "none";
+  /**
+   * This is the viewer.
+   *
+   * Carried so the directory can say "You" on the row and the map can
+   * decline to draw a second pin — it already has a marker of its own for
+   * the viewer, drawn from the real position rather than the published one.
+   */
+  self?: boolean;
 };
+
+/**
+ * You, as a row in your own directory.
+ *
+ * Every people query excludes the viewer, which is right for a map — you
+ * are already drawn, distinctly, and a stranger's card is the wrong thing
+ * to open on yourself. It is wrong for a list: the headcount beside it
+ * counted you, so a board of four listed three, and the only way to check
+ * how you actually read to the room was to ask somebody else.
+ *
+ * Your own position, not your published one — same as the `you` marker,
+ * and for the same reason. This is your screen; the question it answers is
+ * "where would I be", and the profile panel is where the published version
+ * is stated.
+ */
+function selfRow(me: {
+  id: string;
+  name: string | null;
+  headline: string | null;
+  company: string | null;
+  bio: string | null;
+  skills: string[] | null;
+  photoUrl: string | null;
+  locationLabel: string | null;
+  baseLabel: string | null;
+  linkedinUrl: string | null;
+  instagramUrl: string | null;
+  websiteUrl: string | null;
+  lookingFor: string[] | null;
+  canHelpWith: string[] | null;
+  interests: string[] | null;
+  customLookingFor: string[] | null;
+  customCanHelpWith: string[] | null;
+  customInterests: string[] | null;
+  stage: string | null;
+  workingOn: string | null;
+  lat: number | null;
+  lng: number | null;
+  baseLat: number | null;
+  baseLng: number | null;
+  visibility: string;
+}): ShellPerson | null {
+  if (!me.name) return null;
+  const city = me.visibility === "base";
+  const point = validPoint(
+    city ? (me.baseLat ?? me.lat) : (me.lat ?? me.baseLat),
+    city ? (me.baseLng ?? me.lng) : (me.lng ?? me.baseLng)
+  );
+  return {
+    id: me.id,
+    name: me.name,
+    headline: me.headline,
+    company: me.company,
+    bio: me.bio,
+    skills: me.skills ?? [],
+    photoUrl: me.photoUrl,
+    locationLabel: city ? me.baseLabel : (me.locationLabel ?? me.baseLabel),
+    linkedinUrl: me.linkedinUrl,
+    instagramUrl: me.instagramUrl,
+    websiteUrl: me.websiteUrl,
+    lookingFor: me.lookingFor ?? [],
+    canHelpWith: me.canHelpWith ?? [],
+    interests: me.interests ?? [],
+    customLookingFor: me.customLookingFor ?? [],
+    customCanHelpWith: me.customCanHelpWith ?? [],
+    customInterests: me.customInterests ?? [],
+    stage: me.stage,
+    workingOn: me.workingOn,
+    lat: point?.lat ?? 0,
+    lng: point?.lng ?? 0,
+    placed: city ? "base" : "exact",
+    distanceKm: 0,
+    active: true,
+    unplaced: !point,
+    self: true,
+  };
+}
 
 export type ShellPayload = {
   scope: {
@@ -259,6 +345,9 @@ export async function shellPayload(opts: {
       // and the UI had no idea.
       const withStatusHere = (await attachConnectionStatus(rawMembers, opts.userId)) as typeof rawMembers;
       const members = await attachVouches(withStatusHere, opts.userId);
+      // You, at the top of your own board's list.
+      const self = me ? selfRow(me) : null;
+      const people = self ? [self, ...members] : members;
       const surface = board.type as Surface;
       const matches =
         me?.name
@@ -288,7 +377,9 @@ export async function shellPayload(opts: {
           home: {
             place: board.place,
             hostName: host?.name ?? "a member",
-            memberCount: members.length + 1,
+            // The list and the number are now the same list and the same
+            // number: whoever the directory shows, including you.
+            memberCount: people.length,
             eventCount: children.length,
             createdAt: board.createdAt.toISOString(),
             isHost: board.hostUserId === opts.userId,
@@ -300,7 +391,7 @@ export async function shellPayload(opts: {
             canLeave: Boolean(opts.userId) && board.hostUserId !== opts.userId,
           },
         },
-        people: members,
+        people,
         matches,
         events: await toEventRefs(children, opts.userId),
         networks,
@@ -369,7 +460,10 @@ export async function shellPayload(opts: {
    * the placed ones so the map's own list still reads nearest-first.
    */
   const unplaced = await getUnplacedOpenProfiles({ excludeUserId: opts.userId });
-  const people = [...placed, ...unplaced];
+  // First, because it is the one row whose answer the reader already knows
+  // and is checking rather than discovering.
+  const self = me ? selfRow(me) : null;
+  const people = [...(self ? [self] : []), ...placed, ...unplaced];
 
   const matches = me?.name
     ? matchesFor({

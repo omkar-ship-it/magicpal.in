@@ -189,6 +189,12 @@ export default function MapShell({
    * does not, because the camera is already looking at it.
    */
   const showPerson = (id: string) => {
+    // Your own row is an entry to your profile. A stranger's card on
+    // yourself offers to connect you to you.
+    if (id === data.you?.id) {
+      openWin("profile");
+      return;
+    }
     setSelected(id);
     setAim((prev) => ({ id, at: (prev?.at ?? 0) + 1 }));
     openWin("person");
