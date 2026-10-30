@@ -104,6 +104,15 @@ export default function ProfilePanel({
    * not flash into view for somebody who accepted months ago, and must not
    * be skippable for somebody who hasn't.
    */
+  /**
+   * Whether this panel opened on a profile that did not exist yet.
+   *
+   * Captured once, from what the server sent, and not re-derived from the
+   * draft: a person who has just typed their name is still mid-onboarding,
+   * and recomputing it per keystroke would make four more sections appear
+   * under their cursor halfway through the first field.
+   */
+  const [firstRun, setFirstRun] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState<boolean | null>(null);
   const [agreed, setAgreed] = useState(false);
   const consentRef = useRef<HTMLInputElement>(null);
@@ -116,6 +125,7 @@ export default function ProfilePanel({
         if (!alive || !json.profile) return;
         const p = json.profile;
         setEmail(p.email ?? "");
+        setFirstRun(!p.name);
         setTermsAccepted(Boolean(json.termsAccepted));
         setD({
           name: p.name,
@@ -229,6 +239,9 @@ export default function ProfilePanel({
       // block stayed on screen after a successful save, which reads as the
       // tick not having registered and invites a second, pointless one.
       setTermsAccepted(true);
+      // Onboarding is over the moment there is a profile. Everything the
+      // form was holding back appears, rather than on some later visit.
+      setFirstRun(false);
       setSaved(true);
       router.refresh();
       onSaved();
@@ -274,13 +287,22 @@ export default function ProfilePanel({
   // tells somebody they're incomplete without telling them what to do; the
   // first unfilled item is the only useful part of the number, so that is
   // the part this shows.
+  /**
+   * In the order the form asks for them, which is not the order they were
+   * in: "add a picture" sat sixth and lived in the first section, so the
+   * one line telling somebody what to do next pointed back past three
+   * sections they had already scrolled through.
+   *
+   * A picture is no longer a step at all. Everybody has one — the avatar is
+   * generated when there is no photo — so counting it as missing was both
+   * untrue and a way of padding the number.
+   */
   const steps: Array<{ done: boolean; label: string }> = [
     { done: Boolean(d.name && d.headline), label: "your name and a line about you" },
+    { done: Boolean(d.workingOn), label: "what you're working on" },
     { done: d.lookingFor.length + d.customLookingFor.length > 0, label: "what you're looking for" },
     { done: d.canHelpWith.length + d.customCanHelpWith.length > 0, label: "what you can help with" },
     { done: d.interests.length + d.customInterests.length > 0, label: "what you're into" },
-    { done: Boolean(d.workingOn), label: "what you're working on" },
-    { done: Boolean(d.photoUrl || d.avatarStyle), label: "a picture" },
     { done: d.visibility !== "off", label: "where you appear" },
   ];
   const doneCount = steps.filter((x) => x.done).length;
@@ -289,8 +311,18 @@ export default function ProfilePanel({
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      {/* A standing summary, so the long form below is something you scroll
-          into rather than the first thing you meet. */}
+      {/* A bar reading "0% there" is a worse greeting than a sentence. On a
+          first run it says what the next two minutes are for; after that
+          the summary and the progress take over. */}
+      {firstRun ? (
+        <div className="mb-4 rounded-2xl p-3.5" style={{ background: "var(--sunk)" }}>
+          <p className="text-[13.5px] font-semibold">Three questions and you&rsquo;re on the map</p>
+          <p className="mt-1 max-w-[52ch] text-[12px] leading-[1.5] text-[var(--ink-soft)]">
+            Who you are, what you&rsquo;re after, and where. The middle one is the one that matters — it is
+            what every introduction here is made of, in both directions.
+          </p>
+        </div>
+      ) : (
       <div className="mb-4 flex items-center gap-3 rounded-2xl p-3" style={{ background: "var(--sunk)" }}>
         <Avatar name={d.name || "You"} photoUrl={d.photoUrl} size={44} />
         <div className="min-w-0 flex-1">
@@ -312,11 +344,12 @@ export default function ProfilePanel({
           </p>
         </div>
       </div>
+      )}
 
       {/* The bar exists to answer "why bother" — every unfilled line is a
           recommendation that can't be made, in either direction. It
           disappears entirely once there's nothing left to say. */}
-      {nextUp && (
+      {nextUp && !firstRun && (
         <div className="mb-4 rounded-2xl p-3" style={{ background: "var(--sunk)" }}>
           <div className="flex items-baseline justify-between gap-2">
             <p className="text-[12.5px] font-semibold">Your profile is {pct}% there</p>
@@ -345,15 +378,13 @@ export default function ProfilePanel({
         <section>
           <SectionTitle icon={<IconUser size={13} />} title="Who you are" />
           <div className="mt-3 flex flex-col gap-3">
-            <AvatarPicker name={d.name || "You"} photoUrl={d.photoUrl} style={d.avatarStyle} onChange={onAvatar} />
-            {photoError && <p className="text-[12px] font-medium text-[var(--warn)]">{photoError}</p>}
-
             <div>
               <label className="label" htmlFor="p-name">
                 Name
               </label>
               <input id="p-name" className="input" required value={d.name} onChange={(e) => set("name", e.target.value)} />
             </div>
+
             <div>
               <label className="label" htmlFor="p-headline">
                 One line about you
@@ -367,6 +398,14 @@ export default function ProfilePanel({
                 onChange={(e) => set("headline", e.target.value)}
               />
             </div>
+
+            {/* After the two fields that identify somebody, not before
+                them. It was first, and on a phone the picker filled the
+                entire opening screen of a form whose first job is getting
+                a name typed — a decision about a picture standing between
+                somebody and the thing they came to do. */}
+            <AvatarPicker name={d.name || "You"} photoUrl={d.photoUrl} style={d.avatarStyle} onChange={onAvatar} />
+            {photoError && <p className="text-[12px] font-medium text-[var(--warn)]">{photoError}</p>}
             <div>
               <label className="label" htmlFor="p-company">
                 Company
@@ -386,6 +425,10 @@ export default function ProfilePanel({
               />
             </div>
 
+            {/* Not on a first run. A phone number is private by default and
+                needed by nobody at minute one — and it puts a second privacy
+                decision in the middle of being asked your name. */}
+            {!firstRun && (
             <div>
               <label className="label" htmlFor="p-phone">
                 Phone
@@ -425,6 +468,7 @@ export default function ProfilePanel({
                 Never shown on the map or in any list. Shared only after someone you accepted asks.
               </p>
             </div>
+            )}
           </div>
         </section>
 
@@ -679,6 +723,13 @@ export default function ProfilePanel({
         </div>
       </form>
 
+      {/* Everything below is settings, and settings are for somebody who
+          already exists here. Held back on a first run so the one screen a
+          new member meets is three questions and a button, rather than
+          three questions, a button, notification preferences, a board
+          builder, a QR code and a sign-out. */}
+      {!firstRun && (
+        <>
       {/* ------------------------------------------------- your networks */}
         {/* ------------------------------------------- what you're told */}
         <section>
@@ -817,6 +868,8 @@ export default function ProfilePanel({
       </section>
 
       <SignOut email={email} live={d.visibility === "live"} />
+        </>
+      )}
     </div>
   );
 }
