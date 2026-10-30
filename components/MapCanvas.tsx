@@ -768,8 +768,13 @@ function FaceStack({
   if (fanned && sorted.length > 1) {
     const shown = sorted.slice(0, FAN_MAX);
     const rest = sorted.length - shown.length;
-    const slots = fanRing(shown.length + (rest > 0 ? 1 : 0));
+    // Faces only. The overflow count used to take a slot on the ring, which
+    // meant a pile of eleven drew nine faces and a chip — it lives in the
+    // hub now, so ten of them fan.
+    const slots = fanRing(shown.length);
     const reach = Math.max(...slots.map((s) => Math.hypot(s.x, s.y)));
+    const openList = () =>
+      onOpenStack ? onOpenStack(sorted.map((p) => p.id)) : onSelect?.(sorted[0].id);
 
     return (
       <span className="pin-scale" style={{ position: "relative", display: "block", width: 0, height: 0 }}>
@@ -798,21 +803,61 @@ function FaceStack({
           ))}
         </svg>
 
-        {/* The real position. Everything else is a label hanging off it. */}
-        <span
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            left: 0,
-            top: 0,
-            transform: "translate(-50%, -50%)",
-            width: 7,
-            height: 7,
-            borderRadius: 999,
-            background: "var(--ink-soft)",
-            boxShadow: "0 0 0 2px var(--card)",
-          }}
-        />
+        {/**
+         * The hub: the real position, and the way into the list.
+         *
+         * It was a seven-pixel dot marked aria-hidden, which left the only
+         * route from a pile to a directory on the "+N" chip — so a pile of
+         * six, which fans completely and has no chip, had no route at all.
+         * The affordance existed for crowds of a hundred and was missing
+         * for the crowds you are most likely to work through.
+         *
+         * Above ten it carries the overflow count, so there is one thing to
+         * press at every size rather than a dot sometimes and a chip
+         * elsewhere on the ring other times.
+         *
+         * The positioning sits on the wrapper, never on the button:
+         * `.map-pin` animates `transform` on hover, which would replace the
+         * centring translate and throw the hub off its own coordinate.
+         */}
+        <span style={{ position: "absolute", left: 0, top: 0, transform: "translate(-50%, -50%)" }}>
+          <button
+            type="button"
+            className="map-pin grid place-items-center rounded-full"
+            onClick={openList}
+            aria-label={`${sorted.length} people here — open the directory`}
+            style={
+              rest > 0
+                ? {
+                    minWidth: 34,
+                    height: 34,
+                    padding: "0 9px",
+                    background: "var(--card)",
+                    color: "var(--ink-soft)",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    boxShadow: "0 0 0 2px var(--card), var(--shadow)",
+                  }
+                : // Transparent, and far bigger than the dot it contains: a
+                  // seven-pixel target is not a target on a phone.
+                  { width: 34, height: 34, background: "transparent" }
+            }
+          >
+            {rest > 0 ? (
+              `+${rest}`
+            ) : (
+              <span
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: 999,
+                  background: "var(--ink-soft)",
+                  boxShadow: "0 0 0 2px var(--card)",
+                }}
+              />
+            )}
+          </button>
+        </span>
 
         {shown.map((p, i) => (
           <span
@@ -823,19 +868,6 @@ function FaceStack({
             <Face p={p} lit={highlighted.has(p.id)} onSelect={onSelect} />
           </span>
         ))}
-
-        {rest > 0 && (
-          <span
-            style={{
-              position: "absolute",
-              left: slots[shown.length].x,
-              top: slots[shown.length].y,
-              transform: "translate(-50%, -50%)",
-            }}
-          >
-            {more(rest, sorted.map((p) => p.id))}
-          </span>
-        )}
       </span>
     );
   }
