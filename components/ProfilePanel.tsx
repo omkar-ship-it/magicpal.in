@@ -39,8 +39,6 @@ type Draft = {
   company: string;
   workingOn: string;
   linkedinUrl: string;
-  phone: string;
-  phoneVisibility: "private" | "connections";
   photoUrl: string | null;
   avatarStyle: string;
   lookingFor: string[];
@@ -132,8 +130,6 @@ export default function ProfilePanel({
           company: p.company,
           workingOn: p.workingOn,
           linkedinUrl: p.linkedinUrl,
-          phone: p.phone ?? "",
-          phoneVisibility: p.phoneVisibility ?? "connections",
           photoUrl: p.photoUrl,
           avatarStyle: "notionists",
           lookingFor: p.lookingFor,
@@ -421,50 +417,17 @@ export default function ProfilePanel({
               />
             </div>
 
-            {/* Not on a first run. A phone number is private by default and
-                needed by nobody at minute one — and it puts a second privacy
-                decision in the middle of being asked your name. */}
-            {!firstRun && (
-            <div>
-              <label className="label" htmlFor="p-phone">
-                Phone
-              </label>
-              <input
-                id="p-phone"
-                className="input"
-                inputMode="tel"
-                placeholder="+91 98765 43210"
-                value={d.phone}
-                onChange={(e) => set("phone", e.target.value)}
-              />
-              {/* Never in a map payload — it leaves the server only to you
-                  or to somebody you've accepted. Said here because a phone
-                  number is the field people most want to be sure about. */}
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {(
-                  [
-                    ["connections", "Visible to connections"],
-                    ["private", "Private — only me"],
-                  ] as const
-                ).map(([id, label]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    className="chip-toggle tap"
-                    data-on={d.phoneVisibility === id ? "true" : "false"}
-                    aria-pressed={d.phoneVisibility === id}
-                    onClick={() => set("phoneVisibility", id)}
-                  >
-                    {d.phoneVisibility === id && <IconCheck size={11} />}
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <p className="mt-1.5 text-[12px] leading-[1.45] text-[var(--ink-soft)]">
-                Never shown on the map or in any list. Shared only after someone you accepted asks.
-              </p>
-            </div>
-            )}
+            {/* The phone number is gone from this form entirely. It was
+                deferred off the first run already, and that was half an
+                answer: a number nobody is asked for at minute one is a
+                number nobody needs on a profile at all. It is private by
+                default, reaches only an accepted connection, and the thing
+                people actually use to reach each other here is the message
+                thread.
+
+                The column and the API are untouched, and the handler leaves
+                fields it isn't sent alone — so anybody who already added
+                one keeps it, and keeps who can see it. */}
           </div>
         </section>
 

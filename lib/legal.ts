@@ -68,15 +68,20 @@ export function copyrightLine(): string {
  * the most material fact in a privacy policy, so an agreement to the
  * earlier wording was an agreement with somebody else.
  *
+ * Raised again when "off the map" stopped being one of the location
+ * choices. §3 enumerated four states and named that one first; leaving the
+ * text describing a control the product no longer offers is precisely the
+ * drift this file exists to prevent.
+ *
  * The version is written into the consent row, so "when did they agree, and
  * to what" is answerable from the log alone — which is the only question an
  * audit, a complaint or a deletion request ever asks of it. Never reuse a
  * version after editing the text.
  */
-export const LEGAL_VERSION = "2026-10-29.2";
+export const LEGAL_VERSION = "2026-10-30.1";
 
 /** Shown on both documents. Human-readable twin of LEGAL_VERSION. */
-export const LEGAL_EFFECTIVE = "29 October 2026";
+export const LEGAL_EFFECTIVE = "30 October 2026";
 
 /**
  * The single consent kind covering both documents.

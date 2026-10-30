@@ -124,8 +124,18 @@ export async function POST(req: Request) {
   const company = str(body?.company, 120);
   const bio = str(body?.bio, 600);
   const workingOn = str(body?.workingOn, 200);
-  const phone = str(body?.phone, 32);
-  const phoneVisibility = body?.phoneVisibility === "private" ? "private" : "connections";
+  /**
+   * Absent means "leave it alone", the same contract as the pin and the
+   * alert preferences.
+   *
+   * It did not, and the form it belonged to has just been removed — so the
+   * first save by anybody who had ever added a number silently deleted it,
+   * along with who they had allowed to see it. A field disappearing from a
+   * form must never take the data with it; that is a deletion nobody asked
+   * for and nobody would have been shown.
+   */
+  const phoneSent = "phone" in (body ?? {});
+  const phone = phoneSent ? str(body.phone, 32) : null;
   const linkedinUrl = normalizeUrl(body?.linkedinUrl);
   const instagramUrl = normalizeUrl(body?.instagramUrl);
   const websiteUrl = normalizeUrl(body?.websiteUrl);
@@ -245,8 +255,10 @@ export async function POST(req: Request) {
       company: company || null,
       bio: bio || null,
       workingOn: workingOn || null,
-      phone: phone || null,
-      phoneVisibility,
+      ...(phoneSent ? { phone: phone || null } : {}),
+      ...(body?.phoneVisibility === "private" || body?.phoneVisibility === "connections"
+        ? { phoneVisibility: body.phoneVisibility }
+        : {}),
       linkedinUrl: linkedinUrl || null,
       instagramUrl: instagramUrl || null,
       websiteUrl: websiteUrl || null,

@@ -1,6 +1,6 @@
 "use client";
 
-import { IconBeacon, IconCity, IconHidden, IconPin } from "./Icons";
+import { IconBeacon, IconCity, IconPin } from "./Icons";
 
 export type Visibility = "off" | "base" | "exact" | "live";
 
@@ -11,12 +11,6 @@ const OPTIONS: Array<{
   icon: React.ReactNode;
   recommended?: boolean;
 }> = [
-  {
-    id: "off",
-    label: "Off the map",
-    detail: "No pin anywhere. You're still listed in the boards you've joined, and people there can still reach you.",
-    icon: <IconHidden size={15} />,
-  },
   {
     id: "base",
     label: "My city only",
@@ -69,9 +63,18 @@ const OPTIONS: Array<{
  * than promoted to the top, where it would break the ladder and read as
  * the product steering rather than advising.
  *
- * Defaults to off. The prototype defaulted to visible on the grounds that
- * an empty map sells nothing; boards solve the empty map now, so this
- * doesn't have to.
+ * "Off the map" is no longer one of the choices. It was the most protective
+ * of the four and it had stopped being the one that protects anybody: the
+ * public network became its own tick, so somebody who wants to be seen by
+ * their board and nobody else turns that off instead and keeps a pin where
+ * they joined. What `off` produced in practice was members who were in a
+ * room and invisible inside it — which is the state every complaint about
+ * this product so far has turned out to be.
+ *
+ * The value still exists. It is the column's default, so it is what
+ * everybody is until they answer, and rows that chose it keep it — they
+ * are told so below rather than shown a picker with nothing selected and
+ * left to guess.
  */
 export default function VisibilityPicker({
   value,
@@ -88,6 +91,14 @@ export default function VisibilityPicker({
   return (
     <fieldset>
       <legend className="label">Show my location as</legend>
+      {/* Said plainly, because the option that would have explained it is
+          no longer in the list: an unanswered picker and a deliberate "off"
+          look identical, and both mean no pin. */}
+      {value === "off" && (
+        <p className="mb-2 text-[12px] leading-[1.45]" style={{ color: "var(--warn)" }}>
+          You have no pin at the moment, on your boards or anywhere else. Pick one of these to appear.
+        </p>
+      )}
       <div className="flex flex-col gap-2">
         {OPTIONS.map((o) => {
           // Live needs a city too — it's where the pin falls back to when

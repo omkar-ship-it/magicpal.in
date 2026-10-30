@@ -17,7 +17,7 @@ export const metadata = {
  * the internet is about what the company can see; on a map of people the
  * question anybody actually has is what *other members* can see, and that
  * is a product behaviour, not a disclosure — so it is written out in the
- * same four states the code stores.
+ * same states the code stores.
  */
 export default function PrivacyPage() {
   return (
@@ -53,8 +53,9 @@ export default function PrivacyPage() {
         <p className="font-semibold">Profile</p>
         <p>
           Your name, headline, company, what you are working on, a short bio, skills, a photo or a generated
-          avatar, and links you choose to add (LinkedIn, Instagram, website). Optionally a phone number, which
-          is private by default — see §4.
+          avatar, and links you choose to add (LinkedIn, Instagram, website). Also a phone number, if you
+          added one before we stopped asking for them — we no longer collect new ones, and an existing one
+          stays private by default. See §4.
         </p>
         <p className="font-semibold">What you are here for</p>
         <p>
@@ -90,12 +91,13 @@ export default function PrivacyPage() {
 
       <Clause n={3} title="Location, in detail">
         <p>
-          Location has exactly four states and you choose which one applies. You can change it at any time,
-          and changing it takes effect immediately for everybody.
+          There are three ways to publish a location and you choose which applies. You can change it at any
+          time, and the change takes effect immediately for everybody.
         </p>
         <p>
-          <strong>Off.</strong> No position is published. You are still in the member directory of boards you
-          have joined and can still be messaged — you simply have no pin.
+          Until you choose one, nothing is published: you are in the member directory of boards you have
+          joined and can still be messaged, you simply have no pin. Appearing on the public network is a
+          separate choice again — see §4.
         </p>
         <p>
           <strong>City only.</strong> Members see the city you said you are based in. We store the city
