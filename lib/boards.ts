@@ -1,6 +1,6 @@
-import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { db, hasDb } from "./db";
-import { boards, memberships } from "./db/schema";
+import { boards, memberships, users } from "./db/schema";
 import { isActiveMember, MEMBER_ACTIVE, MEMBER_LEFT, MEMBER_REMOVED } from "./membership";
 
 export type BoardType = "event" | "community";
@@ -281,7 +281,23 @@ export async function boardsForUser(userId: string): Promise<Array<Board & { rol
     .select({
       board: boards,
       role: memberships.role,
-      memberCount: sql<number>`(select count(*) from ${memberships} m where m.board_id = ${boards.id} and m.status = '${sql.raw(MEMBER_ACTIVE)}')::int`,
+      /**
+       * People, not membership rows.
+       *
+       * A row is written the moment somebody follows a join link, before
+       * they have a name — and that is the only number on the product that
+       * counted them. A board read "6 members" while its map drew four and
+       * its directory listed four, because every other query filters on a
+       * profile existing and this one did not. A count nobody can reconcile
+       * with what they can see reads as the map being broken.
+       */
+      memberCount: sql<number>`(
+        select count(*) from ${memberships} m
+        join ${users} u on u.id = m.user_id
+        where m.board_id = ${boards.id}
+          and m.status = '${sql.raw(MEMBER_ACTIVE)}'
+          and u.name is not null
+      )::int`,
     })
     .from(memberships)
     .innerJoin(boards, eq(boards.id, memberships.boardId))
@@ -356,12 +372,33 @@ export async function sharedBoardsBetween(
   return rows;
 }
 
+/** Members with a profile. See the note in boardsForUser — same definition. */
 export async function memberCount(boardId: string): Promise<number> {
   if (!hasDb || !db) return 0;
   const [row] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(memberships)
-    .where(and(eq(memberships.boardId, boardId), isActiveMember()));
+    .innerJoin(users, eq(users.id, memberships.userId))
+    .where(and(eq(memberships.boardId, boardId), isActiveMember(), isNotNull(users.name)));
+  return row?.n ?? 0;
+}
+
+/**
+ * Joined, and never finished setting up.
+ *
+ * Shown only to a host, because it is the one number on a board that is
+ * actionable: these people scanned the code, got as far as the profile
+ * form, and stopped. They are invisible everywhere else by design — there
+ * is no name to list and no location to draw — so without this the host
+ * has no way to know they exist, let alone go and nudge them.
+ */
+export async function unfinishedCount(boardId: string): Promise<number> {
+  if (!hasDb || !db) return 0;
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(memberships)
+    .innerJoin(users, eq(users.id, memberships.userId))
+    .where(and(eq(memberships.boardId, boardId), isActiveMember(), isNull(users.name)));
   return row?.n ?? 0;
 }
 

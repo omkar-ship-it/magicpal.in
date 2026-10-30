@@ -183,6 +183,31 @@ export default function CommunityHome({
           )}
         </header>
 
+        {/* Host-only, and the one number on a board worth acting on: people
+            who scanned the code, reached the profile form and stopped. They
+            are invisible on every other surface by design — no name to list,
+            no location to draw — so without saying it here the host cannot
+            know they exist, and the headcount quietly disagreed with the map
+            instead. */}
+        {home.isHost && home.unfinished > 0 && (
+          <div
+            className="reveal rounded-2xl border p-3"
+            style={{ borderColor: "var(--line)", background: "var(--sunk)" }}
+          >
+            {/* The apostrophes are the characters, not entities: an &rsquo;
+                inside a JS string is five literal letters, which is exactly
+                how it shipped the first time. */}
+            <p className="text-[12.5px]">
+              <span className="font-semibold">{home.unfinished}</span>{" "}
+              {home.unfinished === 1 ? "person" : "people"} joined but haven’t finished setting up, so
+              they’re not on the map or in the list yet.
+            </p>
+            <p className="mt-1 text-[11.5px] leading-[1.45] text-[var(--ink-soft)]">
+              They scanned the code and stopped at the profile. A nudge usually does it.
+            </p>
+          </div>
+        )}
+
         <div className="reveal">
           <Stats>
             <Stat icon={<IconPeople size={14} />} value={memberCount} label="members" onClick={onOpenPeople} />

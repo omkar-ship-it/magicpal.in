@@ -1,4 +1,4 @@
-import { boardById, boardsForUser, childEvents, isLive, liveBoardBySlug, membershipOf, publicEvents, rsvpSummary, type Board } from "./boards";
+import { boardById, boardsForUser, childEvents, isLive, liveBoardBySlug, membershipOf, publicEvents, rsvpSummary, unfinishedCount, type Board } from "./boards";
 import { isActive } from "./membership";
 import { attachVouches } from "./vouch";
 import {
@@ -134,6 +134,8 @@ export type ShellPayload = {
       /** The terms of being in it. */
       guidelines: string | null;
       verifiedCount: number;
+      /** Host-only: joined, never finished a profile. See unfinishedCount. */
+      unfinished: number;
       /** The owner can't leave — there'd be nobody left to run it. */
       canLeave: boolean;
     } | null;
@@ -294,6 +296,7 @@ export async function shellPayload(opts: {
             details: board.details,
             guidelines: board.guidelines,
             verifiedCount: members.filter((m) => m.verifiedHere).length,
+            unfinished: board.hostUserId === opts.userId ? await unfinishedCount(board.id) : 0,
             canLeave: Boolean(opts.userId) && board.hostUserId !== opts.userId,
           },
         },
