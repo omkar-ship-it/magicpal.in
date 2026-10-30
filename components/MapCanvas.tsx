@@ -35,6 +35,17 @@ function prefersDark(): boolean {
 const PRECISE_ZOOM = 11;
 
 /**
+ * Above this, a pile of people at one point opens out into a ring.
+ *
+ * Higher than PRECISE_ZOOM on purpose. The fan is sized in screen pixels,
+ * so the same ring covers a couple of kilometres at zoom 11 and a hundred
+ * metres at 15 — and a ring that spans half a city implies a spread that
+ * isn't there, however clearly the spokes say otherwise. Neighbourhood
+ * level is where it starts telling the truth.
+ */
+const FAN_ZOOM = 13;
+
+/**
  * How big a face is drawn, as a multiple of its natural size.
  *
  * A fixed 40px avatar is two different mistakes at the two ends of the
@@ -222,6 +233,8 @@ export default function MapCanvas({
    * frames where the threshold is actually crossed.
    */
   const [precise, setPrecise] = useState(initialZoom >= PRECISE_ZOOM);
+  /** Same reasoning as `precise`: a boolean, so only the crossing re-renders. */
+  const [fanned, setFanned] = useState(initialZoom >= FAN_ZOOM);
 
   /**
    * How far out the viewer may zoom before the world stops filling the
@@ -268,6 +281,7 @@ export default function MapCanvas({
   const onMove = useCallback((e: ViewStateChangeEvent) => {
     // Same value on most frames; React compares and does nothing.
     setPrecise(e.viewState.zoom >= PRECISE_ZOOM);
+    setFanned(e.viewState.zoom >= FAN_ZOOM);
     applyPinScale(e.target?.getContainer(), e.viewState.zoom);
   }, []);
 
@@ -455,7 +469,13 @@ export default function MapCanvas({
       {!eventsOnly &&
         stacks.map((s) => (
           <Marker key={s.key} latitude={s.lat} longitude={s.lng} anchor="center">
-            <FaceStack group={s.group} highlighted={highlighted} onSelect={onSelectPerson} onOpenStack={onOpenStack} />
+            <FaceStack
+              group={s.group}
+              highlighted={highlighted}
+              fanned={fanned}
+              onSelect={onSelectPerson}
+              onOpenStack={onOpenStack}
+            />
           </Marker>
         ))}
     </MapGL>
@@ -555,14 +575,83 @@ function PinCardHover({ pin }: { pin: PinRef }) {
   );
 }
 
+/**
+ * How many faces a fanned pile shows before the rest become a "+N".
+ *
+ * Ten is about where a ring stops being a thing you read and starts being
+ * a thing you count, and the directory is a better answer past that.
+ */
+const FAN_MAX = 10;
+
+/**
+ * Where each face sits when a pile is opened out.
+ *
+ * The radius comes from the circumference the faces need rather than being
+ * fixed, so two people sit close together and nine form a proper ring
+ * instead of overlapping on a circle sized for two.
+ */
+function fanRing(n: number): Array<{ x: number; y: number }> {
+  const SIZE = 40;
+  const GAP = 11;
+  const r = Math.max(SIZE * 0.95, ((SIZE + GAP) * n) / (2 * Math.PI));
+  return Array.from({ length: n }, (_, i) => {
+    // Starting at the top and going round, so a pile of two reads as one
+    // above the other rather than as an arbitrary diagonal.
+    const a = (i / n) * Math.PI * 2 - Math.PI / 2;
+    return { x: Math.round(Math.cos(a) * r), y: Math.round(Math.sin(a) * r) };
+  });
+}
+
+/** One person, identically whether they are stacked or fanned. */
+function Face({
+  p,
+  lit,
+  onSelect,
+}: {
+  p: MapProfile & { hereNow?: boolean; verified?: boolean };
+  lit: boolean;
+  onSelect?: (id: string) => void;
+}) {
+  return (
+    <>
+      <button
+        type="button"
+        className="map-pin"
+        onClick={() => onSelect?.(p.id)}
+        aria-label={p.name}
+        style={lit ? { boxShadow: "0 0 0 2.5px var(--brand), var(--shadow)", borderRadius: 999 } : undefined}
+      >
+        <Avatar name={p.name} photoUrl={p.photoUrl} size={40} ring={2.5} />
+        {/* Bottom-right, so it never collides with the live dot above. */}
+        {p.verified && (
+          <span className="absolute -bottom-0.5 -right-0.5">
+            <VerifiedBadge size={14} label="Verified by a community you're both in" />
+          </span>
+        )}
+        {p.placed === "live" && (
+          <span
+            className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full"
+            style={{ background: "var(--good)", boxShadow: "0 0 0 2px var(--card)" }}
+            title="Live location"
+          />
+        )}
+      </button>
+      <PinCard person={p} />
+    </>
+  );
+}
+
 function FaceStack({
   group,
   highlighted,
+  fanned,
   onSelect,
   onOpenStack,
 }: {
   group: Array<MapProfile & { hereNow?: boolean; verified?: boolean }>;
   highlighted: Set<string>;
+  /** Close enough in to open the pile out instead of overlapping it. */
+  fanned: boolean;
   onSelect?: (id: string) => void;
   /** The whole pile, handed to the directory. See the +N button below. */
   onOpenStack?: (ids: string[]) => void;
@@ -574,6 +663,117 @@ function FaceStack({
     () => [...group].sort((a, b) => Number(highlighted.has(b.id)) - Number(highlighted.has(a.id))),
     [group, highlighted]
   );
+
+  const more = (n: number, ids: string[]) => (
+    <button
+      type="button"
+      className="map-pin grid h-[40px] w-[40px] place-items-center rounded-full text-[12px] font-semibold"
+      style={{ background: "var(--card)", color: "var(--ink-soft)", boxShadow: "0 0 0 2px var(--card), var(--shadow)" }}
+      /**
+       * The pile, not the fourth person in it.
+       *
+       * This used to open whoever happened to be sorted fourth, which is an
+       * arbitrary answer to "who else is here" and no answer at all once a
+       * stack is forty deep. It opens the directory scoped to this stack
+       * instead, filtered by what people offer and need rather than by city
+       * — every one of them is in the same place, which is why they piled up.
+       */
+      onClick={() => (onOpenStack ? onOpenStack(ids) : onSelect?.(sorted[sorted.length - n].id))}
+      aria-label={`${n} more people here — open the directory`}
+    >
+      +{n}
+    </button>
+  );
+
+  /**
+   * Close in, a pile opens out into a ring around where it actually is.
+   *
+   * Everybody who pins themselves at the same venue — a co-working floor, a
+   * conference hall — lands on one coordinate, and overlapping avatars mean
+   * the thing the map is for stops working at exactly the moment it matters
+   * most: you can see that people are there and not who any of them is.
+   *
+   * The fan is not a claim about where anybody is standing, and it is drawn
+   * so it cannot be read as one: a dot marks the real point and a line runs
+   * from it to every face. The ring is sized in screen pixels, so it shrinks
+   * in metres as you zoom in — which is the right way round, since the
+   * further in you are the more precisely the dot locates them.
+   */
+  if (fanned && sorted.length > 1) {
+    const shown = sorted.slice(0, FAN_MAX);
+    const rest = sorted.length - shown.length;
+    const slots = fanRing(shown.length + (rest > 0 ? 1 : 0));
+    const reach = Math.max(...slots.map((s) => Math.hypot(s.x, s.y)));
+
+    return (
+      <span className="pin-scale" style={{ position: "relative", display: "block", width: 0, height: 0 }}>
+        <svg
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            left: -reach,
+            top: -reach,
+            width: reach * 2,
+            height: reach * 2,
+            overflow: "visible",
+            pointerEvents: "none",
+          }}
+        >
+          {slots.map((s, i) => (
+            <line
+              key={i}
+              x1={reach}
+              y1={reach}
+              x2={reach + s.x}
+              y2={reach + s.y}
+              stroke="var(--line)"
+              strokeWidth={1.5}
+            />
+          ))}
+        </svg>
+
+        {/* The real position. Everything else is a label hanging off it. */}
+        <span
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            transform: "translate(-50%, -50%)",
+            width: 7,
+            height: 7,
+            borderRadius: 999,
+            background: "var(--ink-soft)",
+            boxShadow: "0 0 0 2px var(--card)",
+          }}
+        />
+
+        {shown.map((p, i) => (
+          <span
+            key={p.id}
+            className="hover-host"
+            style={{ position: "absolute", left: slots[i].x, top: slots[i].y, transform: "translate(-50%, -50%)" }}
+          >
+            <Face p={p} lit={highlighted.has(p.id)} onSelect={onSelect} />
+          </span>
+        ))}
+
+        {rest > 0 && (
+          <span
+            style={{
+              position: "absolute",
+              left: slots[shown.length].x,
+              top: slots[shown.length].y,
+              transform: "translate(-50%, -50%)",
+            }}
+          >
+            {more(rest, sorted.map((p) => p.id))}
+          </span>
+        )}
+      </span>
+    );
+  }
+
   const faces = sorted.slice(0, 3);
   const extra = sorted.length - faces.length;
 
@@ -581,58 +781,10 @@ function FaceStack({
     <span className="pin-scale flex items-center -space-x-3">
       {faces.map((p) => (
         <span key={p.id} className="hover-host relative">
-          <button
-            type="button"
-            className="map-pin"
-            onClick={() => onSelect?.(p.id)}
-            aria-label={p.name}
-            style={
-              highlighted.has(p.id)
-                ? { boxShadow: "0 0 0 2.5px var(--brand), var(--shadow)", borderRadius: 999 }
-                : undefined
-            }
-          >
-            <Avatar name={p.name} photoUrl={p.photoUrl} size={40} ring={2.5} />
-            {/* Bottom-right, so it never collides with the live dot above. */}
-            {p.verified && (
-              <span className="absolute -bottom-0.5 -right-0.5">
-                <VerifiedBadge size={14} label="Verified by a community you're both in" />
-              </span>
-            )}
-            {p.placed === "live" && (
-              <span
-                className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full"
-                style={{ background: "var(--good)", boxShadow: "0 0 0 2px var(--card)" }}
-                title="Live location"
-              />
-            )}
-          </button>
-          <PinCard person={p} />
+          <Face p={p} lit={highlighted.has(p.id)} onSelect={onSelect} />
         </span>
       ))}
-      {extra > 0 && (
-        <button
-          type="button"
-          className="map-pin grid h-[40px] w-[40px] place-items-center rounded-full text-[12px] font-semibold"
-          style={{ background: "var(--card)", color: "var(--ink-soft)", boxShadow: "0 0 0 2px var(--card), var(--shadow)" }}
-          /**
-           * The pile, not the fourth person in it.
-           *
-           * This used to open whoever happened to be sorted fourth, which
-           * is an arbitrary answer to "who else is here" and no answer at
-           * all once a stack is forty deep. It opens the directory scoped
-           * to this stack instead, filtered by what people offer and need
-           * rather than by city — every one of them is in the same city,
-           * which is why they stacked.
-           */
-          onClick={() =>
-            onOpenStack ? onOpenStack(sorted.map((p) => p.id)) : onSelect?.(sorted[faces.length].id)
-          }
-          aria-label={`${extra} more people here — open the directory`}
-        >
-          +{extra}
-        </button>
-      )}
+      {extra > 0 && more(extra, sorted.map((p) => p.id))}
     </span>
   );
 }
