@@ -141,7 +141,21 @@ export async function POST(req: Request) {
   const customLookingFor = cleanCustom(body?.customLookingFor, customCaps);
   const customCanHelpWith = cleanCustom(body?.customCanHelpWith, customCaps);
   const customInterests = cleanCustom(body?.customInterests, customCaps);
-  const stage = STAGE_BY_ID.has(body?.stage) ? (body.stage as string) : null;
+  /**
+   * A known role, or one in their own words.
+   *
+   * The list is eight entries and the eighth is "Between things", which is
+   * what a fixed list says when it has run out — a chef, a civil servant, a
+   * doctor and a schoolteacher all have to call themselves that. It is a
+   * label the product displays and searches, never something the matcher
+   * scores on, so there is nothing for an unknown value to break.
+   */
+  const rawStage = typeof body?.stage === "string" ? body.stage.trim().replace(/\s+/g, " ") : "";
+  const stage = STAGE_BY_ID.has(rawStage)
+    ? rawStage
+    : rawStage
+      ? rawStage.slice(0, MAX_CUSTOM_LENGTH)
+      : null;
 
   // Parsed through `validPoint`, not `Number.isFinite(Number(x))`: a null
   // coordinate coerces to 0, which is finite, so the naive guard stores a

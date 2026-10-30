@@ -105,7 +105,9 @@ export default function PersonProfile({
   if (!data || stale) return <PanelNote title="Loading…" />;
 
   const p = data.person;
-  const stage = stageById(p.stage);
+  // Falls through to what they typed: an unrecognised id is now a role
+  // in their own words, not a broken one.
+  const stageLabel = stageById(p.stage)?.label ?? p.stage;
   // Their own words sit in the same rows as the vocabulary chips: both are
   // claims the same person made about themselves, and splitting them into
   // "official" and "other" would read as the product doubting one of them.
@@ -126,9 +128,9 @@ export default function PersonProfile({
         subtitle={p.headline}
         eyebrow={
           <>
-            {stage && (
+            {stageLabel && (
               <span className="pill" style={{ background: "var(--sunk)", color: "var(--ink-soft)" }}>
-                {stage.label}
+                {stageLabel}
               </span>
             )}
             {connected && (

@@ -46,6 +46,12 @@ const PRECISE_ZOOM = 11;
 const FAN_ZOOM = 13;
 
 /**
+ * Street level, where a stack should mean "the same doorway" and nothing
+ * looser than that.
+ */
+const CLOSE_ZOOM = 16;
+
+/**
  * How big a face is drawn, as a multiple of its natural size.
  *
  * A fixed 40px avatar is two different mistakes at the two ends of the
@@ -277,6 +283,7 @@ export default function MapCanvas({
   const [precise, setPrecise] = useState(initialZoom >= PRECISE_ZOOM);
   /** Same reasoning as `precise`: a boolean, so only the crossing re-renders. */
   const [fanned, setFanned] = useState(initialZoom >= FAN_ZOOM);
+  const [close, setClose] = useState(initialZoom >= CLOSE_ZOOM);
 
   /**
    * How far out the viewer may zoom before the world stops filling the
@@ -324,14 +331,27 @@ export default function MapCanvas({
     // Same value on most frames; React compares and does nothing.
     setPrecise(e.viewState.zoom >= PRECISE_ZOOM);
     setFanned(e.viewState.zoom >= FAN_ZOOM);
+    setClose(e.viewState.zoom >= CLOSE_ZOOM);
     applyPinScale(e.target?.getContainer(), e.viewState.zoom);
   }, []);
 
   const stacks = useMemo(() => {
-    // Rounding to ~1km at precise zoom and ~10km below it. Both are coarse
-    // enough that two pins never visually collide, which is the only
-    // property that matters here.
-    const digits = precise ? 2 : 1;
+    /**
+     * How close two people have to be before they count as one pin, and it
+     * follows the zoom because "close" is a question about the screen.
+     *
+     * This was a kilometre from zoom 11 upwards, which is most of a city
+     * block at 15 and considerably wider than the whole viewport at 18 — so
+     * zooming in to separate a crowd did nothing at all, and people several
+     * streets apart were served as a single stack with a "+9" on it. The
+     * one action anybody takes to pull a pile apart was the one action that
+     * could not.
+     *
+     * 11km, 1.1km, 110m, 11m. By street level a stack means the same
+     * doorway, and whatever genuinely shares a doorway is fanned out into a
+     * ring below rather than piled up.
+     */
+    const digits = close ? 4 : fanned ? 3 : precise ? 2 : 1;
     const groups = new Map<string, Array<MapProfile & { hereNow?: boolean }>>();
     for (const p of people) {
       // Somebody who has not published a position has no pin. `unplaced`
@@ -353,7 +373,7 @@ export default function MapCanvas({
       lng: group[0].lng,
       group,
     }));
-  }, [people, precise]);
+  }, [people, precise, fanned, close]);
 
   if (!token) {
     return (

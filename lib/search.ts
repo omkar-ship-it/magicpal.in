@@ -97,7 +97,10 @@ function haystack(p: MapProfile): string {
     topicWords,
     sectorWords,
     ownWords,
-    stageById(p.stage)?.label,
+    // Their own words when it isn't one of ours — otherwise a role
+    // somebody typed would be the one thing on their profile search
+    // could not find.
+    stageById(p.stage)?.label ?? p.stage,
   ]
     .filter(Boolean)
     .join(" ")

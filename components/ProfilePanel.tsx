@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SECTORS, STAGES } from "@/lib/intents";
-import { MAX_INTERESTS } from "@/lib/rules";
+import { MAX_CUSTOM_LENGTH, MAX_INTERESTS } from "@/lib/rules";
 import Link from "next/link";
 import { LEGAL } from "@/lib/legal";
 import OwnWords from "./OwnWords";
@@ -109,6 +109,9 @@ export default function ProfilePanel({
    * under their cursor halfway through the first field.
    */
   const [firstRun, setFirstRun] = useState(false);
+  /** A role they typed rather than picked. Everything else reads it the same. */
+  const [roleOpen, setRoleOpen] = useState(false);
+  const [roleDraft, setRoleDraft] = useState("");
   const [termsAccepted, setTermsAccepted] = useState<boolean | null>(null);
   const [agreed, setAgreed] = useState(false);
   const consentRef = useRef<HTMLInputElement>(null);
@@ -252,6 +255,7 @@ export default function ProfilePanel({
   }
 
   const myBoards = networks.filter((n) => n.slug !== null);
+  const ownRole = Boolean(d.stage) && !STAGES.some((s) => s.id === d.stage);
 
   /**
    * Somewhere to rank place results around: their city if they have one,
@@ -546,7 +550,64 @@ export default function ProfilePanel({
                     {s.label}
                   </button>
                 ))}
+                {/* Whatever they typed, sitting in the same row as the rest
+                    — it is the same claim about the same person, and a list
+                    of eight that ends in "Between things" is a list that has
+                    run out. A chef, a civil servant and a schoolteacher all
+                    had to call themselves that. */}
+                {ownRole && (
+                  <button
+                    type="button"
+                    className="chip-toggle tap"
+                    data-on="true"
+                    aria-pressed
+                    onClick={() => set("stage", "")}
+                  >
+                    <IconCheck size={11} />
+                    {d.stage}
+                  </button>
+                )}
               </div>
+
+              {ownRole || roleOpen ? null : (
+                <button
+                  type="button"
+                  className="tap mt-1.5 inline-flex items-center gap-1 text-[12px] font-medium"
+                  style={{ color: "var(--brand)" }}
+                  onClick={() => setRoleOpen(true)}
+                >
+                  <IconPlus size={11} /> Add your own
+                </button>
+              )}
+
+              {!ownRole && roleOpen && (
+                <div className="mt-2 flex gap-1.5">
+                  <input
+                    className="input"
+                    value={roleDraft}
+                    maxLength={MAX_CUSTOM_LENGTH}
+                    placeholder="Chef, civil servant, teacher…"
+                    aria-label="Your role, in your own words"
+                    onChange={(e) => setRoleDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      // Inside a form, so Enter would submit the profile
+                      // with the word still sitting in the box unsaved.
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        if (roleDraft.trim()) set("stage", roleDraft.trim());
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm flex-none"
+                    disabled={roleDraft.trim() === ""}
+                    onClick={() => set("stage", roleDraft.trim())}
+                  >
+                    <IconPlus size={13} /> Add
+                  </button>
+                </div>
+              )}
             </div>
 
             <div>
