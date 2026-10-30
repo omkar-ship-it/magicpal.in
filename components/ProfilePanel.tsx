@@ -582,34 +582,56 @@ export default function ProfilePanel({
               hasExact={d.lat != null && d.lng != null}
               hasBase={d.baseLat != null && d.baseLng != null}
             />
-            <div>
-              <label className="label" htmlFor="p-city">
-                Your city
-              </label>
-              {/* Biased towards wherever they already are, if anywhere —
-                  a returning member correcting their city should not have
-                  to disambiguate it from the same name on another
-                  continent. */}
-              <PlaceSearch
-                id="p-city"
-                near={near}
-                value={d.baseLabel}
-                placeholder="Hyderabad"
-                onPick={(p: Place) => setD((prev) => (prev ? { ...prev, baseLabel: p.label, baseLat: p.lat, baseLng: p.lng } : prev))}
-              />
-            </div>
-            <div>
-              <label className="label" htmlFor="p-exact">
-                Exact location
-              </label>
-              <PlaceSearch
-                id="p-exact"
-                near={near}
-                value={d.locationLabel}
-                placeholder="A venue, an office, a neighbourhood"
-                onPick={(p: Place) => setD((prev) => (prev ? { ...prev, locationLabel: p.label, lat: p.lat, lng: p.lng } : prev))}
-              />
-            </div>
+            {/* One box, and it is the one the chosen setting actually uses.
+                Both were always on screen, which asked somebody to work out
+                for themselves that "a fixed location" ignores the city
+                field above it — and made a section with one decision in it
+                look like three.
+
+                A city for "my city only", and for "live" because that is
+                where a live pin falls back to when the session goes stale.
+                A pin for "a fixed location", which uses nothing else. For
+                "off the map" there is nothing to set, so nothing is asked;
+                choosing any other option reveals the right box. */}
+            {(d.visibility === "base" || d.visibility === "live") && (
+              <div>
+                <label className="label" htmlFor="p-city">
+                  Your city
+                </label>
+                {/* Biased towards wherever they already are, if anywhere —
+                    a returning member correcting their city should not have
+                    to disambiguate it from the same name on another
+                    continent. */}
+                <PlaceSearch
+                  id="p-city"
+                  near={near}
+                  value={d.baseLabel}
+                  placeholder="Hyderabad"
+                  onPick={(p: Place) => setD((prev) => (prev ? { ...prev, baseLabel: p.label, baseLat: p.lat, baseLng: p.lng } : prev))}
+                />
+                {d.visibility === "live" && (
+                  <p className="mt-1.5 text-[12px] leading-[1.45] text-[var(--ink-soft)]">
+                    Where your pin falls back to when you close the app — your live position is read from the
+                    device, so there is nothing to type for it.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {d.visibility === "exact" && (
+              <div>
+                <label className="label" htmlFor="p-exact">
+                  Exact location
+                </label>
+                <PlaceSearch
+                  id="p-exact"
+                  near={near}
+                  value={d.locationLabel}
+                  placeholder="A venue, an office, a neighbourhood"
+                  onPick={(p: Place) => setD((prev) => (prev ? { ...prev, locationLabel: p.label, lat: p.lat, lng: p.lng } : prev))}
+                />
+              </div>
+            )}
 
             {/* A second consent, asked as one.
 
