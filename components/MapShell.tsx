@@ -117,6 +117,17 @@ export default function MapShell({
   const topZ = useRef(3);
   const [selected, setSelected] = useState<string | null>(null);
   /**
+   * Who the map should point at, and how many times it has been asked.
+   *
+   * The counter is what makes asking twice work: opening the same person
+   * again after panning away has to move the camera back, and a bare id
+   * would look unchanged to the effect that does the flying. A count rather
+   * than a clock because this runs in render, where Date.now is impure and
+   * the compiler is right to refuse it.
+   */
+  const [aim, setAim] = useState<{ id: string; at: number } | null>(null);
+
+  /**
    * The stack of co-located people the viewer opened from the map, if any.
    *
    * Held as ids rather than as the people themselves so it survives a
@@ -168,6 +179,20 @@ export default function MapShell({
   // after a fast one for the new — panning fires these in quick succession
   // and out-of-order arrival is the normal case, not the edge.
   const seq = useRef(0);
+
+  /**
+   * Open somebody from a list, and take the map with you.
+   *
+   * Searching the top bar narrows the directory, and picking a name out of
+   * it used to open a card with no way to tell where that person was — on a
+   * map, of all things. Every list route goes through here; a click on a pin
+   * does not, because the camera is already looking at it.
+   */
+  const showPerson = (id: string) => {
+    setSelected(id);
+    setAim((prev) => ({ id, at: (prev?.at ?? 0) + 1 }));
+    openWin("person");
+  };
 
   const load = useCallback(
     async (opts: { lat?: number; lng?: number; net?: string | null }) => {
@@ -308,6 +333,7 @@ export default function MapShell({
           bottomInset={110}
           showZoom
           highlightIds={data.matches.map((m) => m.id)}
+          focus={aim}
           onOpenStack={(ids) => {
             setClusterIds(ids);
             openWin("people");
@@ -394,10 +420,7 @@ export default function MapShell({
             memberCount={data.people.length + 1}
             onOpenEvents={() => openWin("events")}
             onOpenPeople={() => openWin("people")}
-            onOpenPerson={(id) => {
-              setSelected(id);
-              openWin("person");
-            }}
+            onOpenPerson={showPerson}
             onChanged={() => void load({})}
           />
         )}
@@ -427,10 +450,7 @@ export default function MapShell({
           onboarded={onboarded}
           hasSignals={data.hasSignals}
           onCount={onForYouCount}
-          onOpenPerson={(id) => {
-            setSelected(id);
-            openWin("person");
-          }}
+          onOpenPerson={showPerson}
           onSignIn={() => openWin("signin")}
           onProfile={() => openWin("profile")}
         />
@@ -445,10 +465,7 @@ export default function MapShell({
       >
         <AlertsPanel
           signedIn={signedIn}
-          onOpenPerson={(id) => {
-            setSelected(id);
-            openWin("person");
-          }}
+          onOpenPerson={showPerson}
           onOpenForYou={() => openWin("forYou")}
           onOpenSettings={() => openWin("profile")}
           onRead={() => void load({})}
@@ -512,10 +529,7 @@ export default function MapShell({
           cluster={cluster}
           matchIds={matchIds}
           onClearCluster={() => setClusterIds(null)}
-          onOpenPerson={(id) => {
-            setSelected(id);
-            openWin("person");
-          }}
+          onOpenPerson={showPerson}
         />
       </FloatWindow>
 
@@ -536,10 +550,7 @@ export default function MapShell({
             at.current = { lat: pin.lat, lng: pin.lng };
             void load({ lat: pin.lat, lng: pin.lng });
           }}
-          onOpenPerson={(id) => {
-            setSelected(id);
-            openWin("person");
-          }}
+          onOpenPerson={showPerson}
           onSignIn={() => openWin("signin")}
         />
       </FloatWindow>
@@ -562,10 +573,7 @@ export default function MapShell({
           hasSignals={data.hasSignals}
           openSlug={activeEvent}
           onOpenSlug={setActiveEvent}
-          onOpenPerson={(id) => {
-            setSelected(id);
-            openWin("person");
-          }}
+          onOpenPerson={showPerson}
           onProfile={() => openWin("profile")}
           onSignIn={() => openWin("signin")}
           onChanged={() => void load({})}

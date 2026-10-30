@@ -2,7 +2,7 @@ import { and, eq, inArray, isNotNull, isNull, lt, ne, or } from "drizzle-orm";
 import { db, hasDb } from "./db";
 import { consents, memberships, users } from "./db/schema";
 import { isActiveMember } from "./membership";
-import { distanceKm } from "./geo";
+import { distanceKm, validPoint } from "./geo";
 import { ACTIVE_WINDOW_MINUTES, LIVE_STALE_MINUTES, MAX_MAP_RESULTS } from "./rules";
 import { LEGAL_VERSION, TERMS_CONSENT_KIND } from "./legal";
 
@@ -120,31 +120,48 @@ function place(r: {
   baseLabel: string | null;
   liveAt?: Date | string | null;
 }): { lat: number; lng: number; placed: "exact" | "base" | "live"; label: string | null } | null {
+  /**
+   * Read-side validation, not just write-side.
+   *
+   * `validPoint` has guarded every write for a while, but rows written
+   * before it exists are still in the table, and this function trusted
+   * whatever it found. A stored 0,0 is the signature of the old geocoder
+   * bug — a missing coordinate coerced to a number — and it is not a place
+   * in the Gulf of Guinea, it is the absence of one.
+   *
+   * Treating it as absent here is what stops a legacy row doing either of
+   * the two things it was doing: drawing somebody off the coast of Africa,
+   * or silently deleting them from the map when a stale live position fell
+   * back to a "city" of 0,0 that the renderer then refused to draw.
+   */
+  const exact = validPoint(r.lat, r.lng);
+  const base = validPoint(r.baseLat, r.baseLng);
+
   if (r.visibility === "live") {
     // Decays on its own. Somebody who closed the tab three hours ago is not
     // "here now", and nobody ever taps stop — so a stale live position is
     // treated as no position at all rather than as a slightly old one.
     const fresh =
       r.liveAt != null && Date.now() - new Date(r.liveAt).getTime() < LIVE_STALE_MINUTES * 60_000;
-    if (fresh && r.lat != null && r.lng != null) {
-      return { lat: r.lat, lng: r.lng, placed: "live", label: r.locationLabel };
+    if (fresh && exact) {
+      return { lat: exact.lat, lng: exact.lng, placed: "live", label: r.locationLabel };
     }
     // Not fresh: fall back to the city they chose, never to a stale pin.
-    if (r.baseLat != null && r.baseLng != null) {
-      return { lat: r.baseLat, lng: r.baseLng, placed: "base", label: r.baseLabel };
+    if (base) {
+      return { lat: base.lat, lng: base.lng, placed: "base", label: r.baseLabel };
     }
     return null;
   }
-  if (r.visibility === "exact" && r.lat != null && r.lng != null) {
+  if (r.visibility === "exact" && exact) {
     // No jitter. Someone who picked "exact" is asking to be findable at the
     // venue they're standing in; blurring it would quietly break that deal.
-    return { lat: r.lat, lng: r.lng, placed: "exact", label: r.locationLabel };
+    return { lat: exact.lat, lng: exact.lng, placed: "exact", label: r.locationLabel };
   }
-  if (r.visibility === "base" && r.baseLat != null && r.baseLng != null) {
+  if (r.visibility === "base" && base) {
     // The city's label, not the street-level one — the whole point is that
     // the precise location does not leave this function, and that includes
     // its name. "Hyderabad", never "Banjara Hills, Hyderabad".
-    return { lat: r.baseLat, lng: r.baseLng, placed: "base", label: r.baseLabel };
+    return { lat: base.lat, lng: base.lng, placed: "base", label: r.baseLabel };
   }
   return null;
 }

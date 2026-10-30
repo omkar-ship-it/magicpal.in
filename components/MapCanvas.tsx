@@ -136,6 +136,7 @@ export default function MapCanvas({
   onSelectEvent,
   onMoveEnd,
   onOpenStack,
+  focus = null,
 }: {
   people: Array<MapProfile & { hereNow?: boolean; verified?: boolean; unplaced?: boolean }>;
   /** The viewer, drawn distinctly so they can verify their own visibility. */
@@ -178,6 +179,14 @@ export default function MapCanvas({
   onSelectPerson?: (id: string) => void;
   onSelectEvent?: (slug: string) => void;
   onMoveEnd?: (c: { lat: number; lng: number; zoom: number }) => void;
+  /**
+   * Somebody picked out of a list, for the camera to go and find.
+   *
+   * Carries a counter rather than being a bare id so that asking twice
+   * works: opening the same person again after panning away has to move the
+   * camera back, and an unchanged id would look like nothing happened.
+   */
+  focus?: { id: string; at: number } | null;
   /** A whole stack of co-located people, opened as a directory. */
   onOpenStack?: (ids: string[]) => void;
 }) {
@@ -218,7 +227,40 @@ export default function MapCanvas({
       ] as [[number, number], [number, number]],
     };
   });
-  const highlighted = useMemo(() => new Set(highlightIds), [highlightIds]);
+  // Whoever was just opened from a list is ringed too, so the thing the
+  // camera flew to is the thing that stands out when it lands.
+  const highlighted = useMemo(() => {
+    const set = new Set(highlightIds);
+    if (focus?.id) set.add(focus.id);
+    return set;
+  }, [highlightIds, focus]);
+
+  /**
+   * The live map, kept for the one thing that has to be imperative.
+   *
+   * Flying is an instruction, not a rendered value — expressing it as state
+   * would mean re-rendering every marker to move a camera.
+   */
+  const mapObj = useRef<{ flyTo: (o: Record<string, unknown>) => void; getZoom: () => number } | null>(null);
+  const flown = useRef(0);
+  useEffect(() => {
+    if (!focus || focus.at === flown.current) return;
+    const p = people.find((x) => x.id === focus.id);
+    // Somebody with no position cannot be pointed at, and jumping the camera
+    // somewhere arbitrary would be worse than not moving it.
+    if (!p || p.unplaced || (p.lat === 0 && p.lng === 0)) return;
+    const m = mapObj.current;
+    if (!m) return;
+    flown.current = focus.at;
+    m.flyTo({
+      center: [p.lng, p.lat],
+      // Close enough to see them, never further out than you already are.
+      zoom: Math.max(m.getZoom(), 14),
+      duration: 900,
+      // The card and the dock cover the bottom; aim at what is still visible.
+      padding: { top: 0, left: 0, right: 0, bottom: bottomInset },
+    });
+  }, [focus, people, bottomInset]);
 
   /**
    * Past this zoom, people are shown individually; below it, co-located
@@ -362,6 +404,7 @@ export default function MapCanvas({
       mapStyle={dark ? "mapbox://styles/mapbox/dark-v11" : "mapbox://styles/mapbox/light-v11"}
       style={{ width: "100%", height: "100%" }}
       onLoad={(e) => {
+        mapObj.current = e.target;
         measureFrom(e.target.getContainer());
         // Before the first move there is nothing to inherit, and the
         // fallback in the stylesheet is 1 — which at world zoom is the
