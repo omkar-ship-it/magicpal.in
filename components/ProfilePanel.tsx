@@ -17,6 +17,7 @@ import CreateBoard from "./CreateBoard";
 import BoardQR from "./BoardQR";
 import SignOut from "./SignOut";
 import PanelNote from "./PanelNote";
+import Onboarding, { onTheMap } from "./Onboarding";
 import Avatar from "./Avatar";
 import { IconCheck, IconGlobe, IconPeople, IconPin, IconPlus, IconSparkle, IconUser } from "./Icons";
 
@@ -74,13 +75,19 @@ type Draft = {
 export default function ProfilePanel({
   networks,
   connections,
+  peerCount = 0,
   onSaved,
+  onDone,
   onOpenNetwork,
 }: {
   networks: NetworkOption[];
   /** Accepted connections — the one number that says the product worked. */
   connections: number;
+  /** How many people are already on the map — the reason to finish. */
+  peerCount?: number;
   onSaved: () => void;
+  /** Onboarding finished and the person asked to go and look. */
+  onDone?: () => void;
   onOpenNetwork: (slug: string) => void;
 }) {
   const router = useRouter();
@@ -122,7 +129,13 @@ export default function ProfilePanel({
         if (!alive || !json.profile) return;
         const p = json.profile;
         setEmail(p.email ?? "");
-        setFirstRun(!p.name);
+        // Until somebody is actually on the map they are still arriving,
+        // whatever fields happen to be filled in. Keyed off `!p.name`, a
+        // person who saved their name and stopped came back to a
+        // six-section edit form instead of the step they were on.
+        setFirstRun(
+          !onTheMap({ name: p.name ?? "", visibility: p.visibility, lat: p.lat, baseLat: p.baseLat })
+        );
         setTermsAccepted(Boolean(json.termsAccepted));
         setD({
           name: p.name,
@@ -158,6 +171,55 @@ export default function ProfilePanel({
   }, []);
 
   if (!d) return <PanelNote title="Loading your profile…" />;
+
+  /**
+   * A first profile is a different job from editing one.
+   *
+   * This form is a reference surface — every field at once, in sections,
+   * for somebody who knows what they came to change. As a signup it asked
+   * six sections of questions and saved none of them until the last
+   * button, which is how eight accounts ended up with no name. Onboarding
+   * is its own flow, saving after every step; this form takes over the
+   * moment there is a profile to edit.
+   */
+  if (firstRun) {
+    return (
+      <Onboarding
+        draft={{
+          name: d.name,
+          headline: d.headline,
+          company: d.company,
+          workingOn: d.workingOn,
+          photoUrl: d.photoUrl,
+          avatarStyle: d.avatarStyle,
+          lookingFor: d.lookingFor,
+          canHelpWith: d.canHelpWith,
+          customLookingFor: d.customLookingFor,
+          customCanHelpWith: d.customCanHelpWith,
+          locationLabel: d.locationLabel,
+          lat: d.lat,
+          lng: d.lng,
+          baseLabel: d.baseLabel,
+          baseLat: d.baseLat,
+          baseLng: d.baseLng,
+          visibility: d.visibility,
+          publicOptIn: d.publicOptIn,
+        }}
+        setDraft={(fn) => setD((prev) => (prev ? { ...prev, ...fn(prev as never) } : prev))}
+        needsConsent={termsAccepted === false}
+        peerCount={peerCount}
+        onStepSaved={() => {
+          setTermsAccepted(true);
+          router.refresh();
+          onSaved();
+        }}
+        onFinished={() => {
+          setFirstRun(false);
+          onDone?.();
+        }}
+      />
+    );
+  }
 
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((p) => (p ? { ...p, [k]: v } : p));
 

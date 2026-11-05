@@ -698,7 +698,10 @@ export default function MapShell({
         <ProfilePanel
           networks={data.networks}
           connections={data.connections}
+          // The reason to finish: somebody is already there.
+          peerCount={data.people.filter((p) => !p.self).length}
           onSaved={() => void load({})}
+          onDone={() => win("profile", { open: false })}
           onOpenNetwork={(slug) => {
             win("profile", { open: false });
             switchNetwork(slug);
