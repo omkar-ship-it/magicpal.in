@@ -3,6 +3,7 @@ import { getSessionUser } from "@/lib/session";
 import {
   alertControls,
   pushConfigured,
+  pushPublicKey,
   pushDeviceCount,
   removePushSubscription,
   savePushSubscription,
@@ -26,6 +27,8 @@ export async function GET() {
   const controls = await alertControls(user.id);
   return NextResponse.json({
     configured: pushConfigured,
+    // The browser needs this to subscribe; it is public by definition.
+    publicKey: pushPublicKey,
     devices: await pushDeviceCount(user.id),
     ...controls,
   });

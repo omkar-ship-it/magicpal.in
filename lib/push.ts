@@ -26,7 +26,10 @@ import { LEGAL } from "./legal";
  *    is not four times the information. They collapse into one.
  */
 
-const PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
+// Either name works. The key is read on the server and served from
+// /api/push, so the NEXT_PUBLIC_ prefix is no longer load-bearing — it is
+// accepted only so an existing deployment keeps working.
+const PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY ?? process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
 const PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY ?? "";
 
 /**
@@ -38,6 +41,17 @@ const PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY ?? "";
  * crash a page that has nothing to do with it.
  */
 export const pushConfigured = Boolean(PUBLIC_KEY && PRIVATE_KEY);
+
+/**
+ * The server identity a subscription is bound to, handed to the browser.
+ *
+ * Served rather than inlined at build time. It is public by definition —
+ * it ends up in every subscription the browser creates — so the only
+ * thing `NEXT_PUBLIC_` bought was a build-time dependency on a variable
+ * that Vercel now marks sensitive by default, which is exactly the kind
+ * of coupling that fails silently in production and nowhere else.
+ */
+export const pushPublicKey = PUBLIC_KEY;
 
 if (pushConfigured) {
   webpush.setVapidDetails(`mailto:${LEGAL.supportEmail}`, PUBLIC_KEY, PRIVATE_KEY);

@@ -32,6 +32,8 @@ type Prefs = {
 type PushState = {
   /** The deployment has VAPID keys at all. */
   configured: boolean;
+  /** Comes from the server rather than the bundle — see lib/push. */
+  publicKey: string;
   devices: number;
 };
 
@@ -97,7 +99,7 @@ export default function AlertSettings({ onBack }: { onBack: () => void }) {
         setMutedUntil(s.mutedUntil ?? null);
         setPaused(s.mutedUntil != null && new Date(s.mutedUntil).getTime() > Date.now());
         setQuiet(s.quietHours ?? true);
-        setPush({ configured: Boolean(s.configured), devices: s.devices ?? 0 });
+        setPush({ configured: Boolean(s.configured), publicKey: s.publicKey ?? "", devices: s.devices ?? 0 });
       })
       .catch(() => alive && setPrefs(null));
     return () => {
@@ -145,7 +147,8 @@ export default function AlertSettings({ onBack }: { onBack: () => void }) {
         return;
       }
       const reg = await navigator.serviceWorker.ready;
-      const key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
+      const key = push?.publicKey ?? "";
+      if (!key) throw new Error("Push isn't set up on this deployment.");
       const sub = await reg.pushManager.subscribe({
         // Required to be true, and honestly so: every push this sends
         // shows a notification. There is no silent channel here.
@@ -163,7 +166,7 @@ export default function AlertSettings({ onBack }: { onBack: () => void }) {
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error ?? "Could not turn these on.");
-      setPush({ configured: true, devices: d.devices ?? 1 });
+      setPush((cur) => ({ configured: true, publicKey: cur?.publicKey ?? "", devices: d.devices ?? 1 }));
       setNote("This device will now be told when somebody worth meeting is near you.");
     } catch (e) {
       setNote(e instanceof Error ? e.message : "Could not turn these on.");
@@ -185,7 +188,7 @@ export default function AlertSettings({ onBack }: { onBack: () => void }) {
         body: JSON.stringify({ endpoint }),
       });
       const d = await res.json().catch(() => ({}));
-      setPush({ configured: true, devices: d.devices ?? 0 });
+      setPush((cur) => ({ configured: true, publicKey: cur?.publicKey ?? "", devices: d.devices ?? 0 }));
       setNote("This device won't be notified. The list here still fills up.");
     } finally {
       setBusy(false);
