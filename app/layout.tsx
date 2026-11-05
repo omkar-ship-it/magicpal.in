@@ -59,6 +59,27 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={inter.variable}>
+      <head>
+        {/*
+         * Three handshakes started before anything asks for them.
+         *
+         * The map is the page, and the moment it mounts it fires a dozen
+         * requests at api.mapbox.com — each of which otherwise waits on a
+         * DNS lookup, a TCP connection and a TLS negotiation that could
+         * have happened while the HTML was still arriving. On a phone on
+         * mobile data that is the better part of a second of nothing
+         * happening, and it is spent at exactly the moment somebody is
+         * deciding whether this works.
+         *
+         * `preconnect` rather than `dns-prefetch`: the whole handshake, not
+         * only the name lookup, and these are three hosts we know with
+         * certainty will be used rather than a guess worth hedging.
+         */}
+        <link rel="preconnect" href="https://api.mapbox.com" crossOrigin="" />
+        <link rel="preconnect" href="https://events.mapbox.com" crossOrigin="" />
+        {/* Every face without an uploaded photo is drawn here. */}
+        <link rel="preconnect" href="https://api.dicebear.com" crossOrigin="" />
+      </head>
       <body>
         {children}
         <PWA />
