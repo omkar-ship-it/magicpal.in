@@ -11,7 +11,7 @@ import type { PinRef } from "@/lib/pins";
 import Avatar from "./Avatar";
 import { topicById } from "@/lib/intents";
 import { whenLabel } from "@/lib/time";
-import { IconCalendar, IconCity, IconMeetup, IconPin } from "./Icons";
+import { IconCalendar, IconCity, IconMeetup, IconPin, IconX } from "./Icons";
 import VerifiedBadge from "./VerifiedBadge";
 
 /**
@@ -284,6 +284,15 @@ export default function MapCanvas({
   /** Same reasoning as `precise`: a boolean, so only the crossing re-renders. */
   const [fanned, setFanned] = useState(initialZoom >= FAN_ZOOM);
   const [close, setClose] = useState(initialZoom >= CLOSE_ZOOM);
+  /**
+   * A pile the reader opened by hand, rather than by zooming in far
+   * enough that it opened itself.
+   *
+   * One at a time: a second ring opening while the first is still out
+   * turns the map into overlapping flowers, and the question "who is at
+   * this spot" is only ever being asked about one spot.
+   */
+  const [openStack, setOpenStack] = useState<string | null>(null);
 
   /**
    * How far out the viewer may zoom before the world stops filling the
@@ -332,6 +341,16 @@ export default function MapCanvas({
     setPrecise(e.viewState.zoom >= PRECISE_ZOOM);
     setFanned(e.viewState.zoom >= FAN_ZOOM);
     setClose(e.viewState.zoom >= CLOSE_ZOOM);
+    /**
+     * Pulling right out puts a hand-opened ring away again.
+     *
+     * The ring is sized in screen pixels, so at city zoom it covers a few
+     * kilometres and at country zoom most of a country — and a ring that
+     * wide implies a spread that isn't there, however clearly the spokes
+     * and the centre dot say otherwise. Below the zoom where stacks are
+     * even grouped the same way, the pile it belonged to no longer exists.
+     */
+    if (e.viewState.zoom < PRECISE_ZOOM) setOpenStack(null);
     applyPinScale(e.target?.getContainer(), e.viewState.zoom);
   }, []);
 
@@ -539,6 +558,9 @@ export default function MapCanvas({
               group={s.group}
               highlighted={highlighted}
               fanned={fanned}
+              expanded={openStack === s.key}
+              onExpand={() => setOpenStack(s.key)}
+              onCollapse={() => setOpenStack(null)}
               onSelect={onSelectPerson}
               onOpenStack={onOpenStack}
             />
@@ -641,31 +663,81 @@ function PinCardHover({ pin }: { pin: PinRef }) {
   );
 }
 
+const FACE = 40;
+/** Face plus the smallest gap two of them read as separate across. */
+const STEP = 48;
+/** Radius of the innermost ring once a pile needs more than one. */
+const RING_0 = 78;
+
 /**
- * How many faces a fanned pile shows before the rest become a "+N".
+ * How many faces fit on a ring of this radius.
  *
- * Ten is about where a ring stops being a thing you read and starts being
- * a thing you count, and the directory is a better answer past that.
+ * The honest limit: circumference divided by how much room a face needs.
+ * Pushing past it is how a ring becomes a pile drawn in a circle.
  */
-const FAN_MAX = 10;
+function ringCapacity(r: number): number {
+  return Math.max(1, Math.floor((2 * Math.PI * r) / STEP));
+}
+
+/**
+ * Three rings, and the reason is the phone.
+ *
+ * A fourth ring puts the outermost faces 222px from the centre — 444px
+ * across before you count the faces themselves — which is wider than the
+ * screen most of this is read on. Three reaches 48 people and still fits.
+ * Past that the directory is the better answer and it is already open.
+ */
+const MAX_RINGS = 3;
+export const FAN_MAX = Array.from({ length: MAX_RINGS }, (_, i) => ringCapacity(RING_0 + i * STEP)).reduce(
+  (a, b) => a + b,
+  0
+);
+
+function ringPoints(n: number, r: number, turn: number) {
+  return Array.from({ length: n }, (_, i) => {
+    // Starting at the top and going round, so a pile of two reads as one
+    // above the other rather than as an arbitrary diagonal.
+    const a = (i / n) * Math.PI * 2 - Math.PI / 2 + turn;
+    return { x: Math.round(Math.cos(a) * r), y: Math.round(Math.sin(a) * r) };
+  });
+}
 
 /**
  * Where each face sits when a pile is opened out.
  *
- * The radius comes from the circumference the faces need rather than being
- * fixed, so two people sit close together and nine form a proper ring
- * instead of overlapping on a circle sized for two.
+ * A small pile gets one ring sized to its own contents, so two people sit
+ * close together rather than on a circle built for twelve.
+ *
+ * A bigger one flowers into concentric rings — and the faces are spread
+ * across them in proportion to what each ring holds, not packed into the
+ * inner one until it overflows. Filling inward-first drew eleven faces in
+ * a tight ring with a single straggler orbiting outside it; proportional
+ * gives 5 and 7, which reads as one object.
  */
 function fanRing(n: number): Array<{ x: number; y: number }> {
-  const SIZE = 40;
-  const GAP = 11;
-  const r = Math.max(SIZE * 0.95, ((SIZE + GAP) * n) / (2 * Math.PI));
-  return Array.from({ length: n }, (_, i) => {
-    // Starting at the top and going round, so a pile of two reads as one
-    // above the other rather than as an arbitrary diagonal.
-    const a = (i / n) * Math.PI * 2 - Math.PI / 2;
-    return { x: Math.round(Math.cos(a) * r), y: Math.round(Math.sin(a) * r) };
+  const snug = Math.max(FACE * 0.95, (STEP * n) / (2 * Math.PI));
+  if (snug <= RING_0) return ringPoints(n, snug, 0);
+
+  const caps: number[] = [];
+  let total = 0;
+  while (caps.length < MAX_RINGS && total < n) {
+    const c = ringCapacity(RING_0 + caps.length * STEP);
+    caps.push(c);
+    total += c;
+  }
+
+  const out: Array<{ x: number; y: number }> = [];
+  let placed = 0;
+  caps.forEach((cap, i) => {
+    const last = i === caps.length - 1;
+    const take = last ? n - placed : Math.min(cap, Math.round((n * cap) / total));
+    if (take <= 0) return;
+    // Half a slot of rotation on alternate rings, so faces don't line up
+    // radially and leave spokes of white through the flower.
+    out.push(...ringPoints(take, RING_0 + i * STEP, i % 2 ? Math.PI / take : 0));
+    placed += take;
   });
+  return out;
 }
 
 /** One person, identically whether they are stacked or fanned. */
@@ -711,6 +783,9 @@ function FaceStack({
   group,
   highlighted,
   fanned,
+  expanded,
+  onExpand,
+  onCollapse,
   onSelect,
   onOpenStack,
 }: {
@@ -718,6 +793,10 @@ function FaceStack({
   highlighted: Set<string>;
   /** Close enough in to open the pile out instead of overlapping it. */
   fanned: boolean;
+  /** Opened by hand at any zoom, rather than by the camera. */
+  expanded: boolean;
+  onExpand: () => void;
+  onCollapse: () => void;
   onSelect?: (id: string) => void;
   /** The whole pile, handed to the directory. See the +N button below. */
   onOpenStack?: (ids: string[]) => void;
@@ -744,8 +823,20 @@ function FaceStack({
        * instead, filtered by what people offer and need rather than by city
        * — every one of them is in the same place, which is why they piled up.
        */
-      onClick={() => (onOpenStack ? onOpenStack(ids) : onSelect?.(sorted[sorted.length - n].id))}
-      aria-label={`${n} more people here — open the directory`}
+      /**
+       * Two things, because the reader asked one question.
+       *
+       * "Who is here" is answered by the list *and* by seeing the faces
+       * come out of the pile, and making the second one require a zoom
+       * meant the answer was half-given. The ring opens where they
+       * tapped, at whatever zoom they are at.
+       */
+      onClick={() => {
+        onExpand();
+        if (onOpenStack) onOpenStack(ids);
+        else onSelect?.(sorted[sorted.length - n].id);
+      }}
+      aria-label={`${n} more people here — show them and open the directory`}
     >
       +{n}
     </button>
@@ -765,7 +856,7 @@ function FaceStack({
    * in metres as you zoom in — which is the right way round, since the
    * further in you are the more precisely the dot locates them.
    */
-  if (fanned && sorted.length > 1) {
+  if ((fanned || expanded) && sorted.length > 1) {
     const shown = sorted.slice(0, FAN_MAX);
     const rest = sorted.length - shown.length;
     // Faces only. The overflow count used to take a slot on the ring, which
@@ -824,10 +915,28 @@ function FaceStack({
           <button
             type="button"
             className="map-pin grid place-items-center rounded-full"
-            onClick={openList}
-            aria-label={`${sorted.length} people here — open the directory`}
+            /**
+             * What the centre does depends on how the ring got open.
+             *
+             * Opened by hand, the only thing missing is a way back — the
+             * list is already up, so the hub is the close mark. Opened by
+             * the camera, there is nothing to undo and it stays the door
+             * into the list, which is the one route a pile of six has.
+             */
+            onClick={expanded ? onCollapse : openList}
+            aria-label={
+              expanded ? "Close — put these faces back" : `${sorted.length} people here — open the directory`
+            }
             style={
-              rest > 0
+              expanded
+                ? {
+                    width: 30,
+                    height: 30,
+                    background: "var(--card)",
+                    color: "var(--ink-soft)",
+                    boxShadow: "0 0 0 2px var(--card), var(--shadow)",
+                  }
+                : rest > 0
                 ? {
                     minWidth: 34,
                     height: 34,
@@ -843,7 +952,9 @@ function FaceStack({
                   { width: 34, height: 34, background: "transparent" }
             }
           >
-            {rest > 0 ? (
+            {expanded ? (
+              <IconX size={14} />
+            ) : rest > 0 ? (
               `+${rest}`
             ) : (
               <span
