@@ -16,10 +16,12 @@ import { IconCheck } from "./Icons";
  * get an app deleted, and shipping push without this would have been
  * shipping the uninstall with it.
  *
- * Everything here is reachable from the alerts panel itself, which is
- * where somebody is standing when they decide this is too much. Burying it
- * in profile settings means the only control they can find is the one in
- * the operating system, and that one never gets switched back.
+ * Opened from the alerts panel, which is where somebody is standing when
+ * they decide this is too much — but in a window of its own, beside that
+ * list rather than on top of it. Replacing the list with the switches hid
+ * the very thing somebody was reacting to, and burying them in profile
+ * settings instead means the only control they can find is the operating
+ * system's, and that one never gets switched back on.
  */
 
 type Prefs = {
@@ -44,7 +46,7 @@ const PAUSES = [
   { hours: 168, label: "a week" },
 ];
 
-export default function AlertSettings({ onBack }: { onBack: () => void }) {
+export default function AlertSettings() {
   const [prefs, setPrefs] = useState<Prefs | null>(null);
   const [push, setPush] = useState<PushState | null>(null);
   /**
@@ -205,10 +207,6 @@ export default function AlertSettings({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <button type="button" className="btn btn-ghost btn-sm self-start" onClick={onBack}>
-        ← Back to what you were told
-      </button>
-
       {/* ── pause, first ──
           Top of the panel on purpose. Somebody who has just been
           interrupted once too often is looking for an off switch, and

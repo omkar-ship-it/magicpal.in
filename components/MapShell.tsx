@@ -11,6 +11,7 @@ import { distanceKm } from "@/lib/geo";
 import MapCanvas from "./MapCanvas";
 import MapDock, { type DockTab } from "./MapDock";
 import FloatWindow, { DEFAULT_WINDOW, type WindowState } from "./FloatWindow";
+import AlertSettings from "./AlertSettings";
 import LiveLocation from "./LiveLocation";
 import MapTopBar from "./MapTopBar";
 import PeoplePanel from "./PeoplePanel";
@@ -125,6 +126,11 @@ export default function MapShell({
     events: { ...DEFAULT_WINDOW, x: 136, y: 192 },
     chats: { ...DEFAULT_WINDOW, x: 176, y: 232 },
     alerts: { ...DEFAULT_WINDOW, open: initialOverlay === "alerts", x: 420, y: 96, w: 380, z: 3 },
+    // Its own window, not a view inside Alerts. Somebody turning the
+    // volume down wants to see what they are turning it down *on*, and
+    // swapping the list out from under them to show the switches hid the
+    // very thing they were reacting to.
+    alertSettings: { ...DEFAULT_WINDOW, x: 470, y: 140, w: 400, z: 4 },
     person: { ...DEFAULT_WINDOW, x: 60, y: 120 },
     profile: { ...DEFAULT_WINDOW, open: initialOverlay === "profile", x: 216, y: 92, z: 3 },
     signin: { ...DEFAULT_WINDOW, open: initialOverlay === "signin", x: 240, y: 120, z: 3 },
@@ -488,8 +494,19 @@ export default function MapShell({
           signedIn={signedIn}
           onOpenPerson={showPerson}
           onOpenForYou={() => openWin("forYou")}
+          onOpenSettings={() => openWin("alertSettings")}
           onRead={() => void load({})}
         />
+      </FloatWindow>
+
+      <FloatWindow
+        title="Alert settings"
+        state={visible("alertSettings") ? wins.alertSettings : { ...wins.alertSettings, open: false }}
+        onChange={(n) => win("alertSettings", n)}
+        onClose={() => win("alertSettings", { open: false })}
+        onFocus={() => focus("alertSettings")}
+      >
+        <AlertSettings />
       </FloatWindow>
 
       <FloatWindow

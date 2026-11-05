@@ -116,8 +116,17 @@ export default function PeoplePanel({
       note={
         inCluster ? (
           <>
-            All {pool.length} of these are in the same place, so the filters are what they can help with and
-            what they&rsquo;re after — not where they are.{" "}
+            {/* Only claim there are filters when there are. Below the size
+                at which they earn their space, clusterFacets returns none
+                and this sentence was describing a row that wasn't there. */}
+            {facets.length > 0 ? (
+              <>
+                All {pool.length} of these are in the same place, so the filters are what they can help with
+                and what they&rsquo;re after — not where they are.{" "}
+              </>
+            ) : (
+              <>All {pool.length} of these are in the same place.{" "}</>
+            )}
             <button type="button" className="underline" onClick={onClearCluster}>
               Show everyone on {scopeName}
             </button>

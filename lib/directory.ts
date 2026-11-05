@@ -34,12 +34,38 @@ export type Facet = {
  * Enough to be useful, few enough that the chips stay a couple of rows in
  * a narrow window rather than pushing every person below the fold.
  */
-const PER_SIDE = 4;
+const PER_SIDE = 3;
+
+/**
+ * Below this, the list is the answer and the filters are the problem.
+ *
+ * Ten people produced eleven chips — "Offers a co-founder 1" among them —
+ * which is a filter that narrows ten to one, eight rows of chrome, and
+ * not a single face above the fold. A filter earns its space by saving
+ * somebody from reading the list; at this size reading the list is faster
+ * than deciding which chip to press.
+ *
+ * The density problem is real at four hundred and imaginary at ten, and
+ * the fix for it has to know the difference.
+ */
+const MIN_FOR_FACETS = 16;
+
+/**
+ * A chip has to actually divide the group.
+ *
+ * One that holds everybody narrows nothing, and one that holds a single
+ * person is a row with extra steps. Both were on screen.
+ */
+function divides(count: number, total: number): boolean {
+  return count >= 2 && count <= total * 0.8;
+}
 
 export function clusterFacets(
   people: readonly ShellPerson[],
   opts: { matchIds?: ReadonlySet<string> } = {}
 ): Facet[] {
+  if (people.length < MIN_FOR_FACETS) return [];
+
   const out: Facet[] = [
     { id: "all", label: "Everyone", count: people.length, ids: new Set(people.map((p) => p.id)) },
   ];
@@ -51,13 +77,13 @@ export function clusterFacets(
    */
   if (opts.matchIds && opts.matchIds.size > 0) {
     const worth = people.filter((p) => opts.matchIds!.has(p.id));
-    if (worth.length > 0) {
+    if (divides(worth.length, people.length)) {
       out.push({ id: "worth", label: "Worth meeting", count: worth.length, ids: new Set(worth.map((p) => p.id)) });
     }
   }
 
   const known = people.filter((p) => p.connectionStatus === "connected");
-  if (known.length > 0) {
+  if (divides(known.length, people.length)) {
     out.push({ id: "known", label: "People you know", count: known.length, ids: new Set(known.map((p) => p.id)) });
   }
 
@@ -71,6 +97,7 @@ export function clusterFacets(
       }
     }
     return [...groups.entries()]
+      .filter(([, ids]) => divides(ids.size, people.length))
       .sort((a, b) => b[1].size - a[1].size)
       .slice(0, PER_SIDE)
       .map(([topicId, ids]) => {
@@ -90,7 +117,9 @@ export function clusterFacets(
   out.push(...byTopic((p) => p.canHelpWith, "offer"));
   out.push(...byTopic((p) => p.lookingFor, "need"));
 
-  return out;
+  // "Everyone" alone is not a filter row, it is a label for the list that
+  // is already underneath it.
+  return out.length > 1 ? out : [];
 }
 
 /** The two lines a row carries in a cluster, in the vocabulary's own words. */
