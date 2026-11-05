@@ -311,18 +311,59 @@ export async function getUnplacedOpenProfiles(opts: {
 }): Promise<Array<MapProfile & { unplaced: true }>> {
   if (!hasDb || !db) return [];
 
+  /**
+   * Everybody public and named who `place()` can't place — which is not
+   * the same set as "visibility is off", and the difference was two real
+   * members who were in neither list.
+   *
+   * One had picked live sharing, gone quiet twelve days ago and had no
+   * city to fall back to; the other had a finished profile and no
+   * location at all. Both were public, both had filled in what they want
+   * and what they offer, and both were invisible everywhere — no pin,
+   * because there is nothing to draw, and no directory row either,
+   * because this query was asking about a *setting* rather than about an
+   * *outcome*.
+   *
+   * So the predicate is now the exact complement of the map's: fetch the
+   * same population and keep the ones the map discards. A person is on
+   * the map or in this list, and there is no third state for somebody to
+   * fall into.
+   */
   const rows = await db
     .select(PROFILE_COLUMNS)
     .from(users)
     .where(
       and(
-        eq(users.visibility, "off"),
+        // The public network is entered by answering yes, never by
+        // failing to answer. Unchanged, and not negotiable: this list is
+        // about people who are *trying* to be seen.
         eq(users.publicOptIn, true),
         isNotNull(users.name),
-        opts.excludeUserId ? ne(users.id, opts.excludeUserId) : undefined
+        opts.excludeUserId ? ne(users.id, opts.excludeUserId) : undefined,
+        /**
+         * A superset of "unplaceable", so the limit below applies to the
+         * right population rather than to everybody public.
+         *
+         * Deliberately loose — the `live` branch here catches people whose
+         * pin may well be fresh — because `place()` is the authority and
+         * runs on the result. The job of this clause is only to keep the
+         * query from scanning rows that can never qualify.
+         */
+        or(
+          // Never answered the location question at all; `off` is the
+          // column default, not something the product asks anybody to pick.
+          eq(users.visibility, "off"),
+          and(isNull(users.lat), isNull(users.baseLat)),
+          and(eq(users.visibility, "exact"), isNull(users.lat)),
+          and(eq(users.visibility, "base"), isNull(users.baseLat)),
+          // Live decays. With no city underneath it, the decay is a
+          // disappearance rather than a fallback.
+          and(eq(users.visibility, "live"), isNull(users.baseLat))
+        )
       )
     )
-    .limit(MAX_MAP_RESULTS);
+    .limit(MAX_MAP_RESULTS)
+    .then((all) => all.filter((r) => place(r) === null));
 
   return rows.map((r) => ({
     id: r.id,
