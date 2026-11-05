@@ -208,6 +208,26 @@ export const users = pgTable(
     notifyRadiusKm: doublePrecision("notify_radius_km").notNull().default(5),
 
     /**
+     * Everything off until this moment passes. Null means not paused.
+     *
+     * A pause rather than a second set of switches. The thing somebody
+     * actually wants at 9pm on a Friday is "not now", and making them
+     * turn three things off and remember to turn them back on is how a
+     * temporary annoyance becomes a permanent opt-out.
+     */
+    alertsMutedUntil: timestamp("alerts_muted_until", { withTimezone: true }),
+
+    /**
+     * Hold pushes overnight rather than ringing a bedside phone.
+     *
+     * In-app alerts are unaffected — they are already silent, and holding
+     * them back would only mean losing them. This governs the thing that
+     * makes a noise. On by default: the first notification this product
+     * ever sends somebody must not arrive at 3am.
+     */
+    pushQuietHours: boolean("push_quiet_hours").notNull().default(true),
+
+    /**
      * When the proximity scan last ran for this person.
      *
      * Live positions arrive every 90 seconds; evaluating the whole
@@ -896,4 +916,47 @@ export const consents = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("consents_user_kind_idx").on(t.userId, t.kind, t.createdAt)]
+);
+
+/**
+ * One phone, one browser, one permission grant.
+ *
+ * A push subscription is a capability handed out by the browser's own push
+ * service, and it is per-device: the same person on a laptop and a phone
+ * is two rows, and reinstalling the app makes a third and silently kills
+ * the first. So the endpoint is the identity — not the user — and the only
+ * honest lifecycle is "create on subscribe, delete when the push service
+ * says it's gone".
+ *
+ * The table holds no message and no history. What was said lives in
+ * `notifications`; this is only the address it was said to.
+ */
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** The push service's URL for this device. Unique by definition. */
+    endpoint: text("endpoint").notNull().unique(),
+    /** The device's public key and auth secret, for payload encryption. */
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    /**
+     * Minutes east of UTC on the device that will actually ring.
+     *
+     * Quiet hours are a property of the bedside table, not of the account.
+     * Somebody signed in from Bengaluru and from Berlin should have each
+     * phone stay quiet on its own night, and a server-side guess at "the
+     * user's timezone" gets exactly that case wrong.
+     */
+    tzOffsetMinutes: integer("tz_offset_minutes").notNull().default(330),
+    /** Only to tell two devices apart in a list somebody is managing. */
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Last time the push service accepted a message for this endpoint. */
+    lastOkAt: timestamp("last_ok_at", { withTimezone: true }),
+  },
+  (t) => [index("push_subscriptions_user_idx").on(t.userId)]
 );

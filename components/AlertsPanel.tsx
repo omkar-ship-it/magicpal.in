@@ -8,6 +8,7 @@ import PanelNote from "./PanelNote";
 import { Row } from "./Panel";
 import { IconBeacon, IconCity, IconSparkle } from "./Icons";
 import { BRAND_NAME } from "@/lib/brand";
+import AlertSettings from "./AlertSettings";
 
 /**
  * What you were told while you weren't looking.
@@ -22,18 +23,25 @@ export default function AlertsPanel({
   signedIn,
   onOpenPerson,
   onOpenForYou,
-  onOpenSettings,
   onRead,
 }: {
   signedIn: boolean;
   onOpenPerson: (id: string) => void;
   /** Where a crowd notice leads — the one surface built to rank a room. */
   onOpenForYou: () => void;
-  onOpenSettings: () => void;
   /** Clears the badge once the list has actually been looked at. */
   onRead: () => void;
 }) {
   const [alerts, setAlerts] = useState<AlertRow[] | null>(null);
+  /**
+   * Settings open in place rather than jumping to the profile overlay.
+   *
+   * They used to be a link out to a panel that no longer had them — a
+   * dead end. And the moment somebody wants this control is the moment
+   * they are reading the list that annoyed them, so sending them
+   * somewhere else to find it is the wrong direction entirely.
+   */
+  const [tuning, setTuning] = useState(false);
 
   useEffect(() => {
     if (!signedIn) return;
@@ -53,6 +61,8 @@ export default function AlertsPanel({
     };
   }, [signedIn, onRead]);
 
+  if (tuning) return <AlertSettings onBack={() => setTuning(false)} />;
+
   if (!signedIn) {
     return (
       <PanelNote title="Sign in to be told who's around">
@@ -69,8 +79,8 @@ export default function AlertsPanel({
           You&rsquo;ll hear when somebody you&rsquo;re connected to, or somebody worth meeting, turns up near you.
           Nothing is invented to fill this — it stays empty until it isn&rsquo;t.
         </PanelNote>
-        <button type="button" className="btn btn-ghost btn-sm w-full" onClick={onOpenSettings}>
-          Choose what you&rsquo;re told about
+        <button type="button" className="btn btn-ghost btn-sm w-full" onClick={() => setTuning(true)}>
+          Choose what you&rsquo;re told about, and how
         </button>
       </div>
     );
@@ -141,8 +151,8 @@ export default function AlertsPanel({
           )
         )}
       </ul>
-      <button type="button" className="btn btn-ghost btn-sm w-full flex-none" onClick={onOpenSettings}>
-        Choose what you&rsquo;re told about
+      <button type="button" className="btn btn-ghost btn-sm w-full flex-none" onClick={() => setTuning(true)}>
+        Choose what you&rsquo;re told about, and how
       </button>
     </div>
   );

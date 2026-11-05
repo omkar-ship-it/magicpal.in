@@ -6,6 +6,7 @@ import { connectedIds } from "./connections";
 import { matchesFor } from "./matching";
 import { sharedCustomInterests, TOPIC_BY_ID } from "./intents";
 import { distanceKm } from "./geo";
+import { sendPushToUser, usersWithPush } from "./push";
 import {
   ALERT_CITY_RADIUS_KM,
   ALERT_CROWD_COOLDOWN_HOURS,
@@ -98,6 +99,16 @@ export async function runProximityScan(moverId: string, opts: { force?: boolean 
   }
   await db.update(users).set({ alertsScanAt: new Date() }).where(eq(users.id, moverId));
 
+  /**
+   * Who got told something in this sweep.
+   *
+   * Collected rather than pushed inline: a sweep can write three rows for
+   * the same person, and three buzzes is not three times the information
+   * — it is one piece of information delivered in the way that gets an
+   * app deleted. One interruption each, at the end, saying how many.
+   */
+  const told = new Set<string>();
+
   // Where the mover is, for distance purposes. Their own real position —
   // the gate below decides what *others* are allowed to learn from it.
   const here = mover.lat != null && mover.lng != null
@@ -172,13 +183,16 @@ export async function runProximityScan(moverId: string, opts: { force?: boolean 
       // A connection arriving keeps its own line even in a crowd: you know
       // them by name, and that is exactly what a count destroys.
       if (kind !== "connection_nearby" && crowded) {
-        written += await noteCrowd(budget, r.id, moverAsSeen.label);
+        const n = await noteCrowd(budget, r.id, moverAsSeen.label);
+        if (n > 0) told.add(r.id);
+        written += n;
         continue;
       }
 
       if (!budget.mayWrite(r.id, moverId, kind)) continue;
       await insert(r.id, moverId, kind, reasonFor(recipient, mover), moverAsSeen, km, 1);
       budget.spend(r.id, moverId, kind);
+      told.add(r.id);
       written++;
     }
   }
@@ -208,6 +222,7 @@ export async function runProximityScan(moverId: string, opts: { force?: boolean 
       if (!budget.mayWrite(moverId, h.row.id, h.kind)) continue;
       await insert(moverId, h.row.id, h.kind, reasonFor(me, h.row), placeFor(h.row)!, h.km, 1);
       budget.spend(moverId, h.row.id, h.kind);
+      told.add(moverId);
       written++;
     }
 
@@ -217,13 +232,15 @@ export async function runProximityScan(moverId: string, opts: { force?: boolean 
       // that will drift from the one For You already uses. So this says how
       // many and what they're mostly good for, and the ranking stays in the
       // single place that does it properly.
-      written += await noteCrowd(
+      const n = await noteCrowd(
         budget,
         moverId,
         null,
         strangers.length,
         topicOf(me, strangers.map((h) => h.row))
       );
+      if (n > 0) told.add(moverId);
+      written += n;
     } else {
       // Few enough to name, so nothing is truncated and nothing needs
       // ranking — everybody who qualified gets their own line.
@@ -231,12 +248,87 @@ export async function runProximityScan(moverId: string, opts: { force?: boolean 
         if (!budget.mayWrite(moverId, h.row.id, h.kind)) continue;
         await insert(moverId, h.row.id, h.kind, reasonFor(me, h.row), placeFor(h.row)!, h.km, 1);
         budget.spend(moverId, h.row.id, h.kind);
+        told.add(moverId);
         written++;
       }
     }
   }
 
+  await deliver(told);
   return written;
+}
+
+/**
+ * The last hop, for everybody this sweep had something to say to.
+ *
+ * Deliberately after the writes rather than inside them. The inbox is the
+ * record and it is already correct by this point; a push is a second,
+ * optional, interruptive copy of it, and if the push service is slow or
+ * down that must change nothing about what the person sees when they next
+ * open the app.
+ *
+ * It re-reads rather than composing from what was just written, for the
+ * same reason: whatever the inbox says is the truth, and a notification
+ * that disagreed with the list behind it would be worse than none.
+ */
+async function deliver(told: Set<string>): Promise<void> {
+  if (told.size === 0) return;
+  const reachable = await usersWithPush([...told]);
+  if (reachable.size === 0) return;
+
+  await Promise.all(
+    [...reachable].map(async (userId) => {
+      const unread = (await listAlerts(userId, ALERT_DAILY_CAP)).filter((a) => !a.read);
+      if (unread.length === 0) return;
+      const note = summarise(unread);
+      // One failure is one phone, not the sweep.
+      await sendPushToUser(userId, note).catch(() => 0);
+    })
+  );
+}
+
+/**
+ * Several alerts, one sentence.
+ *
+ * A name when there is one, because "Priya Nair is 400 m away" is a
+ * reason to stand up and "You have 3 notifications" is a reason to swipe
+ * it away. Past one, the count — with the newest named, since that is the
+ * one still happening.
+ */
+function summarise(unread: AlertRow[]): { title: string; body: string; url: string; tag: string } {
+  const first = unread[0];
+  const extra = unread.length - 1;
+  const who = first.person?.name ?? null;
+
+  const near =
+    first.distanceKm == null
+      ? first.placeLabel
+        ? `in ${first.placeLabel}`
+        : "in your city"
+      : first.distanceKm < 1
+        ? "under 1 km away"
+        : `${Math.round(first.distanceKm)} km away`;
+
+  if (first.kind === "crowd_nearby") {
+    return {
+      title: `${first.count} people worth meeting, ${near}`,
+      body: first.reason ?? "Open For you to see who, and why.",
+      url: "/?panel=forYou",
+      tag: "nearby",
+    };
+  }
+
+  const lead =
+    first.kind === "connection_nearby"
+      ? `${who ?? "Someone you know"} is ${near}`
+      : `${who ?? "Someone worth meeting"} is ${near}`;
+
+  return {
+    title: lead,
+    body: extra > 0 ? `${first.reason ?? "Worth saying hello."} · and ${extra} more nearby` : first.reason ?? "Worth saying hello.",
+    url: "/?panel=alerts",
+    tag: "nearby",
+  };
 }
 
 /**

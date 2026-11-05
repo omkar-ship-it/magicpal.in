@@ -31,7 +31,9 @@ export default async function Home({
 
   // `panel` keeps /you and /login working as real addresses — they redirect
   // here rather than rendering a mapless page.
-  const overlay = panel === "profile" || panel === "signin" ? panel : null;
+  // "alerts" and "forYou" are where a push notification lands.
+  const overlay =
+    panel === "profile" || panel === "signin" || panel === "alerts" || panel === "forYou" ? panel : null;
 
   return (
     <MapShell
@@ -39,7 +41,17 @@ export default async function Home({
       // Signing in is meaningless once you have, and asking somebody to
       // sign in again reads as having been signed out. A stale ?panel=signin
       // in the URL — after a reload, or a shared link — opens nothing.
-      initialOverlay={user ? (overlay === "signin" ? null : overlay) : overlay === "profile" ? "signin" : overlay}
+      initialOverlay={
+        user
+          ? overlay === "signin"
+            ? null
+            : overlay
+          : // Nothing behind the sign-in wall opens for a signed-out
+            // visitor; they get the door instead of a locked room.
+            overlay === null
+            ? null
+            : "signin"
+      }
       pendingJoin={join ?? null}
       initialEvent={event ?? null}
       signedIn={Boolean(user)}

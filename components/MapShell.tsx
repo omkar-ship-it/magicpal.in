@@ -31,7 +31,16 @@ import ForYouPanel from "./ForYouPanel";
 import { IconChat, IconHidden } from "./Icons";
 import { BRAND_NAME } from "@/lib/brand";
 
-export type Overlay = "signin" | "profile" | null;
+/**
+ * What a URL can ask to have open on arrival.
+ *
+ * "alerts" and "forYou" are here for one reason: a push notification is a
+ * sentence about something happening near you, and tapping it has to land
+ * on the thing it was about. Dropping somebody on the bare map and making
+ * them find the panel themselves is how a notification becomes an
+ * interruption with no payoff.
+ */
+export type Overlay = "signin" | "profile" | "alerts" | "forYou" | null;
 
 /**
  * How far the map must move before the payload is worth fetching again.
@@ -103,13 +112,19 @@ export default function MapShell({
   const [wins, setWins] = useState<Record<string, WindowState>>(() => ({
     // `?panel=` from /you or /login decides what's already up on arrival.
     home: { ...DEFAULT_WINDOW, open: initialOverlay === null && needsSetup, x: 16, y: 72, z: 2 },
-    forYou: { ...DEFAULT_WINDOW, open: initialOverlay === null && !needsSetup, x: 16, y: 72, z: 2 },
+    forYou: {
+      ...DEFAULT_WINDOW,
+      open: initialOverlay === "forYou" || (initialOverlay === null && !needsSetup),
+      x: 16,
+      y: 72,
+      z: 2,
+    },
     feed: { ...DEFAULT_WINDOW, x: 56, y: 112 },
     people: { ...DEFAULT_WINDOW, x: 96, y: 152 },
     pins: { ...DEFAULT_WINDOW, x: 116, y: 172 },
     events: { ...DEFAULT_WINDOW, x: 136, y: 192 },
     chats: { ...DEFAULT_WINDOW, x: 176, y: 232 },
-    alerts: { ...DEFAULT_WINDOW, x: 420, y: 96, w: 380 },
+    alerts: { ...DEFAULT_WINDOW, open: initialOverlay === "alerts", x: 420, y: 96, w: 380, z: 3 },
     person: { ...DEFAULT_WINDOW, x: 60, y: 120 },
     profile: { ...DEFAULT_WINDOW, open: initialOverlay === "profile", x: 216, y: 92, z: 3 },
     signin: { ...DEFAULT_WINDOW, open: initialOverlay === "signin", x: 240, y: 120, z: 3 },
@@ -473,7 +488,6 @@ export default function MapShell({
           signedIn={signedIn}
           onOpenPerson={showPerson}
           onOpenForYou={() => openWin("forYou")}
-          onOpenSettings={() => openWin("profile")}
           onRead={() => void load({})}
         />
       </FloatWindow>

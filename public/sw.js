@@ -23,7 +23,7 @@
  * What is cached is the build's own static output, which is content-hashed
  * and therefore safe forever, plus one offline page.
  */
-const VERSION = "v1";
+const VERSION = "v2";
 const SHELL = `onw-shell-${VERSION}`;
 const OFFLINE = "/offline.html";
 
@@ -86,4 +86,81 @@ self.addEventListener("fetch", (event) => {
       )
     );
   }
+});
+
+/* ── push ──────────────────────────────────────────────────────────────
+   The last hop of a proximity alert.
+
+   The payload is built on the server and has already been through the
+   same `place()` the map uses, so there is nothing to decide here and
+   nothing to look up — rendering it is the whole job. No fetch, because a
+   push handler that calls the network is a push handler that sometimes
+   shows nothing.
+
+   The fallback text matters more than it looks: a push with no readable
+   payload still has to show *something*, or some browsers post their own
+   "This site has been updated in the background" on our behalf, which is
+   both meaningless and ours to answer for. */
+self.addEventListener("push", (event) => {
+  let note = {};
+  try {
+    note = event.data ? event.data.json() : {};
+  } catch {
+    note = {};
+  }
+
+  const title = note.title || "Someone worth meeting is nearby";
+  const body = note.body || "Open the map to see who.";
+  const url = typeof note.url === "string" && note.url.startsWith("/") ? note.url : "/";
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+      // Same tag replaces the previous unread one rather than stacking: a
+      // lock screen with four of these on it is how somebody decides to
+      // turn the whole thing off.
+      tag: note.tag || "nearby",
+      renotify: true,
+      data: { url },
+    })
+  );
+});
+
+/* Tapping it should land in the app that is already open, if one is — a
+   second window of a map the person is already looking at is a worse
+   answer than the window they already had. */
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || "/";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
+      for (const w of wins) {
+        if (new URL(w.url).origin === self.location.origin && "focus" in w) {
+          if ("navigate" in w) w.navigate(url);
+          return w.focus();
+        }
+      }
+      return self.clients.openWindow(url);
+    })
+  );
+});
+
+/* The push service can rotate an endpoint on its own. Without this the
+   subscription silently dies and the person simply stops hearing from us,
+   which is indistinguishable from the feature not working. */
+self.addEventListener("pushsubscriptionchange", (event) => {
+  event.waitUntil(
+    self.registration.pushManager
+      .subscribe(event.oldSubscription ? event.oldSubscription.options : { userVisibleOnly: true })
+      .then((sub) =>
+        fetch("/api/push", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ subscription: sub.toJSON(), tzOffsetMinutes: -new Date().getTimezoneOffset() }),
+        })
+      )
+      .catch(() => {})
+  );
 });
