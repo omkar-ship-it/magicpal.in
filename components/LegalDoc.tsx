@@ -43,6 +43,37 @@ export default function LegalDoc({
   );
 }
 
+/**
+ * A notice that has to be read, not found.
+ *
+ * Above the numbered clauses and visually separated from them, because the
+ * one thing a disclosure of this kind has to be is conspicuous — a term
+ * buried at §17 that materially changes what somebody is signing up to is
+ * the definition of an unfair one, and a court in any of the jurisdictions
+ * here will treat it as such.
+ *
+ * Unnumbered on purpose. The clauses cross-reference each other by number
+ * ("see §12"), so inserting one in the middle would silently point a dozen
+ * references at the wrong text.
+ */
+export function Notice({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section
+      className="mt-6 rounded-2xl p-4"
+      id="early"
+      style={{
+        background: "color-mix(in srgb, var(--brand) 7%, var(--card))",
+        border: "1px solid color-mix(in srgb, var(--brand) 35%, transparent)",
+      }}
+    >
+      <h2 className="text-[15px] font-semibold leading-snug" style={{ color: "var(--brand)" }}>
+        {title}
+      </h2>
+      <div className="mt-2 flex flex-col gap-2.5 text-[13.5px] leading-[1.6]">{children}</div>
+    </section>
+  );
+}
+
 /** One numbered section. The number is for citing it, not for reading order. */
 export function Clause({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import LegalDoc, { Clause } from "@/components/LegalDoc";
+import LegalDoc, { Clause, Notice } from "@/components/LegalDoc";
 import { LEGAL, PROCESSORS } from "@/lib/legal";
 import { ACTIVE_WINDOW_MINUTES } from "@/lib/rules";
 
@@ -26,6 +26,35 @@ export default function PrivacyPage() {
       summary={`${LEGAL.brand} is a map of people who have said they are open to meeting someone. That only works if you can see exactly what you are putting on it, so this explains what we collect, what other members can see, who else receives it, and how to take it back.`}
       other={{ href: "/terms", label: "Terms & Conditions" }}
     >
+      <Notice title="This is an early product, and you are an early member">
+        <p>
+          {LEGAL.brand} is a minimum viable product under active development. How we collect, store and show
+          your data is still being built, and you should decide what to put on it on that basis. Please read
+          this before you sign up.
+        </p>
+        <p>
+          What the service asks for, what other members can see, and how long things are kept may all change
+          as the product does. Your data may be migrated between versions, and non-essential data may be
+          reset while we build. Where a change materially alters what we collect or who can see it, we update
+          this policy, raise its version, and ask you to agree again rather than treating your earlier
+          agreement as covering it — which is why the version is printed above and recorded against your
+          consent.
+        </p>
+        <p>
+          Because the product is small and early, routine operation sometimes involves a person rather than a
+          system: the operator can read the production database to fix a fault, answer your request or
+          investigate a report. §9 says what that access is limited to.
+        </p>
+        <p>
+          <strong>What this notice does not do.</strong> It does not reduce our obligations as a Data
+          Fiduciary under the Digital Personal Data Protection Act, 2023, or as a controller under the UK or
+          EU GDPR. It is not a substitute for your consent, it does not permit any use of your data not
+          described in this policy, and it does not limit your rights under §11 or your right to complain
+          under §12. An early product is still held to the same standard; being unfinished is an explanation,
+          never an excuse.
+        </p>
+      </Notice>
+
       <Clause n={1} title="Who is responsible for your data">
         <p>
           {LEGAL.brand} is operated by {LEGAL.operator}

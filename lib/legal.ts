@@ -73,15 +73,21 @@ export function copyrightLine(): string {
  * text describing a control the product no longer offers is precisely the
  * drift this file exists to prevent.
  *
+ * Raised again for the early-product notice at the head of both documents.
+ * It tells somebody the service is unfinished, may change under them and
+ * may reset data while we build — which is a material fact about what they
+ * are joining, and an agreement to the previous wording was an agreement
+ * to something that did not say it.
+ *
  * The version is written into the consent row, so "when did they agree, and
  * to what" is answerable from the log alone — which is the only question an
  * audit, a complaint or a deletion request ever asks of it. Never reuse a
  * version after editing the text.
  */
-export const LEGAL_VERSION = "2026-10-30.1";
+export const LEGAL_VERSION = "2026-11-05.1";
 
 /** Shown on both documents. Human-readable twin of LEGAL_VERSION. */
-export const LEGAL_EFFECTIVE = "30 October 2026";
+export const LEGAL_EFFECTIVE = "5 November 2026";
 
 /**
  * The single consent kind covering both documents.

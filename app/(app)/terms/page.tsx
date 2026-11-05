@@ -1,5 +1,5 @@
 import Link from "next/link";
-import LegalDoc, { Clause } from "@/components/LegalDoc";
+import LegalDoc, { Clause, Notice } from "@/components/LegalDoc";
 import { LEGAL } from "@/lib/legal";
 
 export const metadata = {
@@ -25,6 +25,35 @@ export default function TermsPage() {
       summary={`These are the rules for using ${LEGAL.brand}. They are a contract between you and us, so they are written to be read rather than to be survived.`}
       other={{ href: "/privacy", label: "Privacy Policy" }}
     >
+      <Notice title="This is an early product, and you are an early member">
+        <p>
+          {LEGAL.brand} is a minimum viable product under active development. It is not a finished service,
+          and you should decide whether to join on that basis. Please read this before you sign up.
+        </p>
+        <p>
+          Features appear, change and are withdrawn, sometimes without notice. The service may be
+          unavailable, may behave unexpectedly, and may contain defects. Data you enter may be migrated
+          between versions, and non-essential data may be reset while we build. We do not promise
+          availability, uninterrupted operation, or that any particular feature will still exist next month.
+          During this period the service is provided <strong>as is</strong> and <strong>as available</strong>.
+        </p>
+        <p>
+          You are joining a product that is being built around you, and the most useful thing you can do is
+          tell us when something is wrong — write to{" "}
+          <a className="underline" href={`mailto:${LEGAL.supportEmail}`}>
+            {LEGAL.supportEmail}
+          </a>
+          .
+        </p>
+        <p>
+          <strong>What this notice does not do.</strong> It does not reduce your rights under the Digital
+          Personal Data Protection Act, 2023, the Consumer Protection Act, 2019, the UK or EU GDPR, or any
+          other law that applies to you and cannot be contracted out of. It is not a waiver of our
+          obligations, and it does not operate as your consent to anything. Where this notice conflicts with
+          a right you hold by law, the law wins.
+        </p>
+      </Notice>
+
       <Clause n={1} title="Agreeing to these terms">
         <p>
           By creating an account you agree to these terms and to the{" "}
