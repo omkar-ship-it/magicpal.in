@@ -261,13 +261,34 @@ export async function shellPayload(opts: {
   radiusKm?: number;
 }): Promise<ShellPayload> {
   const radiusKm = opts.radiusKm ?? DEFAULT_RADIUS_KM;
-  const me = opts.userId ? await getProfileById(opts.userId) : null;
-  if (opts.userId) await touchActivity(opts.userId);
 
-  // The switcher only ever lists boards you belong to, plus the open
-  // network. It is a view switcher, not a directory of other people's
-  // private groups.
-  const mine = opts.userId ? await boardsForUser(opts.userId) : [];
+  /**
+   * Seven questions asked at once, because none of them is about any of
+   * the others.
+   *
+   * This ran as seven `await`s in a row. Each one is an HTTP round-trip to
+   * a database in another region, and the page cannot render until the
+   * last of them lands — so the first paint was paying for all seven
+   * latencies end to end when it only ever needed to pay for the slowest.
+   *
+   * `touchActivity` is in here rather than left unawaited on purpose: a
+   * floating promise on a serverless function is a write that may or may
+   * not happen depending on how fast the response goes out, and "active
+   * now" being quietly wrong is worse than it costing a few milliseconds
+   * it no longer costs.
+   */
+  const [me, , mine, waiting, accepted, alerts, mine_pin] = await Promise.all([
+    opts.userId ? getProfileById(opts.userId) : null,
+    opts.userId ? touchActivity(opts.userId) : null,
+    // The switcher only ever lists boards you belong to, plus the open
+    // network. It is a view switcher, not a directory of other people's
+    // private groups.
+    opts.userId ? boardsForUser(opts.userId) : [],
+    opts.userId ? waitingCount(opts.userId) : 0,
+    opts.userId ? listAcceptedConnections(opts.userId) : [],
+    opts.userId ? unreadAlerts(opts.userId) : 0,
+    opts.userId ? myLivePin(opts.userId) : null,
+  ]);
   // Communities only. An event is something that happens *inside* a
   // community, not a network you belong to — listing both made the switcher
   // a pile of one-evening entries that never go away, and gave a host two
@@ -286,10 +307,7 @@ export async function shellPayload(opts: {
       })),
   ];
 
-  const waiting = opts.userId ? await waitingCount(opts.userId) : 0;
-  const connections = opts.userId ? (await listAcceptedConnections(opts.userId)).length : 0;
-  const alerts = opts.userId ? await unreadAlerts(opts.userId) : 0;
-  const mine_pin = opts.userId ? await myLivePin(opts.userId) : null;
+  const connections = accepted.length;
 
   // Drawn from the row directly rather than through place(), which exists to
   // decide what *other* people may see. You always get your real position,
@@ -334,17 +352,39 @@ export async function shellPayload(opts: {
     // open map rather than a dead screen — and, for the removal case, must
     // not hand back the community's people either.
     if (board && isActive(membership)) {
-      const rawMembers = await getBoardMembers(board.id, {
-        excludeUserId: opts.userId,
-        centerLat: board.lat ?? undefined,
-        centerLng: board.lng ?? undefined,
-      });
-      // Attached here too, not only on the open map. Without it every face
-      // inside a community offered "Ask to connect" however long ago you
-      // actually connected — the request had already been sent and accepted
-      // and the UI had no idea.
-      const withStatusHere = (await attachConnectionStatus(rawMembers, opts.userId)) as typeof rawMembers;
-      const members = await attachVouches(withStatusHere, opts.userId);
+      /**
+       * The board's five questions, asked together.
+       *
+       * Same reasoning as the open path: the roster, the board's events,
+       * who hosts it and how many members never finished a profile are
+       * four independent facts, and a community home was waiting out four
+       * latencies in a row to learn them. The roster's own two-step —
+       * connection status, then vouches — stays a chain, because the
+       * second reads rows the first annotated.
+       */
+      const [members, children, host, unfinished, pinsHere] = await Promise.all([
+        getBoardMembers(board.id, {
+          excludeUserId: opts.userId,
+          centerLat: board.lat ?? undefined,
+          centerLng: board.lng ?? undefined,
+        })
+          // Attached here too, not only on the open map. Without it every
+          // face inside a community offered "Ask to connect" however long
+          // ago you actually connected — the request had already been sent
+          // and accepted and the UI had no idea.
+          .then((raw) => attachConnectionStatus(raw, opts.userId) as Promise<typeof raw>)
+          .then((rows) => attachVouches(rows, opts.userId)),
+        board.type === "community" ? childEvents(board.id) : [],
+        getProfileById(board.hostUserId),
+        board.hostUserId === opts.userId ? unfinishedCount(board.id) : 0,
+        // Exactly the call this branch already made — a board's pins are
+        // scoped to the board's own point, with no radius floor.
+        livePinsFor({
+          viewerId: opts.userId,
+          centerLat: board.lat ?? undefined,
+          centerLng: board.lng ?? undefined,
+        }),
+      ]);
       // You, at the top of your own board's list.
       const self = me ? selfRow(me) : null;
       const people = self ? [self, ...members] : members;
@@ -365,8 +405,6 @@ export async function shellPayload(opts: {
             }).map((m) => ({ id: m.other.id, reason: m.reason, twoWay: m.twoWay }))
           : [];
 
-      const children = board.type === "community" ? await childEvents(board.id) : [];
-      const host = await getProfileById(board.hostUserId);
       return {
         scope: {
           kind: board.type as "event" | "community",
@@ -387,7 +425,7 @@ export async function shellPayload(opts: {
             details: board.details,
             guidelines: board.guidelines,
             verifiedCount: members.filter((m) => m.verifiedHere).length,
-            unfinished: board.hostUserId === opts.userId ? await unfinishedCount(board.id) : 0,
+            unfinished,
             canLeave: Boolean(opts.userId) && board.hostUserId !== opts.userId,
           },
         },
@@ -404,11 +442,7 @@ export async function shellPayload(opts: {
         alerts,
         // Pins aren't scoped to the network: somebody in a café two streets
         // away is worth knowing about whichever community you're looking at.
-        pins: await livePinsFor({
-          viewerId: opts.userId,
-          centerLat: board.lat ?? undefined,
-          centerLng: board.lng ?? undefined,
-        }),
+        pins: pinsHere,
         myPinId: mine_pin?.id ?? null,
       };
     }
@@ -441,11 +475,21 @@ export async function shellPayload(opts: {
    * makes the cap defensible when it eventually bites: the people it drops
    * are the furthest away.
    */
-  const placed = await getOpenMapProfiles({
-    excludeUserId: opts.userId,
-    centerLat: centre.lat,
-    centerLng: centre.lng,
-  });
+  /**
+   * Three more asked together.
+   *
+   * The map's people, the people with nowhere to be drawn, and the live
+   * pins are three independent questions about the same moment, and
+   * running them in a row made the page wait out three latencies to learn
+   * things that could all have arrived at once. `publicEvents` joins them
+   * because it depends on nothing at all.
+   */
+  const [placed, unplaced, pins, events] = await Promise.all([
+    getOpenMapProfiles({
+      excludeUserId: opts.userId,
+      centerLat: centre.lat,
+      centerLng: centre.lng,
+    }),
 
   /**
    * Members who never got as far as answering where they are.
@@ -459,7 +503,21 @@ export async function shellPayload(opts: {
    * question about a position, and these people have none. Ordered after
    * the placed ones so the map's own list still reads nearest-first.
    */
-  const unplaced = await getUnplacedOpenProfiles({ excludeUserId: opts.userId });
+    getUnplacedOpenProfiles({ excludeUserId: opts.userId }),
+    // Deliberately not narrowed by the people-radius. Each pin already
+    // carries its own reach, enforced in livePinsFor against where you
+    // actually are, and that is the limit that matters — someone browsing
+    // "this room" for people still wants to hear about a café two streets
+    // away. The floor keeps the viewer's filter from double-counting.
+    livePinsFor({
+      viewerId: opts.userId,
+      centerLat: centre.lat,
+      centerLng: centre.lng,
+      radiusKm: Math.max(radiusKm, MAX_PIN_REACH_KM),
+    }),
+    publicEvents(),
+  ]);
+
   // First, because it is the one row whose answer the reader already knows
   // and is checking rather than discovering.
   const self = me ? selfRow(me) : null;
@@ -485,17 +543,20 @@ export async function shellPayload(opts: {
       }).map((m) => ({ id: m.other.id, reason: m.reason, twoWay: m.twoWay }))
     : [];
 
-  const withStatus = await attachVouches(
-    (await attachConnectionStatus(people, opts.userId)) as MapProfile[],
-    opts.userId
-  );
-  const events = await publicEvents();
+  // Genuinely sequential: vouches are attached to the rows connection
+  // status has already annotated.
+  const [withStatus, eventRefs] = await Promise.all([
+    attachConnectionStatus(people, opts.userId).then((rows) =>
+      attachVouches(rows as MapProfile[], opts.userId)
+    ),
+    toEventRefs(events, opts.userId),
+  ]);
 
   return {
     scope: { kind: "open", slug: null, name: "Open network", blurb: null, logoUrl: null, home: null },
     people: withStatus,
     matches,
-    events: await toEventRefs(events, opts.userId),
+    events: eventRefs,
     networks,
     waiting,
     radiusKm,
@@ -504,17 +565,7 @@ export async function shellPayload(opts: {
     hasSignals,
     connections,
     alerts,
-    // Deliberately not narrowed by the people-radius. Each pin already
-    // carries its own reach, enforced in livePinsFor against where you
-    // actually are, and that is the limit that matters — someone browsing
-    // "this room" for people still wants to hear about a café two streets
-    // away. The floor keeps the viewer's filter from double-counting.
-    pins: await livePinsFor({
-      viewerId: opts.userId,
-      centerLat: centre.lat,
-      centerLng: centre.lng,
-      radiusKm: Math.max(radiusKm, MAX_PIN_REACH_KM),
-    }),
+    pins,
     myPinId: mine_pin?.id ?? null,
   };
 }
