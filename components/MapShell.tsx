@@ -29,6 +29,8 @@ import PersonProfile from "./PersonProfile";
 import PanelNote from "./PanelNote";
 import FeedPanel from "./FeedPanel";
 import EventsPanel from "./EventsPanel";
+import EventPage from "./EventPage";
+import EditEvent from "./EditEvent";
 import ChatsPanel from "./ChatsPanel";
 import CommunityHome from "./CommunityHome";
 import OpenHome from "./OpenHome";
@@ -190,6 +192,15 @@ export default function MapShell({
   /** Whose thread Chats should land on, set when Message is tapped. */
   const [chatWith, setChatWith] = useState<string | null>(null);
   const [activeEvent, setActiveEvent] = useState<string | null>(initialEvent);
+  /**
+   * The Home window's own copies of what EventsPanel keeps per row.
+   *
+   * When the scope *is* an event, Home renders the event page directly and
+   * there is no list behind it to hold the QR sheet open or swap in the
+   * edit form, so the shell holds both.
+   */
+  const [sharingHome, setSharingHome] = useState(false);
+  const [editingHome, setEditingHome] = useState(false);
   /**
    * What the run itself found, which is not the number the payload carries:
    * the deck skips people you have already been shown, so this falls as you
@@ -364,6 +375,16 @@ export default function MapShell({
         .sort((a, b) => b[1].z - a[1].z)[0]?.[0] ?? null)
     : null;
   const visible = (id: string) => !narrow || frontId === id;
+  /**
+   * Standing in an event, rather than in a community that has some.
+   *
+   * The Events window lists a board's children, and an event has none —
+   * so inside one it could only ever show an empty list above a "New event
+   * in <this event>" button, which the API rejects outright because a
+   * parent has to be a community. Hidden rather than emptied: a surface
+   * that can only be empty shouldn't be reachable.
+   */
+  const inEvent = Boolean(data.selfEvent);
 
   return (
     <div className="relative h-dvh w-full overflow-hidden">
@@ -423,6 +444,8 @@ export default function MapShell({
       <MapTopBar
         networks={data.networks}
         activeSlug={data.scope.slug}
+        scopeName={data.scope.name}
+        scopeKind={data.scope.kind}
         facets={facets}
         onFacets={setFacets}
         // Said where the count lives rather than as a spinner over the map:
@@ -449,11 +472,48 @@ export default function MapShell({
         onFocus={() => focus("home")}
         width={400}
       >
-        {/* Two different pages behind one slot, because they answer the
-            same question — "what is this place" — about two kinds of
-            place. A community has an owner, rules and a roster; the open
-            network has none of those and has to explain itself instead. */}
-        {isOpenNet ? (
+        {/* Three pages behind one slot, because "what is this place" has
+            three different answers. A community has an owner, rules and a
+            roster. The open network has none of those and has to explain
+            itself instead. An event has a door and a clock: when, where,
+            are you coming, who is already in the room — which is why it
+            gets EventPage rather than a community page with the dates
+            bolted on. */}
+        {data.selfEvent && editingHome ? (
+          <EditEvent
+            event={data.selfEvent}
+            onCancel={() => setEditingHome(false)}
+            onSaved={() => {
+              setEditingHome(false);
+              void load({});
+            }}
+          />
+        ) : data.selfEvent ? (
+          <EventPage
+            event={data.selfEvent}
+            sharing={sharingHome}
+            signedIn={signedIn}
+            onboarded={onboarded}
+            hasSignals={data.hasSignals}
+            onShare={() => setSharingHome((s) => !s)}
+            onShow={() => {
+              const e = data.selfEvent;
+              if (e?.lat != null && e.lng != null) {
+                at.current = { lat: e.lat, lng: e.lng };
+                void load({ lat: e.lat, lng: e.lng });
+              }
+            }}
+            onEdit={() => setEditingHome(true)}
+            onOpenPerson={showPerson}
+            onProfile={() => openWin("profile")}
+            onSignIn={() => openWin("signin")}
+            // Deleting the board you are standing on leaves no scope to
+            // reload — a full navigation to the open map is the only place
+            // left to be, and `load` would 404 against the dead slug.
+            onDeleted={() => window.location.assign("/")}
+            onChanged={() => void load({})}
+          />
+        ) : isOpenNet ? (
           <OpenHome
             signedIn={signedIn}
             hasSignals={data.hasSignals}
@@ -624,7 +684,7 @@ export default function MapShell({
 
       <FloatWindow
         title={`Events · ${data.events.length}`}
-        state={visible("events") ? wins.events : { ...wins.events, open: false }}
+        state={visible("events") && !inEvent ? wins.events : { ...wins.events, open: false }}
         onChange={(n) => win("events", n)}
         onClose={() => win("events", { open: false })}
         onFocus={() => focus("events")}
@@ -790,6 +850,7 @@ export default function MapShell({
           events: data.events.length,
           chats: data.waiting,
         }}
+        hide={inEvent ? ["events"] : undefined}
         signedIn={signedIn}
         me={me}
         onSelect={openTab}

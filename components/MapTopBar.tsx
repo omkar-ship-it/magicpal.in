@@ -6,7 +6,7 @@ import { PROXIMITY_STEPS } from "@/lib/rules";
 import type { NetworkOption } from "@/lib/shell";
 import BoardLogo from "./BoardLogo";
 import { facetsActive, NO_FACETS, type Facets } from "@/lib/search";
-import { IconBell, IconCheck, IconChevronDown, IconGlobe, IconPeople, IconSearch, IconX } from "./Icons";
+import { IconBell, IconCalendar, IconCheck, IconChevronDown, IconGlobe, IconPeople, IconSearch, IconX } from "./Icons";
 
 /**
  * Network, search, filters — in that order of how often they're used.
@@ -20,6 +20,8 @@ import { IconBell, IconCheck, IconChevronDown, IconGlobe, IconPeople, IconSearch
 export default function MapTopBar({
   networks,
   activeSlug,
+  scopeName,
+  scopeKind,
   facets,
   onFacets,
   alerts,
@@ -33,6 +35,19 @@ export default function MapTopBar({
 }: {
   networks: NetworkOption[];
   activeSlug: string | null;
+  /**
+   * What the current scope calls itself, for the scopes the switcher
+   * deliberately doesn't list.
+   *
+   * `networks` is communities plus the open network — an event is left out
+   * on purpose, because events are things that happen *inside* a network
+   * rather than networks you belong to. But the lookup below used to fall
+   * back to `networks[0]` on a miss, so standing inside an event the chip
+   * announced "Open network" while every other panel correctly said the
+   * event's name. A miss is the expected case here, not an error.
+   */
+  scopeName: string;
+  scopeKind: "open" | "event" | "community";
   facets: Facets;
   onFacets: (f: Facets) => void;
   countLabel: string;
@@ -49,8 +64,9 @@ export default function MapTopBar({
 }) {
   const [picking, setPicking] = useState(false);
   const [filtering, setFiltering] = useState(false);
-  const active = networks.find((n) => n.slug === activeSlug) ?? networks[0];
   const isOpen = activeSlug === null;
+  /** The scope's own name wins over the list, which may not contain it. */
+  const label = isOpen ? "Open network" : scopeName;
   const activeCount = facetsActive(facets);
 
   function toggleTopic(id: string) {
@@ -87,13 +103,19 @@ export default function MapTopBar({
               className="grid h-6 w-6 flex-none place-items-center rounded-full text-[11px] text-white"
               style={{ background: "linear-gradient(135deg, var(--brand), var(--brand-deep))" }}
             >
-              {isOpen ? <IconGlobe size={13} /> : <IconPeople size={13} />}
+              {isOpen ? (
+                <IconGlobe size={13} />
+              ) : scopeKind === "event" ? (
+                <IconCalendar size={13} />
+              ) : (
+                <IconPeople size={13} />
+              )}
             </span>
             <span
               className="min-w-0 flex-1 truncate text-[12.5px] font-semibold sm:max-w-[140px] sm:flex-none"
               style={{ color: "var(--chrome-ink)" }}
             >
-              {active?.name ?? "Open network"}
+              {label}
             </span>
             <IconChevronDown size={13} style={{ color: "var(--chrome-soft)" }} />
           </button>
@@ -259,7 +281,7 @@ export default function MapTopBar({
                 className="mt-1 w-full rounded-xl p-2.5 text-left text-[12.5px] font-semibold tap hover:bg-[var(--sunk)]"
                 style={{ color: "var(--brand)" }}
               >
-                About {active?.name} →
+                About {label} →
               </button>
             )}
             {networks.length === 1 && (

@@ -39,6 +39,7 @@ const SLOTS: Array<{ id: Exclude<DockTab, null>; label: string; icon: React.Reac
 export default function MapDock({
   active,
   counts,
+  hide,
   signedIn,
   me,
   onSelect,
@@ -47,6 +48,14 @@ export default function MapDock({
   active: DockTab;
   /** Shown inline in the label. Absent or zero renders nothing. */
   counts: Partial<Record<Exclude<DockTab, null>, number>>;
+  /**
+   * Slots this scope has no use for — see `inEvent` in MapShell.
+   *
+   * Dropped from the dock rather than disabled: a greyed slot invites a
+   * tap and then explains nothing, and the dock is the one piece of
+   * chrome that has to stay legible at a glance on a phone.
+   */
+  hide?: ReadonlyArray<Exclude<DockTab, null>>;
   signedIn: boolean;
   me: { name: string; photoUrl: string | null } | null;
   onSelect: (tab: Exclude<DockTab, null>) => void;
@@ -64,7 +73,7 @@ export default function MapDock({
           boxShadow: "var(--shadow-lift)",
         }}
       >
-        {SLOTS.map((s) => (
+        {SLOTS.filter((s) => !hide?.includes(s.id)).map((s) => (
           <DockButton
             key={s.id}
             on={active === s.id}

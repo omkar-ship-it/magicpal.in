@@ -230,6 +230,16 @@ export type ShellPayload = {
   people: ShellPerson[];
   matches: Array<{ id: string; reason: string; twoWay: boolean }>;
   events: EventRef[];
+  /**
+   * The event you are standing *in*, as opposed to the ones inside it.
+   *
+   * Null everywhere except a parentless event scope. `events` above is the
+   * board's children, which for an event is empty by definition — so
+   * without this the Home window had nothing to draw but the community
+   * page, and an event introduced itself as a community with house rules
+   * and no events.
+   */
+  selfEvent: EventRef | null;
   networks: NetworkOption[];
   waiting: number;
   radiusKm: number;
@@ -435,6 +445,13 @@ export async function shellPayload(opts: {
         people,
         matches,
         events: await toEventRefs(children, opts.userId),
+        // `memberCount` overridden because toEventRefs can't know it: it
+        // builds refs for child rows, where the count shown is the RSVP
+        // tally. Here the roster is the people already loaded above.
+        selfEvent:
+          board.type === "event"
+            ? { ...(await toEventRefs([board], opts.userId))[0], memberCount: people.length }
+            : null,
         networks,
         waiting,
         radiusKm,
@@ -565,6 +582,7 @@ export async function shellPayload(opts: {
     people: withStatus,
     matches,
     events: eventRefs,
+    selfEvent: null,
     networks,
     waiting,
     radiusKm,

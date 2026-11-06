@@ -175,13 +175,29 @@ export default function EventsPanel({
         ) : null
       }
     >
+      {/* "Nothing matches that" only when something *was* matched against.
+          The filter defaults to Upcoming, so keying this off the filter as
+          well meant every first visit to an empty list opened by blaming a
+          search the reader had never made. */}
       {sorted.length === 0 ? (
-        <PanelNote title={q || when !== "all" ? "Nothing matches that" : `No events in ${scopeName} yet`}>
-          {q || when !== "all"
+        <PanelNote
+          title={
+            q
+              ? "Nothing matches that"
+              : when === "going"
+                ? "You’re not going to anything yet"
+                : when === "upcoming"
+                  ? `Nothing coming up in ${scopeName}`
+                  : `No events in ${scopeName} yet`
+          }
+        >
+          {q
             ? "Try a different search, or show all events."
-            : canCreate
-              ? "Create one and you'll get a QR code to share — whoever scans it joins the event and the community."
-              : "Events your communities are running show up here."}
+            : when !== "all"
+              ? "Show all events to see past ones too."
+              : canCreate
+                ? "Create one and you'll get a QR code to share — whoever scans it joins the event and the community."
+                : "Events your communities are running show up here."}
         </PanelNote>
       ) : (
         <ul className="stagger flex flex-col gap-2">
