@@ -325,7 +325,14 @@ export function reachNeedsPosition(r: Reach): boolean {
 export const REACHES_FOR: Record<"event" | "community" | "open", Reach[]> = {
   event: ["here", "roster"],
   community: ["km1", "km2", "km5", "km10", "city", "anywhere"],
-  open: ["km1", "km2", "km5", "km10", "city"],
+  // "anywhere" was missing here, and its absence was a trap: every
+  // distance reach drops people pinned at a city centroid — correctly, a
+  // centroid can be twenty kilometres from where somebody actually is —
+  // and "city" compares place names, which fails whenever a geocoder
+  // returned a suburb for one of the two. On a network whose members are
+  // mostly city-pinned that left a reader with no setting that reaches
+  // anybody, and a "try a wider reach" message pointing at nothing wider.
+  open: ["km1", "km2", "km5", "km10", "city", "anywhere"],
 };
 
 export function defaultReach(kind: "event" | "community" | "open"): Reach {
@@ -338,7 +345,21 @@ export function defaultReach(kind: "event" | "community" | "open"): Reach {
   // hide half the roster from itself. Narrowing is a choice the reader
   // makes; it is not a default worth having.
   if (kind === "community") return "anywhere";
-  return "km5";
+  /**
+   * The open map opens wide too, for now.
+   *
+   * Reach *excludes*; proximity *ranks*. On a network of a few dozen
+   * people spread across two cities a radius is a filter with nothing to
+   * filter — it only ever returns an empty deck, which reads as "nobody
+   * is worth meeting" rather than "nobody is within five kilometres".
+   * The score still decays with distance, so somebody two streets away
+   * is still ranked above somebody two cities away; they simply stop
+   * being the only two options.
+   *
+   * Worth narrowing again once a single city has enough people that five
+   * kilometres is a meaningful cut rather than an empty one.
+   */
+  return "anywhere";
 }
 
 /** Five at a time, however many qualified — a deck, not a directory. */
