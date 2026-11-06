@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";
 import { liveBoardBySlug, membershipOf, setCheckedIn } from "@/lib/boards";
 import { isActive } from "@/lib/membership";
+import { CHECKIN_OPENS_MINUTES, checkInState } from "@/lib/rules";
 
 /**
  * "I'm here" / "I've left" at an event.
@@ -28,7 +29,29 @@ export async function POST(req: Request, ctx: { params: Promise<{ slug: string }
     return NextResponse.json({ error: "Join the event first." }, { status: 403 });
   }
 
+  /**
+   * Enforced here, not only in the UI.
+   *
+   * The matcher weights being in the building above any single shared
+   * interest, so a check-in made the morning before would mislead every
+   * run for the rest of the day — and the people it misleads are the
+   * ones who actually turned up. Leaving is always allowed: somebody
+   * walking out after the window closed should still be able to say so.
+   */
   const body = await req.json().catch(() => null);
-  await setCheckedIn(board.id, user.id, body?.here !== false);
+  const here = body?.here !== false;
+  const state = checkInState(board);
+  if (here && state !== "open") {
+    return NextResponse.json(
+      {
+        error:
+          state === "early"
+            ? `Check-in opens ${CHECKIN_OPENS_MINUTES} minutes before the start.`
+            : "This event is over.",
+      },
+      { status: 409 }
+    );
+  }
+  await setCheckedIn(board.id, user.id, here);
   return NextResponse.json({ ok: true });
 }

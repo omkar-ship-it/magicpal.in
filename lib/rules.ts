@@ -362,6 +362,52 @@ export function defaultReach(kind: "event" | "community" | "open"): Reach {
   return "anywhere";
 }
 
+/**
+ * How long before the start that "I'm here" becomes answerable.
+ *
+ * Fifteen minutes, because presence is a claim about a room and it stops
+ * being true the further you are from the moment. Somebody tapping it on
+ * the train that morning would be telling the matcher — which weights
+ * being in the building above any single shared interest — something
+ * false for the whole day, and the people it misleads are the ones who
+ * actually turned up.
+ *
+ * Closing is the event's own end: after that there is no room to be in.
+ */
+export const CHECKIN_OPENS_MINUTES = 15;
+
+/** When an event has no stated end. Matches the fallback isLive uses. */
+const ASSUMED_LENGTH_HOURS = 6;
+
+export type CheckInState = "early" | "open" | "over";
+
+export function checkInWindow(board: {
+  type: string;
+  startsAt: Date | string | null;
+  endsAt?: Date | string | null;
+}): { opensAt: Date; closesAt: Date } | null {
+  if (board.type !== "event" || !board.startsAt) return null;
+  const start = new Date(board.startsAt).getTime();
+  const end = board.endsAt
+    ? new Date(board.endsAt).getTime()
+    : start + ASSUMED_LENGTH_HOURS * 3600_000;
+  return {
+    opensAt: new Date(start - CHECKIN_OPENS_MINUTES * 60_000),
+    closesAt: new Date(end),
+  };
+}
+
+export function checkInState(
+  board: { type: string; startsAt: Date | string | null; endsAt?: Date | string | null },
+  now: number = Date.now()
+): CheckInState | null {
+  const w = checkInWindow(board);
+  if (!w) return null;
+  if (now < w.opensAt.getTime()) return "early";
+  if (now > w.closesAt.getTime()) return "over";
+  return "open";
+}
+
 /** Five at a time, however many qualified — a deck, not a directory. */
 export const DECK_SIZE = 5;
 

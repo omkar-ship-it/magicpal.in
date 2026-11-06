@@ -55,6 +55,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }
   const vouched = await attachVouches(roster, user?.id);
 
   return NextResponse.json({
+    /** The viewer's own presence, so the page doesn't have to find itself in the roster. */
+    youAreHere: Boolean(vouched.find((m) => m.id === user?.id)?.hereNow),
     host: host?.name
       ? { id: host.id, name: host.name, headline: host.headline, photoUrl: host.photoUrl }
       : null,

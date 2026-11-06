@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { EventRef } from "@/lib/shell";
 import { whenLabel } from "@/lib/time";
+import { CHECKIN_OPENS_MINUTES, checkInState } from "@/lib/rules";
 import Avatar from "./Avatar";
 import BoardQR from "./BoardQR";
 import VerifiedBadge from "./VerifiedBadge";
@@ -59,8 +60,24 @@ export default function EventPage({
 }) {
   const [busy, setBusy] = useState(false);
   const [mine, setMine] = useState(event.myRsvp);
+  /**
+   * A clock, read once a minute.
+   *
+   * The check-in window opens on time, not on a reload — somebody with
+   * the page already open at ten to seven should watch the button
+   * become live rather than wonder why it is still greyed.
+   */
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
   const [error, setError] = useState("");
+  const [here, setHere] = useState(false);
+  const [checkInBusy, setCheckInBusy] = useState(false);
+  const [checkInError, setCheckInError] = useState("");
   const [extra, setExtra] = useState<{
+    youAreHere?: boolean;
     host: { id: string; name: string; headline: string | null; photoUrl: string | null } | null;
     parent: { slug: string; name: string } | null;
     attendees: Array<{
@@ -79,13 +96,48 @@ export default function EventPage({
     fetch(`/api/boards/${event.slug}`)
       .then((r) => r.json())
       .then((d) => {
-        if (alive && d.attendees) setExtra(d);
+        if (!alive || !d.attendees) return;
+        setExtra(d);
+        setHere(Boolean(d.youAreHere));
       })
       .catch(() => {});
     return () => {
       alive = false;
     };
   }, [event.slug]);
+
+  /**
+   * "I'm here", and the reason it is its own act.
+   *
+   * Not an RSVP — that is a promise made last week — and not the location
+   * setting, which is about a map rather than a room. The matcher weights
+   * presence above any single shared interest, so this is the single most
+   * valuable thing an attendee can tell it, and the only honest way to
+   * know it is to be asked in the building.
+   */
+  async function setPresence(next: boolean) {
+    setCheckInBusy(true);
+    setCheckInError("");
+    const previous = here;
+    setHere(next);
+    try {
+      const res = await fetch(`/api/boards/${event.slug}/checkin`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ here: next }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Couldn't save that.");
+      onChanged();
+      const d = await fetch(`/api/boards/${event.slug}`).then((r) => r.json()).catch(() => null);
+      if (d?.attendees) setExtra(d);
+    } catch (err) {
+      setHere(previous);
+      setCheckInError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setCheckInBusy(false);
+    }
+  }
 
   async function answer(rsvp: "going" | "maybe" | "no") {
     setBusy(true);
@@ -112,6 +164,18 @@ export default function EventPage({
   const full = event.capacity != null && event.going >= event.capacity;
   const onMap = event.lat != null && event.lng != null;
   const hereNow = extra?.attendees.filter((a) => a.hereNow).length ?? 0;
+  /**
+   * Whether the room exists yet.
+   *
+   * Computed on every render rather than held in state: it changes with
+   * the clock and not with anything the reader does, and a stale "opens
+   * in 15 minutes" on a page somebody left open is exactly the moment
+   * this control matters most.
+   */
+  const checkIn = checkInState(
+    { type: "event", startsAt: event.startsAt, endsAt: event.endsAt },
+    nowTick
+  );
   // The counts live on the section heading rather than under the chips, so
   // the answer and the tally aren't two separate things to read.
   const rsvpLine = `${event.going} going${event.capacity != null ? ` of ${event.capacity}` : ""}${
@@ -252,6 +316,62 @@ export default function EventPage({
         >
           Tickets and more →
         </a>
+      )}
+
+      {/* ── being in the room ──
+          Above the roster, because somebody holding a phone in a venue is
+          answering "I'm here" before they are browsing anybody. Absent
+          entirely for a visitor who has not joined: there is nothing to
+          be present at yet. */}
+      {signedIn && checkIn && mine !== "no" && (
+        <Section title="In the room" icon={<IconBeacon size={12} />}>
+          {checkIn === "early" ? (
+            <p className="text-[12.5px] leading-[1.5] text-[var(--ink-soft)]">
+              Check in opens {CHECKIN_OPENS_MINUTES} minutes before the start. Saying you&rsquo;re here is
+              what puts you in front of the people who are also here — it counts for more than anything
+              else on your profile, so it only counts while it&rsquo;s true.
+            </p>
+          ) : checkIn === "over" ? (
+            <p className="text-[12.5px] text-[var(--ink-soft)]">This one&rsquo;s over.</p>
+          ) : here ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="flex-1 text-[12.5px] leading-[1.45]">
+                <span className="font-semibold" style={{ color: "var(--good)" }}>
+                  You&rsquo;re checked in.
+                </span>{" "}
+                {hereNow > 1 ? `${hereNow - 1} others are here too.` : "First one in."}
+              </p>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                disabled={checkInBusy}
+                onClick={() => void setPresence(false)}
+              >
+                I&rsquo;ve left
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              <button
+                type="button"
+                className="btn btn-primary btn-sm self-start"
+                disabled={checkInBusy}
+                onClick={() => void setPresence(true)}
+              >
+                {checkInBusy ? "One moment…" : "I'm here"}
+              </button>
+              <p className="text-[11.5px] leading-[1.45] text-[var(--ink-soft)]">
+                {hereNow > 0 ? `${hereNow} already in the room. ` : ""}
+                Being here is the strongest thing the matcher knows about you.
+              </p>
+            </div>
+          )}
+          {checkInError && (
+            <p className="mt-1.5 text-[11.5px] font-medium" style={{ color: "var(--warn)" }}>
+              {checkInError}
+            </p>
+          )}
+        </Section>
       )}
 
       {extra && extra.attendees.length > 0 && (
