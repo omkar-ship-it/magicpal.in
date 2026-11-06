@@ -6,6 +6,8 @@ import { getSessionUser } from "@/lib/session";
 import JoinButton from "@/components/JoinButton";
 import BoardLogo from "@/components/BoardLogo";
 import { boardBanner } from "@/lib/avatar";
+import { whenLabel } from "@/lib/time";
+import WhenLabel from "@/components/WhenLabel";
 import { IconLock, IconPeople } from "@/components/Icons";
 
 /**
@@ -55,9 +57,12 @@ export default async function BoardPage({ params }: { params: Promise<{ slug: st
         <h1 className="text-2xl font-bold leading-tight text-balance">{board.name}</h1>
         <p className="mt-1.5 text-[13px] text-[var(--ink-soft)]">
         {board.place ? `${board.place} · ` : ""}
-        {board.startsAt
-          ? `${board.startsAt.toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })} · `
-          : ""}
+        {board.startsAt && (
+          <>
+            <WhenLabel iso={board.startsAt.toISOString()} server={whenLabel(board.startsAt.toISOString())} />
+            {" · "}
+          </>
+        )}
           Hosted by {host?.name ?? "a member"}
         </p>
         {board.blurb && <p className="mt-3 max-w-[48ch] text-[14px] leading-[1.6]">{board.blurb}</p>}
