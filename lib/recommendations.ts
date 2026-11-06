@@ -47,9 +47,30 @@ export type Criteria = {
   reach: Reach;
   lookingFor: string[];
   canHelpWith: string[];
+  /** Sectors, for the people whose needs don't interlock with anybody's. */
+  interests: string[];
+  /**
+   * The same three questions in the reader's own words, for this run.
+   *
+   * These used to come straight off the profile and could not be changed
+   * per run — the reasoning being that somebody's own phrasing is not
+   * something to re-type every time. True, and it also meant the most
+   * specific thing a person could say was the one thing the refine panel
+   * could not ask for. They are seeded from the profile and editable.
+   */
+  customLookingFor: string[];
+  customCanHelpWith: string[];
+  customInterests: string[];
   /** The highest-converting cohort: the exchange works both ways. */
   twoWayOnly: boolean;
-  /** Off means "show me everyone again", including people I passed over. */
+  /**
+   * Off by default.
+   *
+   * On a network this size the deck empties after a couple of runs, and
+   * an empty deck reads as "nobody here is worth meeting" rather than
+   * "you have already been shown these five". Seeing somebody a second
+   * time is cheap; being told there is nobody is not.
+   */
   skipSeen: boolean;
 };
 
@@ -123,8 +144,12 @@ export async function runRecommendations(opts: {
       : defaultReach(kind),
     lookingFor: opts.criteria?.lookingFor ?? me.lookingFor ?? [],
     canHelpWith: opts.criteria?.canHelpWith ?? me.canHelpWith ?? [],
+    interests: opts.criteria?.interests ?? me.interests ?? [],
+    customLookingFor: opts.criteria?.customLookingFor ?? me.customLookingFor ?? [],
+    customCanHelpWith: opts.criteria?.customCanHelpWith ?? me.customCanHelpWith ?? [],
+    customInterests: opts.criteria?.customInterests ?? me.customInterests ?? [],
     twoWayOnly: opts.criteria?.twoWayOnly ?? false,
-    skipSeen: opts.criteria?.skipSeen ?? true,
+    skipSeen: opts.criteria?.skipSeen ?? false,
   };
 
   const scoped = await poolFor(opts.audience, opts.viewerId);
@@ -145,17 +170,18 @@ export async function runRecommendations(opts: {
     ? [...memory.shown, ...memory.connected, ...memory.dismissed]
     : memory.connected;
 
+  // Every field the matcher scores on now comes from the run's criteria,
+  // seeded from the profile and changeable for this run only. Editing a
+  // profile to change today's results would change how everybody sees you,
+  // permanently, for a need you have this afternoon.
   const asked = {
     id: me.id,
     lookingFor: criteria.lookingFor,
     canHelpWith: criteria.canHelpWith,
-    interests: me.interests ?? [],
-    // Not part of the refine panel: the chips are a closed list the panel
-    // can draw, and somebody's own phrasing is not something to re-type per
-    // run. They come straight off the profile and are matched word for word.
-    customLookingFor: me.customLookingFor ?? [],
-    customCanHelpWith: me.customCanHelpWith ?? [],
-    customInterests: me.customInterests ?? [],
+    interests: criteria.interests,
+    customLookingFor: criteria.customLookingFor,
+    customCanHelpWith: criteria.customCanHelpWith,
+    customInterests: criteria.customInterests,
   };
   let all = matchesFor(asked, reached, { surface: "open", limit: 500, exclude: skip });
   if (criteria.twoWayOnly) all = all.filter((m) => m.twoWay);

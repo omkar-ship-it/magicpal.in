@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Criteria, RunCard, RunResult } from "@/lib/recommendations";
-import { reachLabel, type Reach } from "@/lib/rules";
-import { TOPICS } from "@/lib/intents";
+import { MAX_INTERESTS, reachLabel, type Reach } from "@/lib/rules";
+import { SECTORS, TOPICS } from "@/lib/intents";
 import Avatar from "./Avatar";
 import PanelNote from "./PanelNote";
+import OwnWords from "./OwnWords";
 import VerifiedBadge from "./VerifiedBadge";
 import { Row, Section } from "./Panel";
 import { IconCheck, IconSparkle, IconUser, IconX } from "./Icons";
@@ -79,6 +80,21 @@ export default function ForYouPanel({
       if (over.canHelpWith) {
         q.set("offering", "");
         for (const t of over.canHelpWith) q.append("offering", t);
+      }
+      if (over.interests) {
+        q.set("interest", "");
+        for (const t of over.interests) q.append("interest", t);
+      }
+      // Same present-but-empty rule: clearing a phrase has to survive the
+      // round trip rather than re-seeding from the profile.
+      for (const [key, list] of [
+        ["myNeed", over.customLookingFor],
+        ["myOffer", over.customCanHelpWith],
+        ["myInterest", over.customInterests],
+      ] as const) {
+        if (!list) continue;
+        q.set(key, "");
+        for (const t of list) q.append(key, t);
       }
       if (over.twoWayOnly != null) q.set("twoWay", over.twoWayOnly ? "1" : "0");
       if (over.skipSeen != null) q.set("skipSeen", over.skipSeen ? "1" : "0");
@@ -251,6 +267,16 @@ export default function ForYouPanel({
               chosen={c.lookingFor}
               onChange={(next) => setEdits((e) => ({ ...e, lookingFor: next }))}
             />
+            {/* The chips are a closed list and the specific thing somebody
+                actually needs today usually isn't on it. Seeded from the
+                profile, editable for this run — matched word for word
+                against other people's phrases, and by meaning against
+                their whole profile. */}
+            <OwnWords
+              placeholder="A co-founder who has shipped hardware"
+              values={c.customLookingFor}
+              onChange={(next) => setEdits((e) => ({ ...e, customLookingFor: next }))}
+            />
           </Control>
 
           <Control label="I can help with">
@@ -258,6 +284,46 @@ export default function ForYouPanel({
               side="offer"
               chosen={c.canHelpWith}
               onChange={(next) => setEdits((e) => ({ ...e, canHelpWith: next }))}
+            />
+            <OwnWords
+              placeholder="Getting a first enterprise customer"
+              values={c.customCanHelpWith}
+              onChange={(next) => setEdits((e) => ({ ...e, customCanHelpWith: next }))}
+            />
+          </Control>
+
+          {/* Missing from this panel entirely until now, which left the
+              reader no way to steer the one signal that reaches people
+              whose needs don't interlock with theirs. */}
+          <Control label="I'm interested in">
+            <div className="flex flex-wrap gap-1.5">
+              {SECTORS.map((sec) => {
+                const on = c.interests.includes(sec.id);
+                return (
+                  <button
+                    key={sec.id}
+                    type="button"
+                    className="chip-toggle tap"
+                    data-on={on ? "true" : "false"}
+                    aria-pressed={on}
+                    disabled={!on && c.interests.length >= MAX_INTERESTS}
+                    onClick={() =>
+                      setEdits((e) => ({
+                        ...e,
+                        interests: on ? c.interests.filter((x) => x !== sec.id) : [...c.interests, sec.id],
+                      }))
+                    }
+                  >
+                    {on && <IconCheck size={11} />}
+                    {sec.label}
+                  </button>
+                );
+              })}
+            </div>
+            <OwnWords
+              placeholder="Second-hand lab equipment"
+              values={c.customInterests}
+              onChange={(next) => setEdits((e) => ({ ...e, customInterests: next }))}
             />
           </Control>
 

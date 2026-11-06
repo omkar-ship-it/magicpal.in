@@ -8,7 +8,7 @@ import {
   type Audience,
   type Criteria,
 } from "@/lib/recommendations";
-import { REACH_BY_ID, type Reach } from "@/lib/rules";
+import { MAX_CUSTOM, MAX_CUSTOM_LENGTH, REACH_BY_ID, type Reach } from "@/lib/rules";
 import { TOPIC_BY_ID } from "@/lib/intents";
 
 /**
@@ -35,6 +35,16 @@ export async function GET(req: Request) {
   const offering = q.getAll("offering").filter((t) => TOPIC_BY_ID.has(t));
   if (q.has("looking")) criteria.lookingFor = looking;
   if (q.has("offering")) criteria.canHelpWith = offering;
+  if (q.has("interest")) criteria.interests = q.getAll("interest").filter(Boolean);
+  // Free text, which is where the specific things live. Trimmed, capped and
+  // deduplicated here rather than trusted — it reaches the matcher and an
+  // embedding, and both deserve a bounded input.
+  const words = (k: string) => [
+    ...new Set(q.getAll(k).map((v) => v.trim().slice(0, MAX_CUSTOM_LENGTH)).filter(Boolean)),
+  ].slice(0, MAX_CUSTOM);
+  if (q.has("myNeed")) criteria.customLookingFor = words("myNeed");
+  if (q.has("myOffer")) criteria.customCanHelpWith = words("myOffer");
+  if (q.has("myInterest")) criteria.customInterests = words("myInterest");
   if (q.has("twoWay")) criteria.twoWayOnly = q.get("twoWay") === "1";
   if (q.has("skipSeen")) criteria.skipSeen = q.get("skipSeen") !== "0";
 
