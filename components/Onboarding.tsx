@@ -10,6 +10,8 @@ import OwnWords from "./OwnWords";
 import VisibilityPicker, { type Visibility } from "./VisibilityPicker";
 import Avatar from "./Avatar";
 import { IconCheck, IconGlobe, IconPin, IconSparkle, IconUser } from "./Icons";
+import { SECTORS } from "@/lib/intents";
+import { MAX_INTERESTS } from "@/lib/rules";
 
 /**
  * Getting somebody onto the map, one answer at a time.
@@ -49,6 +51,8 @@ export type Draft = {
   canHelpWith: string[];
   customLookingFor: string[];
   customCanHelpWith: string[];
+  interests: string[];
+  customInterests: string[];
   locationLabel: string | null;
   lat: number | null;
   lng: number | null;
@@ -65,7 +69,8 @@ const STEPS = [
   {
     id: "what",
     title: "What you're after",
-    blurb: "The two answers every introduction here is made of, in both directions.",
+    blurb:
+      "The three answers every introduction here is made of. Nothing fits? Type your own — a phrase in your words matches better than a box you ticked.",
   },
 ] as const;
 
@@ -426,6 +431,55 @@ export default function Onboarding({
               values={draft.customCanHelpWith}
               onChange={(v) => set("customCanHelpWith", v)}
             />
+            {/*
+              * The third signal, and the only symmetric one.
+              *
+              * It was missing from this step entirely, which left the
+              * matcher with nothing to say about the large middle of any
+              * room — two people deep in climate are worth introducing
+              * even when neither wants what the other offers, and without
+              * this the answer for them was "no match".
+              */}
+            <div>
+              <div className="mb-2 flex items-baseline justify-between gap-3">
+                <p className="label m-0">I&rsquo;m interested in</p>
+                <span className="text-[11.5px] text-[var(--ink-soft)]">
+                  {draft.interests.length} of {MAX_INTERESTS}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {SECTORS.map((sec) => {
+                  const on = draft.interests.includes(sec.id);
+                  return (
+                    <button
+                      key={sec.id}
+                      type="button"
+                      className="chip-toggle tap"
+                      data-on={on ? "true" : "false"}
+                      aria-pressed={on}
+                      disabled={!on && draft.interests.length >= MAX_INTERESTS}
+                      onClick={() =>
+                        set(
+                          "interests",
+                          on
+                            ? draft.interests.filter((x) => x !== sec.id)
+                            : [...draft.interests, sec.id]
+                        )
+                      }
+                    >
+                      {on && <IconCheck size={11} />}
+                      {sec.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <OwnWords
+              placeholder="Second-hand lab equipment"
+              values={draft.customInterests}
+              onChange={(v) => set("customInterests", v)}
+            />
+
             <div>
               <label className="label" htmlFor="o-working">
                 What you&rsquo;re working on <span className="font-normal text-[var(--ink-soft)]">— optional</span>

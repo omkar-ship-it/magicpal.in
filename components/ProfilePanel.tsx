@@ -199,6 +199,8 @@ export default function ProfilePanel({
           canHelpWith: d.canHelpWith,
           customLookingFor: d.customLookingFor,
           customCanHelpWith: d.customCanHelpWith,
+          interests: d.interests,
+          customInterests: d.customInterests,
           locationLabel: d.locationLabel,
           lat: d.lat,
           lng: d.lng,

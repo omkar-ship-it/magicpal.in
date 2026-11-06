@@ -4,6 +4,7 @@ import { db, hasDb } from "@/lib/db";
 import { consents, users } from "@/lib/db/schema";
 import { getSessionUser } from "@/lib/session";
 import { getProfileById, hasAcceptedTerms } from "@/lib/profiles";
+import { canEmbed, embed, signalText } from "@/lib/ai";
 import { validPoint } from "@/lib/geo";
 import { LEGAL_VERSION, TERMS_CONSENT_KIND } from "@/lib/legal";
 import { cleanCustom, STAGE_BY_ID, validSectors, validTopics } from "@/lib/intents";
@@ -328,6 +329,35 @@ export async function POST(req: Request) {
       granted: visibility !== "off",
       copyVersion: CONSENT_COPY_VERSION,
     });
+  }
+
+  /**
+   * Re-read what this person now means, if it changed.
+   *
+   * Only when the signal text actually moved — most saves are a location
+   * or a toggle, and re-embedding those would spend a request to say
+   * nothing. Awaited rather than left floating: a promise nobody waits
+   * for on a serverless function is a write that happens or doesn't
+   * depending on how fast the response goes out.
+   *
+   * Failure is silent and harmless. An un-embedded profile simply misses
+   * the semantic half of matching, which is exactly how every profile
+   * behaved before this existed.
+   */
+  if (canEmbed) {
+    const fresh = await getProfileById(user.id);
+    if (fresh) {
+      const text = signalText(fresh);
+      if (text && text !== fresh.embeddingOf) {
+        const vector = await embed(text);
+        if (vector) {
+          await db
+            .update(users)
+            .set({ embedding: vector, embeddingOf: text })
+            .where(eq(users.id, user.id));
+        }
+      }
+    }
   }
 
   return NextResponse.json({ ok: true });

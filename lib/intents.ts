@@ -474,3 +474,88 @@ function joinWords(words: string[]): string {
   return `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
 }
 
+
+/**
+ * The first line you'd actually send, as opposed to the reason you were
+ * shown each other.
+ *
+ * `describeMatch` writes *about* somebody, to you — "you asked for X,
+ * that's exactly what they offer". That sentence is the right one on a
+ * card and the wrong one in a message box: nobody opens with a summary of
+ * why an algorithm paired them.
+ *
+ * This writes the other artefact — first person, addressed to them,
+ * naming the one concrete thing the two profiles have in common and
+ * ending somewhere a reply can go. It is a draft and it is always
+ * editable: the point is to beat the blank box, not to send for anybody.
+ * A request with a specific reason is accepted far more often than a bare
+ * one, and the reason people send bare ones is that writing the first
+ * sentence to a stranger is hard.
+ *
+ * Deliberately not a template with the other person's words pasted in
+ * twice. It picks the single strongest thing it knows — a two-way trade,
+ * then something they offer that you asked for, then the reverse, then a
+ * shared sector — and says only that.
+ */
+export function draftOpener(opts: {
+  list: Overlap[];
+  custom: CustomOverlap[];
+  firstName: string;
+  /** The sender's own first name, so the line can be signed off naturally. */
+  other?: { workingOn?: string | null };
+  shared?: Sector[];
+  sharedCustom?: string[];
+}): string {
+  const { list, custom, firstName, other } = opts;
+  const shared = opts.shared ?? [];
+  const sharedCustom = opts.sharedCustom ?? [];
+  const hi = `Hi ${firstName} — `;
+
+  /**
+   * The vocabulary carries both voices and they are not interchangeable:
+   * `offer` is what you say when giving ("engineering depth"), `need` is
+   * what you say when asking ("technical help"). Using the giving voice
+   * for a request produced "I'm looking for investing or angel intros"
+   * where the person meant funding.
+   */
+  const give = (o: Overlap) => o.topic.offer.toLowerCase();
+  const want = (o: Overlap) => o.topic.need.toLowerCase();
+  const mineWants = list.find((o) => o.direction === "mine-wants-theirs");
+  const theyWant = list.find((o) => o.direction === "theirs-wants-mine");
+  const mineCustom = custom.find((c) => c.direction === "mine-wants-theirs");
+  const theirsCustom = custom.find((c) => c.direction === "theirs-wants-mine");
+
+  // The rarest and most compelling thing: each of you has what the other
+  // asked for. Lead with what you can give, not with what you want.
+  if (mineWants && theyWant) {
+    return `${hi}I could help with ${give(theyWant)}, and I'm looking for ${want(
+      mineWants
+    )}, which looks like your area. Worth a conversation?`;
+  }
+  if (mineCustom && (theyWant || theirsCustom)) {
+    const theirs = theyWant ? give(theyWant) : theirsCustom!.label;
+    return `${hi}I could help with ${theirs}, and I'm after “${mineCustom.label}” — which is what you do. Worth a conversation?`;
+  }
+
+  // Their words beat a checkbox: a phrase somebody typed is specific
+  // enough that the opening line sounds like it was written by a person.
+  if (mineCustom) {
+    return `${hi}I'm looking for “${mineCustom.label}” and that's what you do. Could I ask you about it?`;
+  }
+  if (mineWants) {
+    const work = other?.workingOn ? ` I saw you're working on ${other.workingOn}.` : "";
+    return `${hi}I'm looking for ${want(mineWants)}, which is one of yours.${work} Could I ask you about it?`;
+  }
+  if (theirsCustom) {
+    return `${hi}you mentioned you're after “${theirsCustom.label}” — that's something I can help with. Happy to talk it through.`;
+  }
+  if (theyWant) {
+    return `${hi}you're after ${want(theyWant)} and that's one of mine. Happy to talk it through.`;
+  }
+
+  const bond = sharedCustom[0] ?? shared[0]?.label.toLowerCase();
+  if (bond) {
+    return `${hi}we're both into ${bond}. Would be good to compare notes — are you around this week?`;
+  }
+  return `${hi}we're on the same map and it looked worth saying hello. What are you working on at the moment?`;
+}

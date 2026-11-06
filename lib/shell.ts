@@ -6,6 +6,7 @@ import {
   getOpenMapProfiles,
   getProfileById,
   getUnplacedOpenProfiles,
+  similarCandidates,
   touchActivity,
   type MapProfile,
 } from "./profiles";
@@ -362,7 +363,7 @@ export async function shellPayload(opts: {
        * connection status, then vouches — stays a chain, because the
        * second reads rows the first annotated.
        */
-      const [members, children, host, unfinished, pinsHere] = await Promise.all([
+      const [members, children, host, unfinished, pinsHere, similarHere] = await Promise.all([
         getBoardMembers(board.id, {
           excludeUserId: opts.userId,
           centerLat: board.lat ?? undefined,
@@ -384,6 +385,7 @@ export async function shellPayload(opts: {
           centerLat: board.lat ?? undefined,
           centerLng: board.lng ?? undefined,
         }),
+        opts.userId ? similarCandidates(opts.userId) : new Map<string, number>(),
       ]);
       // You, at the top of your own board's list.
       const self = me ? selfRow(me) : null;
@@ -402,6 +404,7 @@ export async function shellPayload(opts: {
           }, members, {
               surface,
               limit: MATCHES_SHOWN,
+              similar: similarHere,
             }).map((m) => ({ id: m.other.id, reason: m.reason, twoWay: m.twoWay }))
           : [];
 
@@ -484,7 +487,7 @@ export async function shellPayload(opts: {
    * things that could all have arrived at once. `publicEvents` joins them
    * because it depends on nothing at all.
    */
-  const [placed, unplaced, pins, events] = await Promise.all([
+  const [placed, unplaced, pins, events, similar] = await Promise.all([
     getOpenMapProfiles({
       excludeUserId: opts.userId,
       centerLat: centre.lat,
@@ -516,6 +519,10 @@ export async function shellPayload(opts: {
       radiusKm: Math.max(radiusKm, MAX_PIN_REACH_KM),
     }),
     publicEvents(),
+    // One indexed query, run with the rest rather than after them. Empty
+    // when there is no key, no extension or no embedding yet — all of
+    // which are ordinary, and none of which changes anything else here.
+    opts.userId ? similarCandidates(opts.userId) : new Map<string, number>(),
   ]);
 
   // First, because it is the one row whose answer the reader already knows
@@ -540,6 +547,7 @@ export async function shellPayload(opts: {
           }, placed, {
         surface: "open",
         limit: MATCHES_SHOWN,
+        similar,
       }).map((m) => ({ id: m.other.id, reason: m.reason, twoWay: m.twoWay }))
     : [];
 

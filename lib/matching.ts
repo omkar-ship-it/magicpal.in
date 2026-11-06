@@ -57,6 +57,27 @@ const DIRECTION_WEIGHT: Record<Overlap["direction"], number> = {
   "theirs-wants-mine": 2,
 };
 
+/**
+ * How close two people's own words have to be before it counts.
+ *
+ * Measured, not guessed. "warehouse automation" against "factory
+ * robotics" scores 0.61 and against "wedding photography" 0.27;
+ * "climate and energy" against "fintech lending" is 0.21. Anything
+ * looser than this turns "related" into "both work in tech", which is
+ * the uselessness this product exists to replace.
+ */
+export const SIMILAR_FLOOR = 0.42;
+
+/**
+ * Worth less than a real overlap, on purpose.
+ *
+ * A ticked box is a statement; a vector is an inference. At the top of
+ * the scale a semantic pair scores a little under a single exact topic
+ * match, which is about how much more the one is worth trusting than
+ * the other.
+ */
+const SEMANTIC_WEIGHT = 1.1;
+
 /** Both directions present is a trade, not a coincidence. Worth more than its parts. */
 const TWO_WAY_BONUS = 3;
 
@@ -144,7 +165,16 @@ export function matchesFor(
     customInterests?: readonly string[];
   },
   pool: readonly MapProfile[],
-  opts: { surface: Surface; limit?: number; exclude?: readonly string[] } = { surface: "open" }
+  opts: {
+    surface: Surface;
+    limit?: number;
+    exclude?: readonly string[];
+    /**
+     * Candidates whose free text means something close to the viewer's,
+     * by id and similarity. From `similarCandidates`; absent is normal.
+     */
+    similar?: ReadonlyMap<string, number>;
+  } = { surface: "open" }
 ): Match[] {
   const limit = opts.limit ?? 3;
   const excluded = new Set([me.id, ...(opts.exclude ?? [])]);
@@ -166,14 +196,28 @@ export function matchesFor(
     const affinity =
       Math.min(shared.length, 2) * INTEREST_WEIGHT +
       Math.min(sharedCustom.length, 2) * CUSTOM_INTEREST_WEIGHT;
+    /**
+     * What the words mean, when the boxes don't line up.
+     *
+     * Exact matching cannot see that "warehouse automation" and "factory
+     * robotics" are the same answer written twice, and free text is where
+     * people put the specific things. This lets such a pair through — and
+     * nothing else: a similarity below the floor contributes zero and
+     * cannot rescue a stranger with nothing in common.
+     */
+    const near = opts.similar?.get(other.id) ?? 0;
+    const semantic = near >= SIMILAR_FLOOR ? SEMANTIC_WEIGHT * (near - SIMILAR_FLOOR) * 4 : 0;
+
     // Someone with nothing in common is not a match at any distance — the
     // open map would otherwise recommend the nearest stranger, which is
     // exactly the uselessness this product exists to replace. A shared
-    // sector counts as something in common.
-    if (base === 0 && affinity === 0 && opts.surface !== "event") continue;
+    // sector counts as something in common, and so does meaning the same
+    // thing in different words.
+    if (base === 0 && affinity === 0 && semantic === 0 && opts.surface !== "event") continue;
     const score =
       base +
       affinity +
+      semantic +
       (two ? TWO_WAY_BONUS : 0) +
       proximityScore(opts.surface, other) +
       (other.active ? 0.4 : 0);
@@ -235,3 +279,4 @@ export function firstName(name: string): string {
 export function pairKey(a: string, b: string): { userAId: string; userBId: string } {
   return a < b ? { userAId: a, userBId: b } : { userAId: b, userBId: a };
 }
+

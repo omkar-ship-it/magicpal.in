@@ -1,9 +1,10 @@
-import { and, eq, inArray, isNotNull, isNull, lt, ne, or } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { db, hasDb } from "./db";
 import { consents, memberships, users } from "./db/schema";
 import { isActiveMember } from "./membership";
 import { distanceKm, validPoint } from "./geo";
 import { ACTIVE_WINDOW_MINUTES, LIVE_STALE_MINUTES, MAX_MAP_RESULTS } from "./rules";
+import { SIMILAR_FLOOR } from "./matching";
 import { LEGAL_VERSION, TERMS_CONSENT_KIND } from "./legal";
 
 export type Visibility = "off" | "base" | "exact" | "live";
@@ -608,4 +609,50 @@ export async function hasAcceptedTerms(userId: string): Promise<boolean> {
     )
     .limit(1);
   return rows.length > 0 && rows[0].granted;
+}
+
+/**
+ * People the ticked boxes would never have found.
+ *
+ * The deterministic matcher compares vocabularies and exact phrases, and
+ * is right about everything it finds. What it cannot do is notice that
+ * "warehouse automation" and "factory robotics" are the same answer
+ * written twice — and free text is exactly where the specific, valuable
+ * things get written.
+ *
+ * So this asks Postgres which candidates are closest in meaning to the
+ * viewer and hands them back with their similarity. It never produces a
+ * reason: the reason still comes from what both people actually wrote,
+ * and this only decides who gets looked at.
+ *
+ * The floor lives with the scoring that uses it — see SIMILAR_FLOOR
+ * in lib/matching.
+ */
+
+export async function similarCandidates(viewerId: string, limit = 40): Promise<Map<string, number>> {
+  if (!hasDb || !db) return new Map();
+  try {
+    const rows = await db.execute(sql`
+      select other.id as id, 1 - (other.embedding <=> me.embedding) as similarity
+      from users me, users other
+      where me.id = ${viewerId}
+        and me.embedding is not null
+        and other.embedding is not null
+        and other.id <> me.id
+        and other.name is not null
+        and 1 - (other.embedding <=> me.embedding) >= ${SIMILAR_FLOOR}
+      order by other.embedding <=> me.embedding
+      limit ${limit}
+    `);
+    const list = (Array.isArray(rows) ? rows : ((rows as { rows?: unknown[] }).rows ?? [])) as Array<{
+      id: string;
+      similarity: number | string;
+    }>;
+    return new Map(list.map((r) => [r.id, Number(r.similarity)]));
+  } catch (err) {
+    // No extension, no column, no embeddings, no key — all ordinary states
+    // for this deployment, none of which should break a page.
+    console.error("[matching] similarity lookup failed", err);
+    return new Map();
+  }
 }

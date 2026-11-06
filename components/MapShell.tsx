@@ -1,11 +1,19 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useIsNarrow } from "@/lib/useIsNarrow";
 import Link from "next/link";
 import type { MapProfile } from "@/lib/profiles";
 import type { FeedItem } from "@/lib/feed";
-import type { EventRef, ShellPayload } from "@/lib/shell";
+import type { EventRef, ShellPayload, ShellPerson } from "@/lib/shell";
+import {
+  customOverlaps,
+  draftOpener,
+  overlaps,
+  sharedCustomInterests,
+  sharedInterests,
+} from "@/lib/intents";
+import { firstName } from "@/lib/matching";
 import { applyFacets, facetsActive, NO_FACETS, type Facets } from "@/lib/search";
 import { distanceKm } from "@/lib/geo";
 import MapCanvas from "./MapCanvas";
@@ -680,6 +688,9 @@ export default function MapShell({
               <ReachOut
                 key={selectedPerson.id}
                 person={selectedPerson}
+                /* The viewer's own signals, so the opening line can be
+                   written from what the two profiles actually share. */
+                me={data.people.find((p) => p.self) ?? null}
                 signedIn={signedIn}
                 onSignIn={() => openWin("signin")}
                 onMessage={() => {
@@ -807,17 +818,77 @@ export default function MapShell({
  */
 function ReachOut({
   person,
+  me,
   signedIn,
   onSignIn,
   onMessage,
 }: {
   person: MapProfile & { connectionStatus?: string | null };
+  /** The viewer, as a row, for drafting the first line. Null when signed out. */
+  me: ShellPerson | null;
   signedIn: boolean;
   onSignIn: () => void;
   /** Open this person's thread in Chats. */
   onMessage: () => void;
 }) {
-  const [note, setNote] = useState("");
+  /**
+   * The first line, already written.
+   *
+   * A request with a specific reason is accepted far more often than a
+   * bare one, and the reason people send bare ones is that writing the
+   * opening sentence to a stranger is hard — so the box starts with the
+   * one concrete thing the two profiles have in common rather than empty.
+   *
+   * A draft, not a send: it is ordinary editable text, and the hint under
+   * it says to make it yours. Seeded once per person via the `key` on
+   * this component, so edits survive re-renders and are not overwritten
+   * halfway through a sentence.
+   */
+  const [note, setNote] = useState(() =>
+    me
+      ? draftOpener({
+          list: overlaps(me, person),
+          custom: customOverlaps(me, person),
+          firstName: firstName(person.name),
+          other: { workingOn: person.workingOn },
+          shared: sharedInterests(me.interests ?? [], person.interests ?? []),
+          sharedCustom: sharedCustomInterests(me.customInterests, person.customInterests),
+        })
+      : ""
+  );
+  /** True once the server has replaced the template with a written line. */
+  const [polished, setPolished] = useState(false);
+  /** Set the moment anybody types, so a late draft never lands on their words. */
+  const touched = useRef(false);
+
+  /**
+   * The template renders instantly; the written version arrives when it
+   * arrives and replaces it only if the box is untouched.
+   *
+   * Deliberately this way round. Waiting for a model before showing
+   * anything would leave an empty box for a second at the exact moment
+   * somebody decided to reach out, and the templated line is a perfectly
+   * good message on its own.
+   */
+  useEffect(() => {
+    if (!signedIn || !me) return;
+    let alive = true;
+    void fetch("/api/opener", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ personId: person.id }),
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!alive || touched.current || !d?.opener || !d.written) return;
+        setNote(d.opener);
+        setPolished(true);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [person.id, signedIn, me]);
   /**
    * Only what *this* session just did. The truth lives on the person, which
    * the server resolves on every payload — reading it into state on mount
@@ -894,13 +965,17 @@ function ReachOut({
         className="input mt-1.5"
         placeholder={`Why you'd like to meet ${person.name.split(" ")[0]}`}
         value={note}
-        onChange={(e) => setNote(e.target.value)}
+        onChange={(e) => {
+          touched.current = true;
+          setNote(e.target.value);
+        }}
         maxLength={280}
       />
       {/* Said plainly, because a note that reads as optional gets skipped and
           a bare request gets declined. */}
       <p className="mt-1.5 text-[11.5px] leading-[1.45] text-[var(--ink-soft)]">
-        Optional, but a specific reason is accepted far more often than a bare request.
+        {polished ? "Drafted from what you both put down" : "A starting point"} — edit it. A line in your
+        own words is accepted far more often than one that reads as generated.
       </p>
       <div className="mt-2.5 flex flex-wrap gap-2">
         <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={ask}>

@@ -1,4 +1,5 @@
 import {
+  customType,
   pgTable,
   text,
   timestamp,
@@ -216,6 +217,21 @@ export const users = pgTable(
      * temporary annoyance becomes a permanent opt-out.
      */
     alertsMutedUntil: timestamp("alerts_muted_until", { withTimezone: true }),
+
+    /**
+     * What this person means, as a vector. Null until embedded.
+     *
+     * Declared as unknown rather than a typed column: drizzle has no
+     * pgvector type and nothing in TypeScript reads it — every use is a
+     * similarity comparison inside Postgres, which is the only place it
+     * is cheap. See lib/ai and lib/matching.
+     */
+    embedding: customType<{ data: number[]; driverData: string }>({
+      dataType: () => "vector(256)",
+      toDriver: (v) => JSON.stringify(v),
+    })("embedding"),
+    /** Exactly the text the vector was built from, so a save can skip a no-op. */
+    embeddingOf: text("embedding_of"),
 
     /**
      * Hold pushes overnight rather than ringing a bedside phone.
