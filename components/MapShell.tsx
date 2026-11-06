@@ -110,9 +110,24 @@ export default function MapShell({
    */
   const needsSetup = !signedIn || !initial.hasSignals || myVisibility === "off";
 
+  /**
+   * Signed in, and not yet on the map.
+   *
+   * Somebody who answered the first onboarding question and closed the tab
+   * came back to the About panel and a "finish setting up" checklist —
+   * a different surface, with different buttons, instead of the step they
+   * were standing on. The flow saves after every step precisely so that
+   * coming back is cheap, and then the shell dropped them somewhere else.
+   *
+   * `off` is the column default and the picker no longer offers it, so it
+   * means "never answered" and cannot be a state anybody chose. Nobody
+   * who has finished can be sent back here.
+   */
+  const midOnboarding = signedIn && (!onboarded || myVisibility === "off");
+
   const [wins, setWins] = useState<Record<string, WindowState>>(() => ({
     // `?panel=` from /you or /login decides what's already up on arrival.
-    home: { ...DEFAULT_WINDOW, open: initialOverlay === null && needsSetup, x: 16, y: 72, z: 2 },
+    home: { ...DEFAULT_WINDOW, open: initialOverlay === null && needsSetup && !midOnboarding, x: 16, y: 72, z: 2 },
     forYou: {
       ...DEFAULT_WINDOW,
       open: initialOverlay === "forYou" || (initialOverlay === null && !needsSetup),
@@ -132,7 +147,14 @@ export default function MapShell({
     // very thing they were reacting to.
     alertSettings: { ...DEFAULT_WINDOW, x: 470, y: 140, w: 400, z: 4 },
     person: { ...DEFAULT_WINDOW, x: 60, y: 120 },
-    profile: { ...DEFAULT_WINDOW, open: initialOverlay === "profile", x: 216, y: 92, z: 3 },
+    // Back to the step they stopped on, not to a checklist about it.
+    profile: {
+      ...DEFAULT_WINDOW,
+      open: initialOverlay === "profile" || (initialOverlay === null && midOnboarding),
+      x: 216,
+      y: 92,
+      z: 3,
+    },
     signin: { ...DEFAULT_WINDOW, open: initialOverlay === "signin", x: 240, y: 120, z: 3 },
   }));
   const topZ = useRef(3);
