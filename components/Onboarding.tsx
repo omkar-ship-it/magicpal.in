@@ -101,6 +101,7 @@ export default function Onboarding({
   setDraft,
   needsConsent,
   peerCount,
+  near = null,
   onStepSaved,
   onFinished,
 }: {
@@ -110,6 +111,15 @@ export default function Onboarding({
   needsConsent: boolean;
   /** How many people are already on the map. The reason to bother. */
   peerCount: number;
+  /**
+   * Where the map is looking, used only to rank search results.
+   *
+   * Not a guess about where the person is and never saved as one — but a
+   * search with no bias at all ranked a Virginia realtor above the city
+   * of Pune, and the part of the world already on their screen is a far
+   * better tiebreak than nothing.
+   */
+  near?: { lat: number; lng: number } | null;
   /** Fired after each successful save, so the map behind updates as they go. */
   onStepSaved: () => void;
   onFinished: () => void;
@@ -349,7 +359,8 @@ export default function Onboarding({
                 </label>
                 <PlaceSearch
                   id="o-city"
-                  near={null}
+                  kind="place"
+                  near={near}
                   value={draft.baseLabel ?? ""}
                   placeholder="Hyderabad"
                   onPick={(p: Place) =>
@@ -366,7 +377,7 @@ export default function Onboarding({
                 </label>
                 <PlaceSearch
                   id="o-exact"
-                  near={null}
+                  near={near}
                   value={draft.locationLabel ?? ""}
                   placeholder="A venue, an office, a neighbourhood"
                   onPick={(p: Place) => setDraft((d) => ({ ...d, locationLabel: p.label, lat: p.lat, lng: p.lng }))}

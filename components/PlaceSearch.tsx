@@ -74,6 +74,7 @@ export default function PlaceSearch({
   placeholder = "Search for a place",
   id,
   near = null,
+  kind = "any",
 }: {
   value: string | null;
   onPick: (p: Place) => void;
@@ -90,6 +91,17 @@ export default function PlaceSearch({
   id?: string;
   /** Somewhere the asker already is, used to rank results. */
   near?: { lat: number; lng: number } | null;
+  /**
+   * What the field is asking for.
+   *
+   * "any" keeps points of interest, which a venue field needs — "2gethr"
+   * has to be findable by its name. "place" asks for cities and districts
+   * only, which is what a field labelled "Your city" means: somebody in
+   * Maharashtra typed "Pune", took the top suggestion, and was saved at a
+   * realtor's office in Virginia, because nothing had said which of the
+   * two the question was about.
+   */
+  kind?: "any" | "place";
 }) {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<Suggestion[]>([]);
@@ -162,7 +174,7 @@ export default function PlaceSearch({
   // short query would be a setState during an effect for something the
   // render can simply work out, and the two can disagree for a frame.
   const tooShort = q.trim().length < 2;
-  const key = `${q.trim().toLowerCase()}|${near ? `${near.lat.toFixed(2)},${near.lng.toFixed(2)}` : ""}`;
+  const key = `${kind}|${q.trim().toLowerCase()}|${near ? `${near.lat.toFixed(2)},${near.lng.toFixed(2)}` : ""}`;
   /**
    * A cache hit is answered during render, not by writing state inside an
    * effect — which is both a frame faster and the only version the compiler
@@ -188,6 +200,7 @@ export default function PlaceSearch({
       setBusy(true);
       try {
         const params = new URLSearchParams({ q: term, session: sessionToken() });
+        if (kind === "place") params.set("types", "place");
         if (near) {
           params.set("nearLat", String(near.lat));
           params.set("nearLng", String(near.lng));
@@ -208,7 +221,7 @@ export default function PlaceSearch({
       }
     }, DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [q, key, near]);
+  }, [q, key, near, kind]);
 
   /** Clicking anywhere else closes the list, the way every menu does. */
   useEffect(() => {

@@ -76,6 +76,7 @@ export default function ProfilePanel({
   networks,
   connections,
   peerCount = 0,
+  mapCentre = null,
   onSaved,
   onDone,
   onOpenNetwork,
@@ -85,6 +86,8 @@ export default function ProfilePanel({
   connections: number;
   /** How many people are already on the map — the reason to finish. */
   peerCount?: number;
+  /** Where the map is looking. Ranks place search, never saved. */
+  mapCentre?: { lat: number; lng: number } | null;
   onSaved: () => void;
   /** Onboarding finished and the person asked to go and look. */
   onDone?: () => void;
@@ -208,6 +211,7 @@ export default function ProfilePanel({
         setDraft={(fn) => setD((prev) => (prev ? { ...prev, ...fn(prev as never) } : prev))}
         needsConsent={termsAccepted === false}
         peerCount={peerCount}
+        near={mapCentre}
         onStepSaved={() => {
           setTermsAccepted(true);
           router.refresh();
@@ -689,6 +693,7 @@ export default function ProfilePanel({
                     continent. */}
                 <PlaceSearch
                   id="p-city"
+                  kind="place"
                   near={near}
                   value={d.baseLabel}
                   placeholder="Hyderabad"

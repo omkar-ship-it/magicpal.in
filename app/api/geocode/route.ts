@@ -150,6 +150,13 @@ export async function GET(req: Request) {
   const near = validPoint(params.get("nearLat"), params.get("nearLng"));
 
   const session = params.get("session");
+  /**
+   * Allow-listed rather than passed through. This string goes into a
+   * request to Mapbox, and the set of answers the two fields in this
+   * product need is small and known.
+   */
+  const asked = params.get("types");
+  const types = asked === "place" ? "place,locality,district,region" : null;
 
   try {
     /**
@@ -168,7 +175,7 @@ export async function GET(req: Request) {
      */
     const results = mapboxToken
       ? session
-        ? await suggestMapbox(q, mapboxToken, near, session)
+        ? await suggestMapbox(q, mapboxToken, near, session, types)
         : await geocodeMapbox(q, mapboxToken, near)
       : await geocodeNominatim(q, near);
     return NextResponse.json({ results });
@@ -181,7 +188,8 @@ async function suggestMapbox(
   q: string,
   token: string,
   near: { lat: number; lng: number } | null,
-  session: string
+  session: string,
+  types: string | null
 ): Promise<Result[]> {
   const url = new URL("https://api.mapbox.com/search/searchbox/v1/suggest");
   url.searchParams.set("q", q);
@@ -189,6 +197,18 @@ async function suggestMapbox(
   url.searchParams.set("session_token", session);
   url.searchParams.set("access_token", token);
   if (near) url.searchParams.set("proximity", `${near.lng},${near.lat}`);
+  /**
+   * What kind of thing the field is asking for.
+   *
+   * Absent for a venue search, where a point of interest is the whole
+   * point — "2gethr" has to be findable by name. Set to places for a
+   * field labelled "Your city", where it emphatically is not: somebody
+   * in Maharashtra typed "Pune", took the first suggestion, and was
+   * saved at "Puneet Bhagi, Ikon Realty, Fairfax, Virginia". A business
+   * five thousand miles away outranked the city because nothing had
+   * told the search which of the two the question was about.
+   */
+  if (types) url.searchParams.set("types", types);
 
   const res = await fetch(url);
   if (!res.ok) return [];

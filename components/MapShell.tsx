@@ -722,6 +722,7 @@ export default function MapShell({
           connections={data.connections}
           // The reason to finish: somebody is already there.
           peerCount={data.people.filter((p) => !p.self).length}
+          mapCentre={data.centre}
           onSaved={() => void load({})}
           onDone={() => win("profile", { open: false })}
           onOpenNetwork={(slug) => {
