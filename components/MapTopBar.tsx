@@ -76,8 +76,15 @@ export default function MapTopBar({
     });
   }
 
+  // Above the windows only while something is dropped down. The bar sits at
+  // z-30 and a floating window at 30 + its own z, so on a phone — where a
+  // window is a full-width sheet starting just under the bar — an open
+  // picker rendered *behind* whatever was already up. Raised only while
+  // open, so the bar otherwise stays under the panel a reader is working in.
   return (
-    <header className="pointer-events-none absolute inset-x-0 top-0 z-30 p-2.5">
+    <header
+      className={`pointer-events-none absolute inset-x-0 top-0 p-2.5 ${picking || filtering ? "z-50" : "z-30"}`}
+    >
       <div className="pointer-events-auto mx-auto max-w-2xl">
         {/* Two rows on a phone. One row meant the switcher, a search box and
             a Filters button sharing 390px, which truncated the search to
@@ -229,6 +236,37 @@ export default function MapTopBar({
         {/* ------------------------------------------------ network list */}
         {picking && (
           <div className="floating-panel panel-enter mt-1.5 max-h-[60dvh] overflow-y-auto p-1.5">
+            {/* Where you actually are, when the list can't say it.
+                An event is not a network you belong to, so it is correctly
+                absent from the options below — but that left the picker
+                showing three rows with none of them ticked, which reads as
+                being nowhere. This row is the scope itself: ticked, and it
+                opens the event rather than switching anything. */}
+            {scopeKind === "event" && (
+              <button
+                type="button"
+                onClick={() => {
+                  onHome();
+                  setPicking(false);
+                }}
+                className="flex w-full items-center gap-2.5 rounded-xl p-2.5 text-left tap hover:bg-[var(--sunk)]"
+                style={{ background: "var(--sunk)" }}
+              >
+                <span
+                  className="grid h-8 w-8 flex-none place-items-center rounded-xl"
+                  style={{ background: "var(--card)", color: "var(--layer-event)" }}
+                >
+                  <IconCalendar size={15} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13.5px] font-semibold">{scopeName}</span>
+                  <span className="block truncate text-[11.5px] text-[var(--ink-soft)]">
+                    Event · where you are now
+                  </span>
+                </span>
+                <IconCheck size={14} style={{ color: "var(--brand)" }} />
+              </button>
+            )}
             {networks.map((n) => (
               <button
                 key={n.slug ?? "open"}
@@ -271,7 +309,8 @@ export default function MapTopBar({
                 {n.slug === activeSlug && <IconCheck size={14} style={{ color: "var(--brand)" }} />}
               </button>
             ))}
-            {activeSlug && (
+            {/* An event already has the row above, which does the same thing. */}
+            {activeSlug && scopeKind !== "event" && (
               <button
                 type="button"
                 onClick={() => {

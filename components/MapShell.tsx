@@ -135,12 +135,32 @@ export default function MapShell({
    */
   const midOnboarding = signedIn && (!onboarded || myVisibility === "off");
 
+  /**
+   * Arriving inside an event opens the event, not the deck.
+   *
+   * Everywhere else "For you" is the right landing — it is the reason to
+   * be here and the map is the backdrop. An event is the exception,
+   * because its page *contains* the deck: the matches are a section on
+   * it, under the time, the venue and the RSVP. Landing on For You there
+   * showed strictly less and left somebody who had just tapped "Open the
+   * event" looking at a map, hunting for the event they had opened.
+   *
+   * Setup still wins. Somebody mid-onboarding has a more urgent screen.
+   */
+  const landsOnEvent = Boolean(initial.selfEvent) && initialOverlay === null && !needsSetup && !midOnboarding;
+
   const [wins, setWins] = useState<Record<string, WindowState>>(() => ({
     // `?panel=` from /you or /login decides what's already up on arrival.
-    home: { ...DEFAULT_WINDOW, open: initialOverlay === null && needsSetup && !midOnboarding, x: 16, y: 72, z: 2 },
+    home: {
+      ...DEFAULT_WINDOW,
+      open: (initialOverlay === null && needsSetup && !midOnboarding) || landsOnEvent,
+      x: 16,
+      y: 72,
+      z: 2,
+    },
     forYou: {
       ...DEFAULT_WINDOW,
-      open: initialOverlay === "forYou" || (initialOverlay === null && !needsSetup),
+      open: initialOverlay === "forYou" || (initialOverlay === null && !needsSetup && !landsOnEvent),
       x: 16,
       y: 72,
       z: 2,
@@ -711,8 +731,16 @@ export default function MapShell({
            * back to the open map with no account of why.
            */
           onOpenBoard={(e: EventRef) => {
-            if (e.joined) switchNetwork(e.slug);
-            else window.location.assign(`/b/${encodeURIComponent(e.slug)}`);
+            if (!e.joined) {
+              window.location.assign(`/b/${encodeURIComponent(e.slug)}`);
+              return;
+            }
+            switchNetwork(e.slug);
+            // Switching the scope alone left a bare map: the Events window
+            // closes behind the switch, and Home — now the event's own
+            // page — was never asked to open. Somebody who tapped "Open
+            // the event" has asked for the event, so show it.
+            openWin("home");
           }}
           onOpenPerson={showPerson}
           onProfile={() => openWin("profile")}
