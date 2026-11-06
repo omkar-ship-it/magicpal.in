@@ -340,7 +340,20 @@ export default function MapShell({
     if (next === "feed") void loadFeed(data.scope.slug);
   }
 
+  /**
+   * Change scope, and say so in the address bar.
+   *
+   * The switch used to be invisible to the browser: you could be standing
+   * in an event with the URL still reading "/", which made the link
+   * unshareable, lost the scope on a reload, and gave Back nothing to go
+   * to. A board is meant to be an address of this screen — `?net=` is the
+   * whole mechanism — so the one place that changes scope has to write it.
+   *
+   * Pushed rather than replaced, so Back walks out of a board the same way
+   * you walked in. `popstate` below does the matching read.
+   */
   function switchNetwork(slug: string | null) {
+    const leavingEvent = Boolean(data.selfEvent);
     setFacets(NO_FACETS);
     setSelected(null);
     // Belongs to the board being left — the panel remounts and reports the
@@ -348,7 +361,39 @@ export default function MapShell({
     setForYouCount(null);
     void load({ net: slug });
     if (wins.feed.open) void loadFeed(slug);
+
+    const url = slug ? `/?net=${encodeURIComponent(slug)}` : "/";
+    if (url !== window.location.pathname + window.location.search) {
+      window.history.pushState({ net: slug }, "", url);
+    }
+
+    // Leaving an event puts the deck back. Home was opened *for* the event
+    // — leaving it there would hand the next scope a window it never asked
+    // for, and hide the recommendations that are the usual landing.
+    if (leavingEvent) {
+      win("home", { open: false });
+      openWin("forYou");
+    }
   }
+
+  /**
+   * Back and forward, which are navigation on a page that never navigates.
+   *
+   * Everything switchNetwork does except the pushState that put us here —
+   * re-entering history while walking through it is how a Back button
+   * becomes a trap.
+   */
+  useEffect(() => {
+    const onPop = () => {
+      const net = new URLSearchParams(window.location.search).get("net");
+      setFacets(NO_FACETS);
+      setSelected(null);
+      setForYouCount(null);
+      void load({ net });
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [load]);
 
   // Owner-only affordances key off the scope's own flag rather than
   // comparing ids in the client: the server already decided, and two places
@@ -499,7 +544,13 @@ export default function MapShell({
             are you coming, who is already in the room — which is why it
             gets EventPage rather than a community page with the dates
             bolted on. */}
+        {/* The event pages bring no scroll container of their own.
+            OpenHome and CommunityHome each own one; EventPage doesn't,
+            because its other caller — the Events window — wraps it. In
+            this slot it had none, so the page simply stopped at the
+            bottom of the window with the roster cut in half. */}
         {data.selfEvent && editingHome ? (
+          <div className="min-h-0 flex-1 overflow-y-auto">
           <EditEvent
             event={data.selfEvent}
             onCancel={() => setEditingHome(false)}
@@ -508,7 +559,9 @@ export default function MapShell({
               void load({});
             }}
           />
+          </div>
         ) : data.selfEvent ? (
+          <div className="min-h-0 flex-1 overflow-y-auto">
           <EventPage
             event={data.selfEvent}
             sharing={sharingHome}
@@ -533,6 +586,7 @@ export default function MapShell({
             onDeleted={() => window.location.assign("/")}
             onChanged={() => void load({})}
           />
+          </div>
         ) : isOpenNet ? (
           <OpenHome
             signedIn={signedIn}
