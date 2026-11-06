@@ -61,6 +61,17 @@ export type EventRef = {
   memberCount: number;
   going: number;
   myRsvp: string | null;
+  /** Active membership, regardless of whether they've answered the RSVP. */
+  joined: boolean;
+  /**
+   * No parent community, so the event is a scope in its own right.
+   *
+   * A child event isn't: `shellPayload` resolves its slug to the parent,
+   * because the network is the community and the event is a thing inside
+   * it. Only a standalone event can be opened as its own board — which is
+   * every event on the open map, by definition of `publicEvents`.
+   */
+  standalone: boolean;
   /** Only the host sees the edit affordance. */
   isHost: boolean;
 };
@@ -624,6 +635,8 @@ async function toEventRefs(rows: Board[], viewerId?: string): Promise<EventRef[]
         memberCount: 0,
         going: rsvp.going,
         myRsvp: rsvp.mine,
+        joined: rsvp.joined,
+        standalone: e.parentBoardId === null,
         isHost: Boolean(viewerId && e.hostUserId === viewerId),
       };
     })

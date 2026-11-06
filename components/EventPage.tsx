@@ -35,6 +35,7 @@ export default function EventPage({
   hasSignals,
   onShare,
   onShow,
+  onOpen,
   onEdit,
   onOpenPerson,
   onProfile,
@@ -50,6 +51,14 @@ export default function EventPage({
   hasSignals: boolean;
   onShare: () => void;
   onShow: () => void;
+  /**
+   * Point the whole app at this event, rather than merely describing it.
+   *
+   * Absent when the event *is* the current scope — there is nowhere to
+   * go — and absent for a child event, whose slug resolves to its parent
+   * community and so has no board of its own to open.
+   */
+  onOpen?: () => void;
   onEdit: () => void;
   onOpenPerson: (id: string) => void;
   onProfile: () => void;
@@ -241,6 +250,15 @@ export default function EventPage({
           {onMap && (
             <button type="button" className="btn btn-ghost btn-sm self-start" onClick={onShow}>
               <IconPin size={12} /> Show it on the map
+            </button>
+          )}
+          {/* The way in, from a listing to the room itself.
+              Reading an event on the open map tells you what it is; opening
+              it points the whole app at it — the matcher starts asking
+              "who here is worth meeting" instead of "who in this city". */}
+          {onOpen && (
+            <button type="button" className="btn btn-primary btn-sm self-start" onClick={onOpen}>
+              <IconPeople size={12} /> {event.joined ? "Open the event" : "Join and open"}
             </button>
           )}
         </Facts>

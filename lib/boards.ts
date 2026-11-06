@@ -319,8 +319,8 @@ export async function setRsvp(boardId: string, userId: string, rsvp: string): Pr
 export async function rsvpSummary(
   boardId: string,
   userId?: string
-): Promise<{ going: number; maybe: number; mine: string | null }> {
-  if (!hasDb || !db) return { going: 0, maybe: 0, mine: null };
+): Promise<{ going: number; maybe: number; mine: string | null; joined: boolean }> {
+  if (!hasDb || !db) return { going: 0, maybe: 0, mine: null, joined: false };
   const rows = await db
     .select({ rsvp: memberships.rsvp, userId: memberships.userId })
     .from(memberships)
@@ -329,6 +329,10 @@ export async function rsvpSummary(
     going: rows.filter((r) => r.rsvp === "going").length,
     maybe: rows.filter((r) => r.rsvp === "maybe").length,
     mine: rows.find((r) => r.userId === userId)?.rsvp ?? null,
+    // Membership, which is not the same question as the RSVP: a member
+    // who hasn't answered yet has `mine` null and still belongs in the
+    // room. Free here — the rows are already loaded.
+    joined: Boolean(userId && rows.some((r) => r.userId === userId)),
   };
 }
 

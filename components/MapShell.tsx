@@ -700,6 +700,20 @@ export default function MapShell({
           hasSignals={data.hasSignals}
           openSlug={activeEvent}
           onOpenSlug={setActiveEvent}
+          /**
+           * Into the event, by whichever route the reader has earned.
+           *
+           * A member switches scope in place — the map stays, the matcher
+           * re-aims at the room. Anyone else goes to the board's own
+           * landing, which is already built for exactly this: it explains
+           * the event, offers Join, and redirects straight into the scope
+           * once they are in. Switching a non-member directly would fall
+           * back to the open map with no account of why.
+           */
+          onOpenBoard={(e: EventRef) => {
+            if (e.joined) switchNetwork(e.slug);
+            else window.location.assign(`/b/${encodeURIComponent(e.slug)}`);
+          }}
           onOpenPerson={showPerson}
           onProfile={() => openWin("profile")}
           onSignIn={() => openWin("signin")}

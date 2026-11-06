@@ -29,6 +29,7 @@ export default function EventsPanel({
   openSlug,
   onOpenSlug,
   onShow,
+  onOpenBoard,
   onOpenPerson,
   onProfile,
   onSignIn,
@@ -47,6 +48,13 @@ export default function EventsPanel({
   onOpenSlug: (slug: string | null) => void;
   /** Centre the map on it rather than navigating away from the map. */
   onShow: (e: EventRef) => void;
+  /**
+   * Point the whole app at this event — the scope switch, not a pan.
+   *
+   * The shell owns it because joining, if it comes to that, is a
+   * navigation rather than a panel state.
+   */
+  onOpenBoard: (e: EventRef) => void;
   /** Open somebody's profile from the host card or the attendee list. */
   onOpenPerson: (id: string) => void;
   onProfile: () => void;
@@ -129,6 +137,7 @@ export default function EventsPanel({
           hasSignals={hasSignals}
           onShare={() => setSharing(sharing === open.slug ? null : open.slug)}
           onShow={() => onShow(open)}
+          onOpen={open.standalone ? () => onOpenBoard(open) : undefined}
           onEdit={() => setEditing(open.slug)}
           onOpenPerson={onOpenPerson}
           onProfile={onProfile}
