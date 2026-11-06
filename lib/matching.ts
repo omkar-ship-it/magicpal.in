@@ -60,23 +60,35 @@ const DIRECTION_WEIGHT: Record<Overlap["direction"], number> = {
 /**
  * How close two people's own words have to be before it counts.
  *
- * Measured, not guessed. "warehouse automation" against "factory
- * robotics" scores 0.61 and against "wedding photography" 0.27;
- * "climate and energy" against "fintech lending" is 0.21. Anything
- * looser than this turns "related" into "both work in tech", which is
- * the uselessness this product exists to replace.
+ * Measured against the real corpus, and the first number was wrong.
+ * Bare phrases separate cleanly — "warehouse automation" against
+ * "factory robotics" is 0.61, against "wedding photography" 0.27 — so
+ * 0.42 looked like a floor. Run over whole profiles it admitted half
+ * the room: every one of them is a professional-networking profile, so
+ * they start similar, and across sixteen real members the median pair
+ * scores 0.47 against a maximum of 0.74.
+ *
+ * 0.60 is the top quartile of that distribution, which is the right
+ * shape for a signal whose job is to add a few candidates the ticked
+ * boxes missed. Anything looser is "both work in tech", which is the
+ * uselessness this product exists to replace.
+ *
+ * It is a property of the corpus, not a constant of nature. Worth
+ * re-measuring when the population changes character — a single
+ * co-working floor will sit higher than an open map.
  */
-export const SIMILAR_FLOOR = 0.42;
+export const SIMILAR_FLOOR = 0.6;
 
 /**
  * Worth less than a real overlap, on purpose.
  *
- * A ticked box is a statement; a vector is an inference. At the top of
- * the scale a semantic pair scores a little under a single exact topic
- * match, which is about how much more the one is worth trusting than
- * the other.
+ * Normalised across the range above the floor, so the strongest
+ * semantic pair scores about one weak topic match and the weakest
+ * scores nothing. A ticked box is a statement; a vector is an
+ * inference, and it should never outrank the thing somebody actually
+ * said about themselves.
  */
-const SEMANTIC_WEIGHT = 1.1;
+const SEMANTIC_WEIGHT = 3;
 
 /** Both directions present is a trade, not a coincidence. Worth more than its parts. */
 const TWO_WAY_BONUS = 3;
@@ -206,7 +218,8 @@ export function matchesFor(
      * cannot rescue a stranger with nothing in common.
      */
     const near = opts.similar?.get(other.id) ?? 0;
-    const semantic = near >= SIMILAR_FLOOR ? SEMANTIC_WEIGHT * (near - SIMILAR_FLOOR) * 4 : 0;
+    const semantic =
+      near >= SIMILAR_FLOOR ? SEMANTIC_WEIGHT * ((near - SIMILAR_FLOOR) / (1 - SIMILAR_FLOOR)) : 0;
 
     // Someone with nothing in common is not a match at any distance — the
     // open map would otherwise recommend the nearest stranger, which is
