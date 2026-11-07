@@ -18,6 +18,8 @@ import { listAcceptedConnections } from "./connections";
 import { livePinsFor, myLivePin, type PinRef } from "./pins";
 import { unreadAlerts } from "./alerts";
 import { DEFAULT_RADIUS_KM, MATCHES_SHOWN, MAX_PIN_REACH_KM } from "./rules";
+import { cityLabel } from "./cityLabel";
+import { topicById } from "./intents";
 
 /**
  * One scoped payload for the whole app shell.
@@ -181,6 +183,39 @@ function anonymise(p: ShellPerson): ShellPerson {
   };
 }
 
+
+/**
+ * A handful of real asks, detached from the people who made them.
+ *
+ * Built from the rows the caller is about to anonymise, before they are
+ * stripped — so these are genuinely what is on the map right now, not
+ * copy. Needs and offers alternate, because one of each is the argument:
+ * people here are both asking and giving.
+ *
+ * Own words are preferred over the vocabulary for the same reason the
+ * cards prefer them — "a technical co-founder (ML)" is somebody's actual
+ * problem, and "Technical help" is a checkbox. The city is as fine as the
+ * placement ever gets here, and a row with no city simply carries none.
+ */
+function teaserFrom(people: ShellPerson[], limit = 4): ShellPayload["teaser"] {
+  const needs: ShellPayload["teaser"] = [];
+  const offers: ShellPayload["teaser"] = [];
+  for (const p of people) {
+    const where = cityLabel(p.locationLabel) || null;
+    const need = p.customLookingFor?.[0] ?? topicById(p.lookingFor?.[0] ?? "")?.need;
+    const offer = p.customCanHelpWith?.[0] ?? topicById(p.canHelpWith?.[0] ?? "")?.offer;
+    if (need) needs.push({ side: "need", text: need, where });
+    if (offer) offers.push({ side: "offer", text: offer, where });
+  }
+  // Alternating, so the list cannot read as "everybody here wants something".
+  const out: ShellPayload["teaser"] = [];
+  for (let i = 0; out.length < limit && (i < needs.length || i < offers.length); i++) {
+    if (needs[i]) out.push(needs[i]);
+    if (out.length < limit && offers[i]) out.push(offers[i]);
+  }
+  return out;
+}
+
 /**
  * You, as a row in your own directory.
  *
@@ -307,6 +342,22 @@ export type ShellPayload = {
    * nothing in them, not to decide what to hide. See `anonymise`.
    */
   locked: boolean;
+  /**
+   * Real asks, with nobody attached to them.
+   *
+   * The one honest hook a locked map has. A stranger arriving at a grey
+   * map with three smudges on it has been given no reason to believe
+   * anybody worth meeting is behind them, and the count — the usual way
+   * to make that case — is the one number this product cannot show while
+   * it is small. What it *can* show is the asks themselves: somebody near
+   * here is looking for a technical co-founder, somebody can make
+   * introductions to hospitals. Those are the product, demonstrated, and
+   * they carry no name, no face, no id and no number.
+   *
+   * City-level placement only, and never more than a handful, so a
+   * sentence cannot be walked back to a person by where it was standing.
+   */
+  teaser: Array<{ side: "need" | "offer"; text: string; where: string | null }>;
   networks: NetworkOption[];
   waiting: number;
   radiusKm: number;
@@ -519,6 +570,8 @@ export async function shellPayload(opts: {
         // builds refs for child rows, where the count shown is the RSVP
         // tally. Here the roster is the people already loaded above.
         locked: !hasSignals,
+        // `members`, not `roster` — the latter is already stripped.
+        teaser: hasSignals ? [] : teaserFrom(members as ShellPerson[]),
         selfEvent:
           board.type === "event"
             ? { ...(await toEventRefs([board], opts.userId))[0], memberCount: people.length }
@@ -653,6 +706,7 @@ export async function shellPayload(opts: {
     // No `self` to spare here — the open-map query excludes the viewer,
     // who is drawn from `you` instead.
     people: hasSignals ? withStatus : withStatus.map(anonymise),
+    teaser: hasSignals ? [] : teaserFrom(withStatus as ShellPerson[]),
     matches,
     events: eventRefs,
     selfEvent: null,

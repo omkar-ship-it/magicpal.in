@@ -606,6 +606,7 @@ export default function MapShell({
         ) : isOpenNet ? (
           <OpenHome
             locked={locked}
+            teaser={data.teaser}
             signedIn={signedIn}
             hasSignals={data.hasSignals}
             visibility={myVisibility}
