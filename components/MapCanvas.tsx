@@ -712,13 +712,26 @@ function PinCardHover({ pin }: { pin: PinRef }) {
  * real person's, and it keeps a wall of them from being scraped as a
  * directory by somebody who never signed in.
  */
-function Chip({ p, onSelect }: { p: MapProfile; onSelect?: (id: string) => void }) {
-  const parts = p.name.trim().split(/\s+/);
-  const shown = parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1][0]}.` : parts[0];
-  const needs = askLines(p.lookingFor, p.customLookingFor, "need");
-  const offers = askLines(p.canHelpWith, p.customCanHelpWith, "offer");
-  const side = needs.length > 0 ? "need" : offers.length > 0 ? "offer" : null;
-  const line = needs[0] ?? offers[0] ?? null;
+function Chip({
+  p,
+  side,
+  line,
+  onSelect,
+}: {
+  p: MapProfile;
+  side: "need" | "offer";
+  line: string;
+  onSelect?: (id: string) => void;
+}) {
+  /**
+   * "Priya S.", but not "M R." — plenty of people here write their name
+   * as an initial and a given name ("M SAI KUMAR REDDY"), and taking the
+   * first token blind turned that into two letters that name nobody.
+   */
+  const parts = p.name.trim().split(/\s+/).filter(Boolean);
+  const lead = parts[0].replace(/\.$/, "").length <= 1 && parts.length > 1 ? parts.slice(0, 2) : parts.slice(0, 1);
+  const tail = parts.length > lead.length ? `${parts[parts.length - 1][0]}.` : "";
+  const shown = [...lead, tail].filter(Boolean).join(" ");
 
   return (
     <button
@@ -730,15 +743,10 @@ function Chip({ p, onSelect }: { p: MapProfile; onSelect?: (id: string) => void 
       <Avatar name={p.name} photoUrl={p.photoUrl} size={24} />
       <span className="min-w-0">
         <span className="block truncate text-[11px] font-semibold leading-[1.2]">{shown}</span>
-        {line && (
-          <span
-            className="block truncate text-[10px] leading-[1.25]"
-            style={{ color: `var(--${side})` }}
-          >
-            <span className="font-semibold">{side === "need" ? "Looking for " : "Can help with "}</span>
-            {line.toLowerCase()}
-          </span>
-        )}
+        <span className="block truncate text-[10px] leading-[1.25]" style={{ color: `var(--${side})` }}>
+          <span className="font-semibold">{side === "need" ? "Looking for " : "Can help with "}</span>
+          {line.toLowerCase()}
+        </span>
       </span>
     </button>
   );
@@ -789,7 +797,26 @@ function Face({
   onSelect?: (id: string) => void;
 }) {
   if (locked) return <Hidden />;
-  if (chip && p.name) return <Chip p={p} onSelect={onSelect} />;
+  if (chip && p.name) {
+    const needs = askLines(p.lookingFor, p.customLookingFor, "need");
+    const offers = askLines(p.canHelpWith, p.customCanHelpWith, "offer");
+    /**
+     * Mixed, when somebody has both.
+     *
+     * Preferring needs made every chip on the map read "Looking for",
+     * which paints the place as a queue of people wanting things rather
+     * than a room where help goes both ways. Split on the id so the
+     * choice is stable per person and roughly even across the map.
+     */
+    let h = 0;
+    for (let i = 0; i < p.id.length; i++) h = (h * 31 + p.id.charCodeAt(i)) >>> 0;
+    const both = needs.length > 0 && offers.length > 0;
+    const side = both ? (h % 2 ? "offer" : "need") : needs.length > 0 ? "need" : offers.length > 0 ? "offer" : null;
+    const line = side === "offer" ? offers[0] : side === "need" ? needs[0] : null;
+    // Nothing stated, so nothing to label — a chip reading just a name is
+    // a wider pin that says less. They stay a face.
+    if (side && line) return <Chip p={p} side={side} line={line} onSelect={onSelect} />;
+  }
   return (
     <>
       <button
