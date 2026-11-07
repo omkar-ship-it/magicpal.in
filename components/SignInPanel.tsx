@@ -3,8 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { IconChevronLeft } from "./Icons";
-import Avatar from "./Avatar";
-import { Ask } from "./Asks";
 
 /**
  * Signing in without leaving the map.
@@ -18,24 +16,16 @@ import { Ask } from "./Asks";
  * on the same view with their own recommendations filled in.
  */
 export default function SignInPanel({
-  preview = [],
+  landing = false,
   onDone,
 }: {
   /**
-   * Real members — see `previewFrom` in lib/shell.
-   *
-   * They live here rather than on the home panel because this is the
-   * screen that asks for something. "Sign in" is a cost with no stated
-   * benefit; the same button under three people you can see is a trade.
+   * This is the first thing a stranger sees, rather than a form they
+   * opened on purpose. The map behind it is already carrying the
+   * evidence — named chips saying what people are after — so the panel
+   * states the invitation and gets out of the way.
    */
-  preview?: Array<{
-    name: string;
-    photoUrl: string | null;
-    headline: string | null;
-    need: string | null;
-    offer: string | null;
-    where: string | null;
-  }>;
+  landing?: boolean;
   onDone: (onboarded: boolean) => void;
 }) {
   const router = useRouter();
@@ -95,46 +85,14 @@ export default function SignInPanel({
       {step === "email" ? (
         <form onSubmit={requestCode} className="flex flex-col gap-3">
           <div>
-            {preview.length > 0 ? (
+            {landing ? (
               <>
-                {/* The headline is the whole pitch, so it says the thing
-                    the product does rather than naming the control. The
-                    two halves are coloured because they are the two
-                    halves everywhere else on the map. */}
-                <h2 className="text-[26px] font-bold leading-[1.1] tracking-[-0.02em]">
-                  See who&rsquo;s{" "}
-                  <span style={{ color: "var(--brand)" }}>around you.</span>
+                <h2 className="text-[24px] font-bold leading-[1.12] tracking-[-0.02em]">
+                  Join other professionals around you!
                 </h2>
                 <p className="mt-2 text-[13.5px] leading-[1.5] text-[var(--ink-soft)]">
-                  Founders, builders and investors near you, with what they&rsquo;re{" "}
-                  <strong style={{ color: "var(--need)" }}>looking for</strong> and what they{" "}
-                  <strong style={{ color: "var(--offer)" }}>can help with</strong>.
+                  Discover who&rsquo;s here, what they&rsquo;re exploring, and people you&rsquo;d like to meet!
                 </p>
-                <ul className="mt-3 flex flex-col gap-2">
-                  {preview.map((m) => (
-                    <li
-                      key={m.name}
-                      className="rounded-2xl border p-2.5"
-                      style={{ borderColor: "var(--line)", background: "var(--card)" }}
-                    >
-                      <span className="flex items-center gap-2">
-                        <Avatar name={m.name} photoUrl={m.photoUrl} size={32} />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[12.5px] font-semibold">{m.name}</span>
-                          <span className="block truncate text-[11px] text-[var(--ink-soft)]">
-                            {[m.headline, m.where].filter(Boolean).join(" · ")}
-                          </span>
-                        </span>
-                      </span>
-                      {(m.need || m.offer) && (
-                        <span className="mt-1.5 flex flex-col gap-1">
-                          {m.need && <Ask side="need" lines={[m.need]} compact />}
-                          {m.offer && <Ask side="offer" lines={[m.offer]} compact />}
-                        </span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
               </>
             ) : (
               <>
@@ -167,7 +125,7 @@ export default function SignInPanel({
           {/* The two objections somebody has at this exact moment: how
               long is this going to take, and what are you about to do
               with where I am. */}
-          {preview.length > 0 && (
+          {landing && (
             <p className="text-center text-[11.5px] leading-[1.45] text-[var(--ink-soft)]">
               Free · takes a minute · your city is shown, never your exact location
             </p>

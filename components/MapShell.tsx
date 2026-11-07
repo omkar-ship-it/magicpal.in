@@ -130,6 +130,15 @@ export default function MapShell({
    * "here is what you are missing".
    */
   const locked = data.locked;
+  /**
+   * No headcounts for anybody who hasn't earned the room.
+   *
+   * A gated member shouldn't see them, and nor should a visitor — on a
+   * map this young the honest number is the least persuasive fact
+   * available, and the named chips behind the sign-in panel already make
+   * the case without it.
+   */
+  const hideCounts = locked || !signedIn;
 
   /**
    * Signed in, and not yet on the map.
@@ -559,7 +568,7 @@ export default function MapShell({
         // Said where the count lives rather than as a spinner over the map:
         // the numbers beside it are the thing going stale, and a pan that
         // hasn't landed yet should say so next to them.
-        countLabel={loading ? "Updating…" : locked ? "" : `${shown.length} of ${data.people.length} shown`}
+        countLabel={loading ? "Updating…" : hideCounts ? "" : `${shown.length} of ${data.people.length} shown`}
         alerts={data.alerts}
         signedIn={signedIn}
         onAlerts={() => openWin("alerts")}
@@ -608,7 +617,7 @@ export default function MapShell({
           <EventPage
             event={data.selfEvent}
             sharing={sharingHome}
-            locked={locked}
+            locked={hideCounts}
             signedIn={signedIn}
             onboarded={onboarded}
             hasSignals={data.hasSignals}
@@ -757,7 +766,7 @@ export default function MapShell({
         /* In a cluster the title is the pile, not the board: the window is
            answering "who is in this building" and a count of the whole
            network above it would contradict every row underneath. */
-        title={locked ? "People" : cluster ? `Here · ${cluster.length}` : `People · ${shown.length}`}
+        title={hideCounts ? "People" : cluster ? `Here · ${cluster.length}` : `People · ${shown.length}`}
         state={visible("people") ? wins.people : { ...wins.people, open: false }}
         onChange={(n) => win("people", n)}
         onClose={() => {
@@ -785,7 +794,7 @@ export default function MapShell({
       </FloatWindow>
 
       <FloatWindow
-        title={!locked && data.pins.length > 0 ? `Now · ${data.pins.length}` : "Now"}
+        title={!hideCounts && data.pins.length > 0 ? `Now · ${data.pins.length}` : "Now"}
         state={visible("pins") ? wins.pins : { ...wins.pins, open: false }}
         onChange={(n) => win("pins", n)}
         onClose={() => win("pins", { open: false })}
@@ -809,7 +818,7 @@ export default function MapShell({
       </FloatWindow>
 
       <FloatWindow
-        title={locked ? "Events" : `Events · ${data.events.length}`}
+        title={hideCounts ? "Events" : `Events · ${data.events.length}`}
         state={visible("events") && !inEvent ? wins.events : { ...wins.events, open: false }}
         onChange={(n) => win("events", n)}
         onClose={() => win("events", { open: false })}
@@ -983,7 +992,7 @@ export default function MapShell({
               <IconX size={14} />
             </button>
         <SignInPanel
-          preview={data.preview}
+          landing={!signedIn}
           onDone={async (wasOnboarded) => {
             if (pendingJoin) {
               // Best-effort: a failed join still leaves them signed in on
@@ -1014,7 +1023,7 @@ export default function MapShell({
         width={340}
       >
         <SignInPanel
-          preview={data.preview}
+          landing={!signedIn}
           onDone={async (wasOnboarded) => {
             if (pendingJoin) {
               // Best-effort: a failed join still leaves them signed in on
@@ -1048,9 +1057,10 @@ export default function MapShell({
               ) ?? null)
         }
         counts={
-          locked
-            ? // Chats are yours and predate any of this, so they keep theirs.
-              { chats: data.waiting }
+          hideCounts
+            ? // Chats are yours and predate any of this, and an event tally
+              // is a count of evenings, not of people.
+              { chats: data.waiting, events: data.events.length }
             : {
                 forYou: forYouCount ?? matched.length,
                 people: shown.length,

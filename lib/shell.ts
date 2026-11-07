@@ -210,38 +210,6 @@ function anonymise(p: ShellPerson): ShellPerson {
 }
 
 
-/**
- * A handful of members, picked to look like the room actually is.
- *
- * Preferring people who have said something: a card with a face and no
- * answer underneath it is the least persuasive thing on the page, and
- * there is no point spending one of three slots on it. Own words beat
- * the vocabulary for the same reason they do everywhere else.
- */
-function previewFrom(people: ShellPerson[], limit = 2): ShellPayload["preview"] {
-  const line = (ids: readonly string[] | null, own: readonly string[] | null, side: "need" | "offer") => {
-    const first = own?.find((t) => t?.trim());
-    if (first) return first.trim();
-    for (const id of ids ?? []) {
-      const t = topicById(id);
-      const label = side === "need" ? t?.need : t?.offer;
-      if (label) return label;
-    }
-    return null;
-  };
-  return people
-    .filter((p) => p.name)
-    .map((p) => ({
-      name: p.name,
-      photoUrl: p.photoUrl,
-      headline: p.headline,
-      need: line(p.lookingFor, p.customLookingFor, "need"),
-      offer: line(p.canHelpWith, p.customCanHelpWith, "offer"),
-      where: cityLabel(p.locationLabel) || null,
-    }))
-    .sort((a, b) => Number(Boolean(b.need || b.offer)) - Number(Boolean(a.need || a.offer)))
-    .slice(0, limit);
-}
 
 /**
  * You, as a row in your own directory.
@@ -369,26 +337,6 @@ export type ShellPayload = {
    * nothing in them, not to decide what to hide. See `anonymise`.
    */
   locked: boolean;
-  /**
-   * A few real members, for the one screen that has to persuade.
-   *
-   * Only ever sent to somebody with no session. A stranger deciding
-   * whether to sign up needs to see that the people here are real and
-   * worth meeting, and the honest way to show that is to show them —
-   * face, what they do, what they're after. Blurring them made the
-   * argument backwards: a map of grey smudges says nobody is here.
-   *
-   * Members who are signed in get this as an empty array; they can see
-   * the map itself.
-   */
-  preview: Array<{
-    name: string;
-    photoUrl: string | null;
-    headline: string | null;
-    need: string | null;
-    offer: string | null;
-    where: string | null;
-  }>;
   networks: NetworkOption[];
   waiting: number;
   radiusKm: number;
@@ -615,7 +563,6 @@ export async function shellPayload(opts: {
         // tally. Here the roster is the people already loaded above.
         locked: gated,
         // `members`, not `roster` — the latter is already stripped.
-        preview: opts.userId ? [] : previewFrom(members as ShellPerson[]),
         selfEvent:
           board.type === "event"
             ? { ...(await toEventRefs([board], opts.userId))[0], memberCount: people.length }
@@ -754,7 +701,6 @@ export async function shellPayload(opts: {
       : opts.userId
         ? withStatus
         : withStatus.map(scatter),
-    preview: opts.userId ? [] : previewFrom(withStatus as ShellPerson[]),
     matches,
     events: eventRefs,
     selfEvent: null,
