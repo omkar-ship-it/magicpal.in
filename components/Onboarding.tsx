@@ -230,7 +230,13 @@ export default function Onboarding({
           A step count and a bar, and the bar is the smaller half of it.
           "Step 2 of 3" is a promise about how much is left; a percentage
           on its own is a score, and nobody has ever been encouraged by
-          being told they are 33%. */}
+          being told they are 33%.
+
+          The current step fills completely rather than part way. A
+          half-filled segment was trying to say "you are inside this one",
+          and what it actually said was "you have not finished anything" —
+          two full bars and an empty one is a reason to keep going, two
+          full and a third of a third is a reason to stop. */}
       <div className="mb-4">
         <div className="flex items-baseline justify-between gap-2">
           <p className="text-[12px] font-semibold tracking-wide text-[var(--ink-soft)]">
@@ -250,7 +256,7 @@ export default function Onboarding({
               <span
                 className="block h-full rounded-full"
                 style={{
-                  width: n < i ? "100%" : n === i ? "35%" : "0%",
+                  width: n <= i ? "100%" : "0%",
                   background: "linear-gradient(90deg, var(--brand), var(--brand-deep))",
                   transition: "width 420ms cubic-bezier(0.22, 1, 0.36, 1)",
                 }}
