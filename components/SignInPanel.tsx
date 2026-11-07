@@ -122,12 +122,14 @@ export default function SignInPanel({
           <button type="submit" disabled={busy} className="btn btn-primary">
             {busy ? "Sending…" : "Send me a code"}
           </button>
-          {/* The two objections somebody has at this exact moment: how
-              long is this going to take, and what are you about to do
-              with where I am. */}
+          {/* The objections somebody has at this exact moment: how long
+              is this going to take, and what are you about to do with
+              where I am. The answer to the second is the honest one —
+              a work address is the useful pin, and live location is
+              there for the hours it actually helps. */}
           {landing && (
             <p className="text-center text-[11.5px] leading-[1.45] text-[var(--ink-soft)]">
-              Free · takes a minute · your city is shown, never your exact location
+              Free · takes a minute · your work location is preferred · use live location when needed
             </p>
           )}
         </form>
