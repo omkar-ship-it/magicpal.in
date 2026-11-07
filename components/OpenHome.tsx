@@ -142,7 +142,6 @@ export default function OpenHome({
   hasSignals,
   visibility,
   locked = false,
-  teaser = [],
   peopleCount,
   hereNowCount,
   eventCount,
@@ -165,8 +164,6 @@ export default function OpenHome({
    * a reason to join. See lib/shell `anonymise`.
    */
   locked?: boolean;
-  /** Real asks with nobody attached — see `teaserFrom` in lib/shell. */
-  teaser?: Array<{ side: "need" | "offer"; text: string; where: string | null }>;
   peopleCount: number;
   hereNowCount: number;
   eventCount: number;
@@ -240,62 +237,12 @@ export default function OpenHome({
             >
               <IconGlobe size={28} />
             </span>
-            <h1 className="mt-3 text-[22px] font-semibold leading-[1.15] tracking-[-0.02em]">
-              {locked ? "Let the right people come to you" : BRAND_NAME}
-            </h1>
+            <h1 className="mt-3 text-[22px] font-semibold leading-[1.15] tracking-[-0.02em]">{BRAND_NAME}</h1>
             <p className="mt-1 max-w-[46ch] text-[13px] leading-[1.5] text-[var(--ink-soft)]">
-              {locked ? (
-                <>
-                  In a group of a thousand you post and hope somebody is reading. Here you say what you&rsquo;re
-                  after once, and it stays up — on a map, where the person who can actually help finds it.
-                </>
-              ) : (
-                <>
-                  A map of people who said they&rsquo;re open to meeting someone. Not a feed, not a follower
-                  count — who is near you, what they&rsquo;re after, and why it&rsquo;s worth walking over.
-                </>
-              )}
+              Say what you&rsquo;re after once. It stays on the map, and the right person finds you.
             </p>
           </div>
         </header>
-
-        {/* The only honest hook a locked map has.
-            A stranger has been shown three grey smudges and asked to
-            sign up; "17 people are here" is the usual answer and is the
-            one number this product cannot afford to say while it is
-            small. These are the asks themselves — real, current, and
-            carrying no name, face or count. They make the argument the
-            headline just made, with evidence. */}
-        {locked && teaser.length > 0 && (
-          <Section title="On this map right now" icon={<IconSparkle size={12} />}>
-            <ul className="flex flex-col gap-1.5">
-              {teaser.map((t, i) => (
-                <li key={`${t.side}-${i}-${t.text}`}>
-                  <span
-                    className="block rounded-xl px-2.5 py-2"
-                    style={{
-                      background: `color-mix(in srgb, var(--${t.side}) 10%, transparent)`,
-                    }}
-                  >
-                    <span
-                      className="block text-[9.5px] font-bold uppercase tracking-[0.07em]"
-                      style={{ color: `var(--${t.side})` }}
-                    >
-                      {t.side === "need" ? "Someone is looking for" : "Someone can help with"}
-                    </span>
-                    <span className="mt-0.5 block text-[12.5px] font-semibold leading-[1.35]">{t.text}</span>
-                    {t.where && (
-                      <span className="mt-0.5 block text-[11px] text-[var(--ink-soft)]">{t.where}</span>
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-2 text-[11.5px] leading-[1.45] text-[var(--ink-soft)]">
-              Who they are opens up once you&rsquo;ve said what you&rsquo;re after.
-            </p>
-          </Section>
-        )}
 
         {/* The first thing, when there is a first thing. */}
         {todo.length > 0 && (

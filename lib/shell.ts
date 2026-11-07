@@ -155,8 +155,31 @@ export type ShellPerson = MapProfile & {
  * can be turned back into a person by asking another endpoint for it.
  */
 function anonymise(p: ShellPerson): ShellPerson {
+  /**
+   * Nudged off the exact point, deterministically.
+   *
+   * Almost everybody here is pinned to a city centroid, so without this
+   * every anonymous pin in Hyderabad lands on the same pixel and sixteen
+   * people draw as one smudge — a map that looks deserted because of how
+   * it is drawn, not because of who is on it. The offset is derived from
+   * the real id, so a given person sits in the same spot on every load
+   * rather than jittering about between refreshes, and it is small
+   * enough (under ~3km) to stay inside the city it claims.
+   *
+   * Honest at this precision: the row says `base`, which already means
+   * "somewhere in this city" and never meant this exact point.
+   */
+  let h = 0;
+  for (let i = 0; i < p.id.length; i++) h = (h * 31 + p.id.charCodeAt(i)) >>> 0;
+  const angle = (h % 360) * (Math.PI / 180);
+  const radiusKm = 0.6 + ((h >>> 9) % 1000) / 1000 * 2.2;
+  const dLat = (radiusKm / 111) * Math.sin(angle);
+  const dLng = (radiusKm / (111 * Math.cos((p.lat * Math.PI) / 180) || 1)) * Math.cos(angle);
+
   return {
     ...p,
+    lat: p.lat + dLat,
+    lng: p.lng + dLng,
     id: `hidden-${Math.random().toString(36).slice(2, 11)}`,
     name: "",
     headline: null,

@@ -360,7 +360,18 @@ export default function MapCanvas({
      * 11km, 1.1km, 110m, 11m. By street level a stack means the same
      * doorway, and a stack of those is a "+N" into the directory.
      */
-    const digits = close ? 4 : neighbourhood ? 3 : precise ? 2 : 1;
+    /**
+     * Locked readers get every pin drawn separately.
+     *
+     * Grouping exists so forty faces at one centroid read as one object
+     * you can open. Nothing opens here, and the collapse was actively
+     * lying about the size of the room: sixteen people pinned to one city
+     * centroid became three smudges, which is a map that looks empty
+     * because of how it is drawn rather than because of who is on it.
+     * The coordinates are already scattered server-side (see `anonymise`),
+     * so each one has somewhere of its own to go.
+     */
+    const digits = locked ? 6 : close ? 4 : neighbourhood ? 3 : precise ? 2 : 1;
     const groups = new Map<string, Array<MapProfile & { hereNow?: boolean }>>();
     for (const p of people) {
       // Somebody who has not published a position has no pin. `unplaced`
@@ -382,7 +393,7 @@ export default function MapCanvas({
       lng: group[0].lng,
       group,
     }));
-  }, [people, precise, neighbourhood, close]);
+  }, [people, precise, neighbourhood, close, locked]);
 
   if (!token) {
     return (
@@ -665,15 +676,20 @@ function PinCardHover({ pin }: { pin: PinRef }) {
  */
 function Hidden() {
   return (
+    // Ringed and only lightly blurred, so it reads as a marker with
+    // somebody behind it rather than as a mark on the screen. A heavier
+    // blur looked like dirt on the map, which is a worse argument for
+    // signing up than no pin at all.
     <span
       className="map-pin block rounded-full"
       aria-hidden="true"
       style={{
-        width: 40,
-        height: 40,
+        width: 34,
+        height: 34,
         background: "var(--ink-soft)",
-        opacity: 0.3,
-        filter: "blur(3px)",
+        opacity: 0.42,
+        filter: "blur(1.6px)",
+        boxShadow: "0 0 0 3px color-mix(in srgb, var(--card) 70%, transparent), var(--shadow)",
       }}
     />
   );

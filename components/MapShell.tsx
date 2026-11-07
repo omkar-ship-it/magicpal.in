@@ -164,7 +164,9 @@ export default function MapShell({
     // `?panel=` from /you or /login decides what's already up on arrival.
     home: {
       ...DEFAULT_WINDOW,
-      open: (initialOverlay === null && needsSetup && !midOnboarding) || landsOnEvent,
+      // Not for a signed-out visitor any more: they get the sign-in panel,
+      // which is where the argument for signing in now lives.
+      open: (initialOverlay === null && signedIn && needsSetup && !midOnboarding) || landsOnEvent,
       x: 16,
       y: 72,
       z: 2,
@@ -196,7 +198,22 @@ export default function MapShell({
       y: 92,
       z: 3,
     },
-    signin: { ...DEFAULT_WINDOW, open: initialOverlay === "signin", x: 240, y: 120, z: 3 },
+    /**
+     * The first thing a stranger sees, deliberately.
+     *
+     * The About panel used to open here and explain the product to
+     * somebody who had not yet been given a reason to care. The ask comes
+     * first now, with the evidence inside it — the blurred pins behind it
+     * are the argument, and this is the only control that turns them into
+     * people.
+     */
+    signin: {
+      ...DEFAULT_WINDOW,
+      open: initialOverlay === "signin" || (initialOverlay === null && !signedIn),
+      x: 240,
+      y: 120,
+      z: 3,
+    },
   }));
   const topZ = useRef(3);
   const [selected, setSelected] = useState<string | null>(null);
@@ -606,7 +623,6 @@ export default function MapShell({
         ) : isOpenNet ? (
           <OpenHome
             locked={locked}
-            teaser={data.teaser}
             signedIn={signedIn}
             hasSignals={data.hasSignals}
             visibility={myVisibility}
@@ -934,6 +950,7 @@ export default function MapShell({
         width={340}
       >
         <SignInPanel
+          teaser={data.teaser}
           onDone={async (wasOnboarded) => {
             if (pendingJoin) {
               // Best-effort: a failed join still leaves them signed in on

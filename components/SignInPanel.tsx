@@ -15,7 +15,21 @@ import { IconChevronLeft } from "./Icons";
  * On success it refreshes in place rather than navigating, so they land back
  * on the same view with their own recommendations filled in.
  */
-export default function SignInPanel({ onDone }: { onDone: (onboarded: boolean) => void }) {
+export default function SignInPanel({
+  teaser = [],
+  onDone,
+}: {
+  /**
+   * Real asks, nobody attached — see `teaserFrom` in lib/shell.
+   *
+   * They live here rather than on the home panel because this is the
+   * screen that asks for something. "Sign in" is a cost with no stated
+   * benefit; the same button under three sentences somebody actually
+   * wrote is a trade.
+   */
+  teaser?: Array<{ side: "need" | "offer"; text: string; where: string | null }>;
+  onDone: (onboarded: boolean) => void;
+}) {
   const router = useRouter();
   const [step, setStep] = useState<"email" | "code">("email");
   const [email, setEmail] = useState("");
@@ -73,10 +87,33 @@ export default function SignInPanel({ onDone }: { onDone: (onboarded: boolean) =
       {step === "email" ? (
         <form onSubmit={requestCode} className="flex flex-col gap-3">
           <div>
-            <h2 className="text-[16px] font-semibold">Sign in</h2>
+            <h2 className="text-[16px] font-semibold">
+              {teaser.length > 0 ? "Sign in to see who\u2019s here" : "Sign in"}
+            </h2>
             <p className="mt-1 text-[12.5px] leading-[1.5] text-[var(--ink-soft)]">
-              No password — we&rsquo;ll email you a one-time code. The map stays where it is.
+              {teaser.length > 0
+                ? "The blurred pins behind this are real people. Here\u2019s what a few of them said."
+                : "No password \u2014 we\u2019ll email you a one-time code. The map stays where it is."}
             </p>
+            {teaser.length > 0 && (
+              <ul className="mt-2.5 flex flex-col gap-1.5">
+                {teaser.slice(0, 3).map((t, i) => (
+                  <li
+                    key={`${t.side}-${i}-${t.text}`}
+                    className="rounded-xl px-2.5 py-1.5"
+                    style={{ background: `color-mix(in srgb, var(--${t.side}) 10%, transparent)` }}
+                  >
+                    <span
+                      className="block text-[9.5px] font-bold uppercase tracking-[0.07em]"
+                      style={{ color: `var(--${t.side})` }}
+                    >
+                      {t.side === "need" ? "Looking for" : "Can help with"}
+                    </span>
+                    <span className="block text-[12px] font-semibold leading-[1.3]">{t.text}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           <div>
             <label className="label" htmlFor="signin-email">
