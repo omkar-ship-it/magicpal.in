@@ -198,15 +198,35 @@ function anonymise(p: ShellPerson): ShellPerson {
  * placement ever gets here, and a row with no city simply carries none.
  */
 function teaserFrom(people: ShellPerson[], limit = 4): ShellPayload["teaser"] {
-  const needs: ShellPayload["teaser"] = [];
-  const offers: ShellPayload["teaser"] = [];
-  for (const p of people) {
-    const where = cityLabel(p.locationLabel) || null;
-    const need = p.customLookingFor?.[0] ?? topicById(p.lookingFor?.[0] ?? "")?.need;
-    const offer = p.customCanHelpWith?.[0] ?? topicById(p.canHelpWith?.[0] ?? "")?.offer;
-    if (need) needs.push({ side: "need", text: need, where });
-    if (offer) offers.push({ side: "offer", text: offer, where });
-  }
+  const pick = (side: "need" | "offer") => {
+    const own: ShellPayload["teaser"] = [];
+    const vocab: ShellPayload["teaser"] = [];
+    const seen = new Set<string>();
+    for (const p of people) {
+      const where = cityLabel(p.locationLabel) || null;
+      const add = (text: string | undefined, into: ShellPayload["teaser"]) => {
+        const t = text?.trim();
+        if (!t) return;
+        // Two people who ticked the same box are not two reasons to join.
+        const key = t.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        into.push({ side, text: t, where });
+      };
+      for (const t of (side === "need" ? p.customLookingFor : p.customCanHelpWith) ?? []) add(t, own);
+      for (const id of (side === "need" ? p.lookingFor : p.canHelpWith) ?? []) {
+        const topic = topicById(id);
+        add(side === "need" ? topic?.need : topic?.offer, vocab);
+      }
+    }
+    // Own words ahead of the vocabulary, across everybody rather than
+    // within each person: one specific sentence from one member is worth
+    // more here than four people's worth of the same checkbox.
+    return [...own, ...vocab];
+  };
+
+  const needs = pick("need");
+  const offers = pick("offer");
   // Alternating, so the list cannot read as "everybody here wants something".
   const out: ShellPayload["teaser"] = [];
   for (let i = 0; out.length < limit && (i < needs.length || i < offers.length); i++) {
