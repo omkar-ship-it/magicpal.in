@@ -121,6 +121,17 @@ export default function MapShell({
   const needsSetup = !signedIn || !initial.hasSignals || myVisibility === "off";
 
   /**
+   * The reader has stated nothing, so the room is shape without substance.
+   *
+   * The server has already stripped the rows (lib/shell `anonymise`); this
+   * is only about what the chrome says. Every number goes with them — a
+   * count is the one thing a young map must not volunteer, because the
+   * honest answer is small and reads as "nobody is here" rather than as
+   * "here is what you are missing".
+   */
+  const locked = data.locked;
+
+  /**
    * Signed in, and not yet on the map.
    *
    * Somebody who answered the first onboarding question and closed the tab
@@ -337,7 +348,10 @@ export default function MapShell({
       return;
     }
     openWin(next);
-    if (next === "feed") void loadFeed(data.scope.slug);
+    // Not fetched while locked: the feed is a list of who did what, which
+    // is the one thing this state withholds. Not fetching beats fetching
+    // and hiding.
+    if (next === "feed" && !locked) void loadFeed(data.scope.slug);
   }
 
   /**
@@ -459,7 +473,8 @@ export default function MapShell({
           people={shown}
           you={data.you}
           events={data.events}
-          pins={data.pins}
+          pins={locked ? [] : data.pins}
+          locked={locked}
           onSelectPin={() => openWin("pins")}
           // Opening Events turns the map into a map of events. Asking
           // "what's happening" and "who's nearby" at the same time answers
@@ -516,7 +531,7 @@ export default function MapShell({
         // Said where the count lives rather than as a spinner over the map:
         // the numbers beside it are the thing going stale, and a pan that
         // hasn't landed yet should say so next to them.
-        countLabel={loading ? "Updating…" : `${shown.length} of ${data.people.length} shown`}
+        countLabel={loading ? "Updating…" : locked ? "" : `${shown.length} of ${data.people.length} shown`}
         alerts={data.alerts}
         signedIn={signedIn}
         onAlerts={() => openWin("alerts")}
@@ -565,6 +580,7 @@ export default function MapShell({
           <EventPage
             event={data.selfEvent}
             sharing={sharingHome}
+            locked={locked}
             signedIn={signedIn}
             onboarded={onboarded}
             hasSignals={data.hasSignals}
@@ -589,6 +605,7 @@ export default function MapShell({
           </div>
         ) : isOpenNet ? (
           <OpenHome
+            locked={locked}
             signedIn={signedIn}
             hasSignals={data.hasSignals}
             visibility={myVisibility}
@@ -605,6 +622,7 @@ export default function MapShell({
           />
         ) : (
           <CommunityHome
+            locked={locked}
             scope={data.scope}
             events={data.events}
             people={data.people}
@@ -681,6 +699,8 @@ export default function MapShell({
         onFocus={() => focus("feed")}
       >
         <FeedPanel
+          locked={locked}
+          onProfile={() => openWin(signedIn ? "profile" : "signin")}
           items={feed}
           loading={feedLoading}
           signedIn={signedIn}
@@ -709,7 +729,7 @@ export default function MapShell({
         /* In a cluster the title is the pile, not the board: the window is
            answering "who is in this building" and a count of the whole
            network above it would contradict every row underneath. */
-        title={cluster ? `Here · ${cluster.length}` : `People · ${shown.length}`}
+        title={locked ? "People" : cluster ? `Here · ${cluster.length}` : `People · ${shown.length}`}
         state={visible("people") ? wins.people : { ...wins.people, open: false }}
         onChange={(n) => win("people", n)}
         onClose={() => {
@@ -720,6 +740,8 @@ export default function MapShell({
         onFocus={() => focus("people")}
       >
         <PeoplePanel
+          locked={locked}
+          onProfile={() => openWin(signedIn ? "profile" : "signin")}
           people={shown}
           scopeName={data.scope.name}
           isOpenNet={isOpenNet}
@@ -735,13 +757,15 @@ export default function MapShell({
       </FloatWindow>
 
       <FloatWindow
-        title={data.pins.length > 0 ? `Now · ${data.pins.length}` : "Now"}
+        title={!locked && data.pins.length > 0 ? `Now · ${data.pins.length}` : "Now"}
         state={visible("pins") ? wins.pins : { ...wins.pins, open: false }}
         onChange={(n) => win("pins", n)}
         onClose={() => win("pins", { open: false })}
         onFocus={() => focus("pins")}
       >
         <PinsPanel
+          locked={locked}
+          onLockedProfile={() => openWin(signedIn ? "profile" : "signin")}
           pins={data.pins}
           signedIn={signedIn}
           onboarded={onboarded}
@@ -757,7 +781,7 @@ export default function MapShell({
       </FloatWindow>
 
       <FloatWindow
-        title={`Events · ${data.events.length}`}
+        title={locked ? "Events" : `Events · ${data.events.length}`}
         state={visible("events") && !inEvent ? wins.events : { ...wins.events, open: false }}
         onChange={(n) => win("events", n)}
         onClose={() => win("events", { open: false })}
@@ -772,6 +796,7 @@ export default function MapShell({
           signedIn={signedIn}
           onboarded={onboarded}
           hasSignals={data.hasSignals}
+          locked={locked}
           openSlug={activeEvent}
           onOpenSlug={setActiveEvent}
           /**
@@ -939,13 +964,18 @@ export default function MapShell({
                 (k) => wins[k].open && !wins[k].min
               ) ?? null)
         }
-        counts={{
-          forYou: forYouCount ?? matched.length,
-          people: shown.length,
-          pins: data.pins.length,
-          events: data.events.length,
-          chats: data.waiting,
-        }}
+        counts={
+          locked
+            ? // Chats are yours and predate any of this, so they keep theirs.
+              { chats: data.waiting }
+            : {
+                forYou: forYouCount ?? matched.length,
+                people: shown.length,
+                pins: data.pins.length,
+                events: data.events.length,
+                chats: data.waiting,
+              }
+        }
         hide={inEvent ? ["events"] : undefined}
         signedIn={signedIn}
         me={me}

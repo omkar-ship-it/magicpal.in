@@ -9,10 +9,10 @@ import type { MapProfile } from "@/lib/profiles";
 import type { SelfMarker } from "@/lib/shell";
 import type { PinRef } from "@/lib/pins";
 import Avatar from "./Avatar";
-import { topicById } from "@/lib/intents";
 import { whenLabel } from "@/lib/time";
 import { IconCalendar, IconCity, IconMeetup, IconPin } from "./Icons";
 import VerifiedBadge from "./VerifiedBadge";
+import { Ask, askLines } from "./Asks";
 
 /**
  * Which Mapbox style to draw, following the viewer's theme.
@@ -138,6 +138,7 @@ export default function MapCanvas({
   bottomInset = 0,
   showZoom = false,
   highlightIds = [],
+  locked = false,
   onSelectPerson,
   onSelectEvent,
   onMoveEnd,
@@ -182,6 +183,15 @@ export default function MapCanvas({
   showZoom?: boolean;
   /** Recommended people — drawn with a ring so the list and map agree. */
   highlightIds?: string[];
+  /**
+   * The reader has stated nothing, so there is nothing to show them.
+   *
+   * The rows arrive already stripped (see `anonymise` in lib/shell); this
+   * only stops the map drawing affordances that would now be empty — a
+   * hover card with no text in it, a click that opens nobody, a "+4" that
+   * counts people the reader is not allowed to meet.
+   */
+  locked?: boolean;
   onSelectPerson?: (id: string) => void;
   onSelectEvent?: (slug: string) => void;
   onMoveEnd?: (c: { lat: number; lng: number; zoom: number }) => void;
@@ -536,6 +546,7 @@ export default function MapCanvas({
         stacks.map((s) => (
           <Marker key={s.key} latitude={s.lat} longitude={s.lng} anchor="center">
             <FaceStack
+              locked={locked}
               group={s.group}
               highlighted={highlighted}
               fanned={fanned}
@@ -557,10 +568,11 @@ export default function MapCanvas({
  * pointer across a crowded stack doesn't re-render the whole map.
  */
 function PinCard({ person }: { person: MapProfile & { hereNow?: boolean; verified?: boolean } }) {
-  const wants = person.lookingFor.map(topicById).filter(Boolean).slice(0, 2);
+  const needs = askLines(person.lookingFor, person.customLookingFor, "need");
+  const offers = askLines(person.canHelpWith, person.customCanHelpWith, "offer");
   return (
     <span
-      className="hover-card pointer-events-none absolute z-50 block w-[220px] rounded-2xl border border-[var(--line)] p-2.5 text-left"
+      className="hover-card pointer-events-none absolute z-50 block w-[252px] rounded-2xl border border-[var(--line)] p-2.5 text-left"
       style={{ background: "var(--card)", boxShadow: "var(--shadow-lift)" }}
       aria-hidden="true"
     >
@@ -583,17 +595,19 @@ function PinCard({ person }: { person: MapProfile & { hereNow?: boolean; verifie
           {person.placed === "base" ? " · city only" : person.placed === "live" ? " · live" : ""}
         </span>
       </span>
-      {wants.length > 0 && (
-        <span className="mt-1.5 flex flex-wrap gap-1">
-          {wants.map((t) => (
-            <span
-              key={t!.id}
-              className="pill"
-              style={{ background: "color-mix(in srgb, var(--brand) 12%, transparent)", color: "var(--brand)", fontSize: 10 }}
-            >
-              {t!.need}
-            </span>
-          ))}
+      {/* The two lines somebody is actually hovering to read. Both of
+          them: an offer with no need beside it is a CV, and a need with no
+          offer is an ask — the pair is what makes a stranger worth
+          crossing a room for. */}
+      {(needs.length > 0 || offers.length > 0) && (
+        <span className="mt-2 flex flex-col gap-1">
+          <Ask side="need" lines={needs} compact />
+          <Ask side="offer" lines={offers} compact />
+        </span>
+      )}
+      {needs.length === 0 && offers.length === 0 && (
+        <span className="mt-1.5 block text-[11px] italic text-[var(--ink-soft)]">
+          Hasn&rsquo;t said what they&rsquo;re after yet.
         </span>
       )}
     </span>
@@ -719,15 +733,43 @@ function fanRing(n: number): Array<{ x: number; y: number }> {
 }
 
 /** One person, identically whether they are stacked or fanned. */
+/**
+ * A person-shaped smudge, for a reader who has stated nothing.
+ *
+ * There is a real person at this point and nothing here says who. Drawn
+ * rather than omitted because an empty map argues that nobody is here,
+ * which is the opposite of the argument the map exists to make — and a
+ * number would make it worse, since on a young map the honest count is
+ * the weakest thing you could show a newcomer.
+ */
+function Hidden() {
+  return (
+    <span
+      className="map-pin block rounded-full"
+      aria-hidden="true"
+      style={{
+        width: 40,
+        height: 40,
+        background: "var(--ink-soft)",
+        opacity: 0.3,
+        filter: "blur(3px)",
+      }}
+    />
+  );
+}
+
 function Face({
   p,
   lit,
+  locked,
   onSelect,
 }: {
   p: MapProfile & { hereNow?: boolean; verified?: boolean };
   lit: boolean;
+  locked?: boolean;
   onSelect?: (id: string) => void;
 }) {
+  if (locked) return <Hidden />;
   return (
     <>
       <button
@@ -761,11 +803,13 @@ function FaceStack({
   group,
   highlighted,
   fanned,
+  locked,
   onSelect,
   onOpenStack,
 }: {
   group: Array<MapProfile & { hereNow?: boolean; verified?: boolean }>;
   highlighted: Set<string>;
+  locked?: boolean;
   /** Close enough in to open the pile out instead of overlapping it. */
   fanned: boolean;
   onSelect?: (id: string) => void;
@@ -780,7 +824,12 @@ function FaceStack({
     [group, highlighted]
   );
 
-  const more = (n: number, ids: string[]) => (
+  const more = (n: number, ids: string[]) =>
+    locked ? (
+      <span className="relative">
+        <Hidden />
+      </span>
+    ) : (
     <button
       type="button"
       className="map-pin grid h-[40px] w-[40px] place-items-center rounded-full text-[12px] font-semibold"
@@ -799,7 +848,7 @@ function FaceStack({
     >
       +{n}
     </button>
-  );
+    );
 
   /**
    * Close in, a pile opens out into a ring around where it actually is.
@@ -915,7 +964,7 @@ function FaceStack({
             className="hover-host"
             style={{ position: "absolute", left: slots[i].x, top: slots[i].y, transform: "translate(-50%, -50%)" }}
           >
-            <Face p={p} lit={highlighted.has(p.id)} onSelect={onSelect} />
+            <Face p={p} lit={highlighted.has(p.id)} locked={locked} onSelect={onSelect} />
           </span>
         ))}
       </span>
@@ -929,7 +978,7 @@ function FaceStack({
     <span className="pin-scale flex items-center -space-x-3">
       {faces.map((p) => (
         <span key={p.id} className="hover-host relative">
-          <Face p={p} lit={highlighted.has(p.id)} onSelect={onSelect} />
+          <Face p={p} lit={highlighted.has(p.id)} locked={locked} onSelect={onSelect} />
         </span>
       ))}
       {extra > 0 && more(extra, sorted.map((p) => p.id))}

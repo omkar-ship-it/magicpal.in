@@ -13,6 +13,13 @@
   --gold: #b07d09;
   --good: #1f8a5f;
   --warn: #c2410c;
+  /* The two halves of what a person is here for, and the only pair on the
+     product that has to be told apart at a glance: what they need, and
+     what they can give. Warm asks, cool offers. Kept out of the status and
+     map-layer palettes above because this distinction outranks both — it
+     is the thing somebody reads a card to find out. */
+  --need: #c23f23;
+  --offer: #1d5fb8;
   /* Connection-status scheme: green = connected, amber = pending, orange = not yet connected. */
   --pending: #d99a00;
   --status-new: #f0591a;
@@ -50,6 +57,8 @@
     --gold: #e7ab26;
     --good: #45c98b;
     --warn: #ff9252;
+    --need: #ffb59e;
+    --offer: #8fbaf7;
     --pending: #f0c330;
     --status-new: #ff8257;
     --layer-event: #a996ff;
@@ -79,6 +88,8 @@
   --gold: #e7ab26;
   --good: #45c98b;
   --warn: #ff9252;
+  --need: #ffb59e;
+  --offer: #8fbaf7;
   --pending: #f0c330;
   --status-new: #ff8257;
   --layer-event: #a996ff;

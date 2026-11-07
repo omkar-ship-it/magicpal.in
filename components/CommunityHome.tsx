@@ -36,6 +36,7 @@ export default function CommunityHome({
   scope,
   events,
   people,
+  locked = false,
   memberCount,
   onOpenEvents,
   onOpenPeople,
@@ -46,6 +47,12 @@ export default function CommunityHome({
   events: EventRef[];
   /** Already scoped to this board by the shell — for faces, not a roster. */
   people: ShellPerson[];
+  /**
+   * Nothing stated, so no faces and no headcount. See lib/shell `anonymise`
+   * — the rows arrive stripped, so the avatar strip would be blank discs
+   * over a number that reads as "this group is small".
+   */
+  locked?: boolean;
   memberCount: number;
   onOpenEvents: () => void;
   onOpenPeople: () => void;
@@ -155,7 +162,7 @@ export default function CommunityHome({
 
           {/* Faces, immediately under the name: a community page with no
               people on it reads as empty however large the headcount is. */}
-          {faces.length > 0 && (
+          {!locked && faces.length > 0 && (
             <button
               type="button"
               onClick={onOpenPeople}
@@ -208,6 +215,7 @@ export default function CommunityHome({
           </div>
         )}
 
+        {!locked && (
         <div className="reveal">
           <Stats>
             <Stat icon={<IconPeople size={14} />} value={memberCount} label="members" onClick={onOpenPeople} />
@@ -230,6 +238,7 @@ export default function CommunityHome({
             />
           </Stats>
         </div>
+        )}
 
         {home.details ? (
           <Section title="What this community is for" icon={<IconSparkle size={12} />}>

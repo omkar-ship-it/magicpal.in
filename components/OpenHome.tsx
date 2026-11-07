@@ -141,6 +141,7 @@ export default function OpenHome({
   signedIn,
   hasSignals,
   visibility,
+  locked = false,
   peopleCount,
   hereNowCount,
   eventCount,
@@ -156,6 +157,13 @@ export default function OpenHome({
   /** They've said what they need, offer or are into. */
   hasSignals: boolean;
   visibility: "off" | "base" | "exact" | "live";
+  /**
+   * Nothing stated, so nothing counted. The headline numbers are the one
+   * thing a map this young must not volunteer — the true figure is small,
+   * and a newcomer reads a small number as "nobody is here" rather than as
+   * a reason to join. See lib/shell `anonymise`.
+   */
+  locked?: boolean;
   peopleCount: number;
   hereNowCount: number;
   eventCount: number;
@@ -261,6 +269,7 @@ export default function OpenHome({
           </Section>
         )}
 
+        {!locked && (
         <div className="reveal">
           <Stats>
             <Stat icon={<IconPeople size={14} />} value={peopleCount} label="on the map" onClick={onOpenPeople} />
@@ -275,6 +284,7 @@ export default function OpenHome({
             <Stat icon={<IconSparkle size={14} />} value={communityCount} label="your communities" />
           </Stats>
         </div>
+        )}
 
         {/* ------------------------------------------------ how it works */}
         <Section title="How it works" icon={<IconSparkle size={12} />}>

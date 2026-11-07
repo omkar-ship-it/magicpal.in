@@ -191,8 +191,9 @@ export default function ForYouPanel({
   if (!hasSignals) {
     return (
       <PanelNote title="Tell us what you're looking for">
-        Recommendations are built from what you need, what you can offer and what you&rsquo;re into. Without any of
-        those there&rsquo;s nothing to match on — the People tab still shows everyone.
+        Recommendations are built from what you need, what you can offer and what you&rsquo;re into — and so is
+        everyone else&rsquo;s view of you. Until you&rsquo;ve said yours, the map shows you where people are but
+        not who they are.
         <button type="button" className="btn btn-primary btn-sm mt-3" onClick={onProfile}>
           Add your signals
         </button>

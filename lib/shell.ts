@@ -134,6 +134,54 @@ export type ShellPerson = MapProfile & {
 };
 
 /**
+ * Everyone else, with everything that identifies them removed.
+ *
+ * The map is meant to work as pull rather than push: you say what you
+ * need and what you can give, it stays up, and the right person comes to
+ * you. That trade only holds if both sides make it — somebody reading a
+ * room they have told nothing about themselves is taking the value and
+ * leaving the cost, and more practically they are the reason the map
+ * fills with faces that cannot be matched on.
+ *
+ * So until a reader has stated a need, an offer or an interest, they get
+ * shape without substance: pins where people are, and nothing to read.
+ *
+ * Stripped on the server, not blurred in CSS. A blur is a picture of a
+ * secret — the names would still be sitting in the payload for anyone who
+ * opened devtools, which is a poor promise from a product whose whole
+ * subject is who can see you. The id goes too, so nothing on the screen
+ * can be turned back into a person by asking another endpoint for it.
+ */
+function anonymise(p: ShellPerson): ShellPerson {
+  return {
+    ...p,
+    id: `hidden-${Math.random().toString(36).slice(2, 11)}`,
+    name: "",
+    headline: null,
+    company: null,
+    bio: null,
+    skills: [],
+    photoUrl: null,
+    locationLabel: null,
+    linkedinUrl: null,
+    instagramUrl: null,
+    websiteUrl: null,
+    lookingFor: [],
+    canHelpWith: [],
+    interests: [],
+    customLookingFor: [],
+    customCanHelpWith: [],
+    customInterests: [],
+    stage: null,
+    workingOn: null,
+    verified: false,
+    verifiedHere: false,
+    connectionStatus: "none",
+    role: undefined,
+  };
+}
+
+/**
  * You, as a row in your own directory.
  *
  * Every people query excludes the viewer, which is right for a map — you
@@ -251,6 +299,14 @@ export type ShellPayload = {
    * and no events.
    */
   selfEvent: EventRef | null;
+  /**
+   * The reader has stated nothing, so everyone else arrives anonymised.
+   *
+   * Set by the server, which has already done the stripping — the client
+   * reads it to stop drawing counts and hover cards for rows that have
+   * nothing in them, not to decide what to hide. See `anonymise`.
+   */
+  locked: boolean;
   networks: NetworkOption[];
   waiting: number;
   radiusKm: number;
@@ -410,7 +466,10 @@ export async function shellPayload(opts: {
       ]);
       // You, at the top of your own board's list.
       const self = me ? selfRow(me) : null;
-      const people = self ? [self, ...members] : members;
+      // You are never hidden from yourself — your own pin is how you check
+      // that your visibility setting does what you think it does.
+      const roster = hasSignals ? members : members.map(anonymise);
+      const people = self ? [self, ...roster] : roster;
       const surface = board.type as Surface;
       const matches =
         me?.name
@@ -459,6 +518,7 @@ export async function shellPayload(opts: {
         // `memberCount` overridden because toEventRefs can't know it: it
         // builds refs for child rows, where the count shown is the RSVP
         // tally. Here the roster is the people already loaded above.
+        locked: !hasSignals,
         selfEvent:
           board.type === "event"
             ? { ...(await toEventRefs([board], opts.userId))[0], memberCount: people.length }
@@ -590,10 +650,13 @@ export async function shellPayload(opts: {
 
   return {
     scope: { kind: "open", slug: null, name: "Open network", blurb: null, logoUrl: null, home: null },
-    people: withStatus,
+    // No `self` to spare here — the open-map query excludes the viewer,
+    // who is drawn from `you` instead.
+    people: hasSignals ? withStatus : withStatus.map(anonymise),
     matches,
     events: eventRefs,
     selfEvent: null,
+    locked: !hasSignals,
     networks,
     waiting,
     radiusKm,

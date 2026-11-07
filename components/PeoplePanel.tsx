@@ -7,6 +7,7 @@ import { clusterFacets } from "@/lib/directory";
 import DirectoryPanel from "./DirectoryPanel";
 import PersonRow from "./PersonRow";
 import PanelNote from "./PanelNote";
+import LockedNote from "./LockedNote";
 
 /**
  * Everybody here, as something you can actually search.
@@ -27,6 +28,8 @@ import PanelNote from "./PanelNote";
  * lib/directory: same window, same rows, different question.
  */
 export default function PeoplePanel({
+  locked,
+  onProfile,
   people,
   scopeName,
   isOpenNet,
@@ -39,6 +42,9 @@ export default function PeoplePanel({
   onClearCluster,
   onOpenPerson,
 }: {
+  /** Nothing to list: the reader has stated nothing. See lib/shell `anonymise`. */
+  locked?: boolean;
+  onProfile?: () => void;
   people: ShellPerson[];
   scopeName: string;
   isOpenNet: boolean;
@@ -100,6 +106,17 @@ export default function PeoplePanel({
   });
 
   const offMap = people.filter((p) => p.unplaced).length;
+
+  /**
+   * Nothing to list, and deliberately no number either.
+   *
+   * The rows arrived stripped, so a directory of them would be a column
+   * of blanks with a search box over it. Saying how many there are would
+   * be worse than saying nothing: on a map this young the true count is
+   * the least persuasive fact available, and the pins behind this panel
+   * already make the only argument that works — people are here.
+   */
+  if (locked) return <LockedNote what="who's here" onProfile={onProfile} />;
 
   return (
     <DirectoryPanel
