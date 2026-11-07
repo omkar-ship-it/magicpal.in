@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { IconChevronLeft } from "./Icons";
+import Avatar from "./Avatar";
+import { Ask } from "./Asks";
 
 /**
  * Signing in without leaving the map.
@@ -16,18 +18,24 @@ import { IconChevronLeft } from "./Icons";
  * on the same view with their own recommendations filled in.
  */
 export default function SignInPanel({
-  teaser = [],
+  preview = [],
   onDone,
 }: {
   /**
-   * Real asks, nobody attached — see `teaserFrom` in lib/shell.
+   * Real members — see `previewFrom` in lib/shell.
    *
    * They live here rather than on the home panel because this is the
    * screen that asks for something. "Sign in" is a cost with no stated
-   * benefit; the same button under three sentences somebody actually
-   * wrote is a trade.
+   * benefit; the same button under three people you can see is a trade.
    */
-  teaser?: Array<{ side: "need" | "offer"; text: string; where: string | null }>;
+  preview?: Array<{
+    name: string;
+    photoUrl: string | null;
+    headline: string | null;
+    need: string | null;
+    offer: string | null;
+    where: string | null;
+  }>;
   onDone: (onboarded: boolean) => void;
 }) {
   const router = useRouter();
@@ -88,28 +96,36 @@ export default function SignInPanel({
         <form onSubmit={requestCode} className="flex flex-col gap-3">
           <div>
             <h2 className="text-[16px] font-semibold">
-              {teaser.length > 0 ? "Sign in to see who\u2019s here" : "Sign in"}
+              {preview.length > 0 ? "They\u2019re already on the map" : "Sign in"}
             </h2>
             <p className="mt-1 text-[12.5px] leading-[1.5] text-[var(--ink-soft)]">
-              {teaser.length > 0
-                ? "The blurred pins behind this are real people. Here\u2019s what a few of them said."
+              {preview.length > 0
+                ? "Sign in to see everyone, and to say what you\u2019re after so the right ones find you."
                 : "No password \u2014 we\u2019ll email you a one-time code. The map stays where it is."}
             </p>
-            {teaser.length > 0 && (
-              <ul className="mt-2.5 flex flex-col gap-1.5">
-                {teaser.slice(0, 3).map((t, i) => (
+            {preview.length > 0 && (
+              <ul className="mt-3 flex flex-col gap-2">
+                {preview.map((m) => (
                   <li
-                    key={`${t.side}-${i}-${t.text}`}
-                    className="rounded-xl px-2.5 py-1.5"
-                    style={{ background: `color-mix(in srgb, var(--${t.side}) 10%, transparent)` }}
+                    key={m.name}
+                    className="rounded-2xl border p-2.5"
+                    style={{ borderColor: "var(--line)", background: "var(--card)" }}
                   >
-                    <span
-                      className="block text-[9.5px] font-bold uppercase tracking-[0.07em]"
-                      style={{ color: `var(--${t.side})` }}
-                    >
-                      {t.side === "need" ? "Looking for" : "Can help with"}
+                    <span className="flex items-center gap-2">
+                      <Avatar name={m.name} photoUrl={m.photoUrl} size={32} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[12.5px] font-semibold">{m.name}</span>
+                        <span className="block truncate text-[11px] text-[var(--ink-soft)]">
+                          {[m.headline, m.where].filter(Boolean).join(" \u00b7 ")}
+                        </span>
+                      </span>
                     </span>
-                    <span className="block text-[12px] font-semibold leading-[1.3]">{t.text}</span>
+                    {(m.need || m.offer) && (
+                      <span className="mt-1.5 flex flex-col gap-1">
+                        {m.need && <Ask side="need" lines={[m.need]} compact />}
+                        {m.offer && <Ask side="offer" lines={[m.offer]} compact />}
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>

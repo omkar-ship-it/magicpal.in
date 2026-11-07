@@ -154,32 +154,34 @@ export type ShellPerson = MapProfile & {
  * subject is who can see you. The id goes too, so nothing on the screen
  * can be turned back into a person by asking another endpoint for it.
  */
-function anonymise(p: ShellPerson): ShellPerson {
-  /**
-   * Nudged off the exact point, deterministically.
-   *
-   * Almost everybody here is pinned to a city centroid, so without this
-   * every anonymous pin in Hyderabad lands on the same pixel and sixteen
-   * people draw as one smudge — a map that looks deserted because of how
-   * it is drawn, not because of who is on it. The offset is derived from
-   * the real id, so a given person sits in the same spot on every load
-   * rather than jittering about between refreshes, and it is small
-   * enough (under ~3km) to stay inside the city it claims.
-   *
-   * Honest at this precision: the row says `base`, which already means
-   * "somewhere in this city" and never meant this exact point.
-   */
+/**
+ * Nudge a city-pinned person off the exact centroid, deterministically.
+ *
+ * Everyone who chose "city only" shares one coordinate, so a city with
+ * sixteen members draws as one stack — a map that looks empty because of
+ * how it is plotted rather than because of who is on it. The offset is
+ * derived from the real id, so a person sits in the same spot on every
+ * load, and it is under ~3km: well inside the city the row already
+ * claimed, and no more precise a statement than `base` ever made.
+ *
+ * Never applied to an exact or live pin, which mean what they say.
+ */
+function scatter<T extends { id: string; lat: number; lng: number; placed: string }>(p: T): T {
+  if (p.placed !== "base") return p;
   let h = 0;
   for (let i = 0; i < p.id.length; i++) h = (h * 31 + p.id.charCodeAt(i)) >>> 0;
   const angle = (h % 360) * (Math.PI / 180);
   const radiusKm = 0.6 + ((h >>> 9) % 1000) / 1000 * 2.2;
-  const dLat = (radiusKm / 111) * Math.sin(angle);
-  const dLng = (radiusKm / (111 * Math.cos((p.lat * Math.PI) / 180) || 1)) * Math.cos(angle);
-
   return {
     ...p,
-    lat: p.lat + dLat,
-    lng: p.lng + dLng,
+    lat: p.lat + (radiusKm / 111) * Math.sin(angle),
+    lng: p.lng + (radiusKm / (111 * Math.cos((p.lat * Math.PI) / 180) || 1)) * Math.cos(angle),
+  };
+}
+
+function anonymise(p: ShellPerson): ShellPerson {
+  return {
+    ...scatter(p),
     id: `hidden-${Math.random().toString(36).slice(2, 11)}`,
     name: "",
     headline: null,
@@ -208,55 +210,36 @@ function anonymise(p: ShellPerson): ShellPerson {
 
 
 /**
- * A handful of real asks, detached from the people who made them.
+ * A handful of members, picked to look like the room actually is.
  *
- * Built from the rows the caller is about to anonymise, before they are
- * stripped — so these are genuinely what is on the map right now, not
- * copy. Needs and offers alternate, because one of each is the argument:
- * people here are both asking and giving.
- *
- * Own words are preferred over the vocabulary for the same reason the
- * cards prefer them — "a technical co-founder (ML)" is somebody's actual
- * problem, and "Technical help" is a checkbox. The city is as fine as the
- * placement ever gets here, and a row with no city simply carries none.
+ * Preferring people who have said something: a card with a face and no
+ * answer underneath it is the least persuasive thing on the page, and
+ * there is no point spending one of three slots on it. Own words beat
+ * the vocabulary for the same reason they do everywhere else.
  */
-function teaserFrom(people: ShellPerson[], limit = 4): ShellPayload["teaser"] {
-  const pick = (side: "need" | "offer") => {
-    const own: ShellPayload["teaser"] = [];
-    const vocab: ShellPayload["teaser"] = [];
-    const seen = new Set<string>();
-    for (const p of people) {
-      const where = cityLabel(p.locationLabel) || null;
-      const add = (text: string | undefined, into: ShellPayload["teaser"]) => {
-        const t = text?.trim();
-        if (!t) return;
-        // Two people who ticked the same box are not two reasons to join.
-        const key = t.toLowerCase();
-        if (seen.has(key)) return;
-        seen.add(key);
-        into.push({ side, text: t, where });
-      };
-      for (const t of (side === "need" ? p.customLookingFor : p.customCanHelpWith) ?? []) add(t, own);
-      for (const id of (side === "need" ? p.lookingFor : p.canHelpWith) ?? []) {
-        const topic = topicById(id);
-        add(side === "need" ? topic?.need : topic?.offer, vocab);
-      }
+function previewFrom(people: ShellPerson[], limit = 2): ShellPayload["preview"] {
+  const line = (ids: readonly string[] | null, own: readonly string[] | null, side: "need" | "offer") => {
+    const first = own?.find((t) => t?.trim());
+    if (first) return first.trim();
+    for (const id of ids ?? []) {
+      const t = topicById(id);
+      const label = side === "need" ? t?.need : t?.offer;
+      if (label) return label;
     }
-    // Own words ahead of the vocabulary, across everybody rather than
-    // within each person: one specific sentence from one member is worth
-    // more here than four people's worth of the same checkbox.
-    return [...own, ...vocab];
+    return null;
   };
-
-  const needs = pick("need");
-  const offers = pick("offer");
-  // Alternating, so the list cannot read as "everybody here wants something".
-  const out: ShellPayload["teaser"] = [];
-  for (let i = 0; out.length < limit && (i < needs.length || i < offers.length); i++) {
-    if (needs[i]) out.push(needs[i]);
-    if (out.length < limit && offers[i]) out.push(offers[i]);
-  }
-  return out;
+  return people
+    .filter((p) => p.name)
+    .map((p) => ({
+      name: p.name,
+      photoUrl: p.photoUrl,
+      headline: p.headline,
+      need: line(p.lookingFor, p.customLookingFor, "need"),
+      offer: line(p.canHelpWith, p.customCanHelpWith, "offer"),
+      where: cityLabel(p.locationLabel) || null,
+    }))
+    .sort((a, b) => Number(Boolean(b.need || b.offer)) - Number(Boolean(a.need || a.offer)))
+    .slice(0, limit);
 }
 
 /**
@@ -386,21 +369,25 @@ export type ShellPayload = {
    */
   locked: boolean;
   /**
-   * Real asks, with nobody attached to them.
+   * A few real members, for the one screen that has to persuade.
    *
-   * The one honest hook a locked map has. A stranger arriving at a grey
-   * map with three smudges on it has been given no reason to believe
-   * anybody worth meeting is behind them, and the count — the usual way
-   * to make that case — is the one number this product cannot show while
-   * it is small. What it *can* show is the asks themselves: somebody near
-   * here is looking for a technical co-founder, somebody can make
-   * introductions to hospitals. Those are the product, demonstrated, and
-   * they carry no name, no face, no id and no number.
+   * Only ever sent to somebody with no session. A stranger deciding
+   * whether to sign up needs to see that the people here are real and
+   * worth meeting, and the honest way to show that is to show them —
+   * face, what they do, what they're after. Blurring them made the
+   * argument backwards: a map of grey smudges says nobody is here.
    *
-   * City-level placement only, and never more than a handful, so a
-   * sentence cannot be walked back to a person by where it was standing.
+   * Members who are signed in get this as an empty array; they can see
+   * the map itself.
    */
-  teaser: Array<{ side: "need" | "offer"; text: string; where: string | null }>;
+  preview: Array<{
+    name: string;
+    photoUrl: string | null;
+    headline: string | null;
+    need: string | null;
+    offer: string | null;
+    where: string | null;
+  }>;
   networks: NetworkOption[];
   waiting: number;
   radiusKm: number;
@@ -500,6 +487,16 @@ export async function shellPayload(opts: {
   // Words somebody typed themselves count every bit as much as a ticked
   // box — otherwise the one person who described exactly what they need is
   // told they have "stated nothing to match on".
+  /**
+   * Hiding people is for members who haven't held up their end — never
+   * for a stranger.
+   *
+   * The reciprocity argument only works against somebody who is already
+   * *on* the map taking value out of it. A visitor who has not signed up
+   * is not free-riding, they are deciding whether to; hiding the product
+   * from them is just a worse shop window, and it showed — sixteen grey
+   * blurs over Hyderabad argued that nobody was there.
+   */
   const hasSignals = Boolean(
     me &&
       ((me.lookingFor?.length ?? 0) > 0 ||
@@ -509,6 +506,9 @@ export async function shellPayload(opts: {
         (me.customCanHelpWith?.length ?? 0) > 0 ||
         (me.customInterests?.length ?? 0) > 0)
   );
+
+  /** Signed in, and still hasn't said a thing. See the note above. */
+  const gated = Boolean(opts.userId) && !hasSignals;
 
   // ------------------------------------------------------------- board
   if (opts.scope.kind === "board") {
@@ -562,7 +562,7 @@ export async function shellPayload(opts: {
       const self = me ? selfRow(me) : null;
       // You are never hidden from yourself — your own pin is how you check
       // that your visibility setting does what you think it does.
-      const roster = hasSignals ? members : members.map(anonymise);
+      const roster = gated ? members.map(anonymise) : opts.userId ? members : members.map(scatter);
       const people = self ? [self, ...roster] : roster;
       const surface = board.type as Surface;
       const matches =
@@ -612,9 +612,9 @@ export async function shellPayload(opts: {
         // `memberCount` overridden because toEventRefs can't know it: it
         // builds refs for child rows, where the count shown is the RSVP
         // tally. Here the roster is the people already loaded above.
-        locked: !hasSignals,
+        locked: gated,
         // `members`, not `roster` — the latter is already stripped.
-        teaser: hasSignals ? [] : teaserFrom(members as ShellPerson[]),
+        preview: opts.userId ? [] : previewFrom(members as ShellPerson[]),
         selfEvent:
           board.type === "event"
             ? { ...(await toEventRefs([board], opts.userId))[0], memberCount: people.length }
@@ -748,12 +748,16 @@ export async function shellPayload(opts: {
     scope: { kind: "open", slug: null, name: "Open network", blurb: null, logoUrl: null, home: null },
     // No `self` to spare here — the open-map query excludes the viewer,
     // who is drawn from `you` instead.
-    people: hasSignals ? withStatus : withStatus.map(anonymise),
-    teaser: hasSignals ? [] : teaserFrom(withStatus as ShellPerson[]),
+    people: gated
+      ? withStatus.map(anonymise)
+      : opts.userId
+        ? withStatus
+        : withStatus.map(scatter),
+    preview: opts.userId ? [] : previewFrom(withStatus as ShellPerson[]),
     matches,
     events: eventRefs,
     selfEvent: null,
-    locked: !hasSignals,
+    locked: gated,
     networks,
     waiting,
     radiusKm,

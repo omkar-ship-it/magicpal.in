@@ -10,7 +10,7 @@ import type { SelfMarker } from "@/lib/shell";
 import type { PinRef } from "@/lib/pins";
 import Avatar from "./Avatar";
 import { whenLabel } from "@/lib/time";
-import { IconCalendar, IconCity, IconMeetup, IconPin } from "./Icons";
+import { IconCalendar, IconCity, IconMeetup, IconPin, IconUser } from "./Icons";
 import VerifiedBadge from "./VerifiedBadge";
 import { Ask, askLines } from "./Asks";
 
@@ -139,6 +139,7 @@ export default function MapCanvas({
   showZoom = false,
   highlightIds = [],
   locked = false,
+  spread = false,
   onSelectPerson,
   onSelectEvent,
   onMoveEnd,
@@ -192,6 +193,15 @@ export default function MapCanvas({
    * counts people the reader is not allowed to meet.
    */
   locked?: boolean;
+  /**
+   * Draw every pin where it says it is, without collapsing piles.
+   *
+   * On for anybody whose coordinates have been scattered server-side —
+   * a gated member, or a visitor — because the scatter exists precisely
+   * so the pile has somewhere to spread to, and regrouping it here would
+   * undo the thing it was for.
+   */
+  spread?: boolean;
   onSelectPerson?: (id: string) => void;
   onSelectEvent?: (slug: string) => void;
   onMoveEnd?: (c: { lat: number; lng: number; zoom: number }) => void;
@@ -371,7 +381,7 @@ export default function MapCanvas({
      * The coordinates are already scattered server-side (see `anonymise`),
      * so each one has somewhere of its own to go.
      */
-    const digits = locked ? 6 : close ? 4 : neighbourhood ? 3 : precise ? 2 : 1;
+    const digits = spread ? 6 : close ? 4 : neighbourhood ? 3 : precise ? 2 : 1;
     const groups = new Map<string, Array<MapProfile & { hereNow?: boolean }>>();
     for (const p of people) {
       // Somebody who has not published a position has no pin. `unplaced`
@@ -393,7 +403,7 @@ export default function MapCanvas({
       lng: group[0].lng,
       group,
     }));
-  }, [people, precise, neighbourhood, close, locked]);
+  }, [people, precise, neighbourhood, close, spread]);
 
   if (!token) {
     return (
@@ -666,32 +676,32 @@ function PinCardHover({ pin }: { pin: PinRef }) {
 
 /** One person, wherever they are drawn. */
 /**
- * A person-shaped smudge, for a reader who has stated nothing.
+ * A member who hasn't said anything yet, as seen by another one.
  *
- * There is a real person at this point and nothing here says who. Drawn
- * rather than omitted because an empty map argues that nobody is here,
- * which is the opposite of the argument the map exists to make — and a
- * number would make it worse, since on a young map the honest count is
- * the weakest thing you could show a newcomer.
+ * Only ever drawn for somebody signed in who has stated no need, offer
+ * or interest — never for a visitor, who sees the map as it is.
+ *
+ * A silhouette rather than a blur. The blurred version read as dirt on
+ * the screen: sixteen brown smudges over a city argued that the map was
+ * damaged, not that there were people on it. A plain figure in a ring
+ * is unmistakably a person whose identity is withheld, which is the
+ * thing actually being said.
  */
 function Hidden() {
   return (
-    // Ringed and only lightly blurred, so it reads as a marker with
-    // somebody behind it rather than as a mark on the screen. A heavier
-    // blur looked like dirt on the map, which is a worse argument for
-    // signing up than no pin at all.
     <span
-      className="map-pin block rounded-full"
+      className="map-pin grid place-items-center rounded-full"
       aria-hidden="true"
       style={{
         width: 34,
         height: 34,
-        background: "var(--ink-soft)",
-        opacity: 0.42,
-        filter: "blur(1.6px)",
-        boxShadow: "0 0 0 3px color-mix(in srgb, var(--card) 70%, transparent), var(--shadow)",
+        background: "var(--sunk)",
+        color: "color-mix(in srgb, var(--ink-soft) 55%, transparent)",
+        boxShadow: "0 0 0 2px var(--card), var(--shadow)",
       }}
-    />
+    >
+      <IconUser size={17} />
+    </span>
   );
 }
 

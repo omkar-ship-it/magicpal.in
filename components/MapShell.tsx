@@ -211,7 +211,11 @@ export default function MapShell({
       ...DEFAULT_WINDOW,
       open: initialOverlay === "signin" || (initialOverlay === null && !signedIn),
       x: 240,
-      y: 120,
+      y: 96,
+      // Tall enough that the two member cards, the email field and the
+      // button are all on screen together. A call to action below the
+      // fold of its own panel is a call to action nobody makes.
+      h: 620,
       z: 3,
     },
   }));
@@ -492,6 +496,7 @@ export default function MapShell({
           events={data.events}
           pins={locked ? [] : data.pins}
           locked={locked}
+          spread={locked || !signedIn}
           onSelectPin={() => openWin("pins")}
           // Opening Events turns the map into a map of events. Asking
           // "what's happening" and "who's nearby" at the same time answers
@@ -950,7 +955,7 @@ export default function MapShell({
         width={340}
       >
         <SignInPanel
-          teaser={data.teaser}
+          preview={data.preview}
           onDone={async (wasOnboarded) => {
             if (pendingJoin) {
               // Best-effort: a failed join still leaves them signed in on
