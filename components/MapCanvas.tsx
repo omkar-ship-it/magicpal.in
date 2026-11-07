@@ -46,6 +46,16 @@ const PRECISE_ZOOM = 11;
 const NEIGHBOURHOOD_ZOOM = 13;
 
 /**
+ * Below this, even a spread map goes back to piling up.
+ *
+ * `spread` exists so a city's worth of people stop landing on one pixel.
+ * Pulled right out to a continent they are on one pixel whatever the
+ * setting says, and sixteen labelled chips stacked on Hyderabad is a
+ * worse drawing than one stack of faces.
+ */
+const SPREAD_ZOOM = 8;
+
+/**
  * Street level, where a stack should mean "the same doorway" and nothing
  * looser than that.
  */
@@ -140,6 +150,7 @@ export default function MapCanvas({
   highlightIds = [],
   locked = false,
   spread = false,
+  chip = false,
   onSelectPerson,
   onSelectEvent,
   onMoveEnd,
@@ -202,6 +213,14 @@ export default function MapCanvas({
    * undo the thing it was for.
    */
   spread?: boolean;
+  /**
+   * Labelled chips instead of bare faces.
+   *
+   * For the signed-out map, where the pins are the pitch: a stranger
+   * reading "Looking for a technical co-founder" across a city is being
+   * shown the product, and a grid of anonymous avatars is not.
+   */
+  chip?: boolean;
   onSelectPerson?: (id: string) => void;
   onSelectEvent?: (slug: string) => void;
   onMoveEnd?: (c: { lat: number; lng: number; zoom: number }) => void;
@@ -304,6 +323,7 @@ export default function MapCanvas({
   /** Same reasoning as `precise`: a boolean, so only the crossing re-renders. */
   const [neighbourhood, setNeighbourhood] = useState(initialZoom >= NEIGHBOURHOOD_ZOOM);
   const [close, setClose] = useState(initialZoom >= CLOSE_ZOOM);
+  const [regional, setRegional] = useState(initialZoom >= SPREAD_ZOOM);
 
   /**
    * How far out the viewer may zoom before the world stops filling the
@@ -351,6 +371,7 @@ export default function MapCanvas({
     // Same value on most frames; React compares and does nothing.
     setPrecise(e.viewState.zoom >= PRECISE_ZOOM);
     setNeighbourhood(e.viewState.zoom >= NEIGHBOURHOOD_ZOOM);
+    setRegional(e.viewState.zoom >= SPREAD_ZOOM);
     setClose(e.viewState.zoom >= CLOSE_ZOOM);
     applyPinScale(e.target?.getContainer(), e.viewState.zoom);
   }, []);
@@ -381,7 +402,7 @@ export default function MapCanvas({
      * The coordinates are already scattered server-side (see `anonymise`),
      * so each one has somewhere of its own to go.
      */
-    const digits = spread ? 6 : close ? 4 : neighbourhood ? 3 : precise ? 2 : 1;
+    const digits = spread && regional ? 6 : close ? 4 : neighbourhood ? 3 : precise ? 2 : 1;
     const groups = new Map<string, Array<MapProfile & { hereNow?: boolean }>>();
     for (const p of people) {
       // Somebody who has not published a position has no pin. `unplaced`
@@ -403,7 +424,7 @@ export default function MapCanvas({
       lng: group[0].lng,
       group,
     }));
-  }, [people, precise, neighbourhood, close, spread]);
+  }, [people, precise, neighbourhood, close, spread, regional]);
 
   if (!token) {
     return (
@@ -567,6 +588,7 @@ export default function MapCanvas({
           <Marker key={s.key} latitude={s.lat} longitude={s.lng} anchor="center">
             <FaceStack
               locked={locked}
+              chip={chip}
               group={s.group}
               highlighted={highlighted}
               onSelect={onSelectPerson}
@@ -675,6 +697,53 @@ function PinCardHover({ pin }: { pin: PinRef }) {
 }
 
 /** One person, wherever they are drawn. */
+
+/**
+ * A person as a labelled chip, for the shop-window view.
+ *
+ * A face alone says somebody is there; it does not say why you would
+ * cross a room for them. On the one screen that has to persuade a
+ * stranger, the map itself should carry the argument — so each pin
+ * becomes a name and the single most useful line about them, and the
+ * whole map reads as a page of reasons rather than a scatter of
+ * avatars.
+ *
+ * Surname reduced to an initial. It is enough for a name to read as a
+ * real person's, and it keeps a wall of them from being scraped as a
+ * directory by somebody who never signed in.
+ */
+function Chip({ p, onSelect }: { p: MapProfile; onSelect?: (id: string) => void }) {
+  const parts = p.name.trim().split(/\s+/);
+  const shown = parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1][0]}.` : parts[0];
+  const needs = askLines(p.lookingFor, p.customLookingFor, "need");
+  const offers = askLines(p.canHelpWith, p.customCanHelpWith, "offer");
+  const side = needs.length > 0 ? "need" : offers.length > 0 ? "offer" : null;
+  const line = needs[0] ?? offers[0] ?? null;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect?.(p.id)}
+      className="map-pin flex max-w-[190px] items-center gap-1.5 rounded-full py-1 pl-1 pr-2.5 text-left"
+      style={{ background: "var(--card)", boxShadow: "0 0 0 1px var(--line), var(--shadow)" }}
+    >
+      <Avatar name={p.name} photoUrl={p.photoUrl} size={24} />
+      <span className="min-w-0">
+        <span className="block truncate text-[11px] font-semibold leading-[1.2]">{shown}</span>
+        {line && (
+          <span
+            className="block truncate text-[10px] leading-[1.25]"
+            style={{ color: `var(--${side})` }}
+          >
+            <span className="font-semibold">{side === "need" ? "Looking for " : "Can help with "}</span>
+            {line.toLowerCase()}
+          </span>
+        )}
+      </span>
+    </button>
+  );
+}
+
 /**
  * A member who hasn't said anything yet, as seen by another one.
  *
@@ -709,14 +778,18 @@ function Face({
   p,
   lit,
   locked,
+  chip,
   onSelect,
 }: {
   p: MapProfile & { hereNow?: boolean; verified?: boolean };
   lit: boolean;
   locked?: boolean;
+  /** Draw the labelled version — see Chip. */
+  chip?: boolean;
   onSelect?: (id: string) => void;
 }) {
   if (locked) return <Hidden />;
+  if (chip && p.name) return <Chip p={p} onSelect={onSelect} />;
   return (
     <>
       <button
@@ -750,12 +823,14 @@ function FaceStack({
   group,
   highlighted,
   locked,
+  chip,
   onSelect,
   onOpenStack,
 }: {
   group: Array<MapProfile & { hereNow?: boolean; verified?: boolean }>;
   highlighted: Set<string>;
   locked?: boolean;
+  chip?: boolean;
   onSelect?: (id: string) => void;
   /** The whole pile, handed to the directory. See the +N button below. */
   onOpenStack?: (ids: string[]) => void;
@@ -815,7 +890,7 @@ function FaceStack({
     <span className="pin-scale flex items-center -space-x-3">
       {faces.map((p) => (
         <span key={p.id} className="hover-host relative">
-          <Face p={p} lit={highlighted.has(p.id)} locked={locked} onSelect={onSelect} />
+          <Face p={p} lit={highlighted.has(p.id)} locked={locked} chip={chip && group.length === 1} onSelect={onSelect} />
         </span>
       ))}
       {extra > 0 && more(extra, sorted.map((p) => p.id))}

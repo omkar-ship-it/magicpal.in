@@ -39,7 +39,7 @@ import SignInPanel from "./SignInPanel";
 import ProfilePanel from "./ProfilePanel";
 import PublicOptIn from "./PublicOptIn";
 import ForYouPanel from "./ForYouPanel";
-import { IconChat, IconHidden } from "./Icons";
+import { IconChat, IconHidden, IconX } from "./Icons";
 import { BRAND_NAME } from "@/lib/brand";
 
 /**
@@ -497,6 +497,7 @@ export default function MapShell({
           pins={locked ? [] : data.pins}
           locked={locked}
           spread={locked || !signedIn}
+          chip={!signedIn}
           onSelectPin={() => openWin("pins")}
           // Opening Events turns the map into a map of events. Asking
           // "what's happening" and "who's nearby" at the same time answers
@@ -505,7 +506,12 @@ export default function MapShell({
           activeEventSlug={activeEvent}
           initialLat={data.centre?.lat ?? initial.centre?.lat ?? 17.4065}
           initialLng={data.centre?.lng ?? initial.centre?.lng ?? 78.4772}
-          initialZoom={isOpenNet ? 10 : data.scope.kind === "event" ? 12 : 3}
+          // Closer in for a visitor. The scattered chips span about ten
+          // kilometres, which at city zoom is a hundred and forty pixels —
+          // a clump in the middle of an empty frame. One step in and the
+          // same people fill the screen, which is what they actually look
+          // like once you are looking at a neighbourhood.
+          initialZoom={isOpenNet ? (signedIn ? 10 : 12) : data.scope.kind === "event" ? 12 : 3}
           fitToPeople={!isOpenNet && data.scope.kind === "community"}
           // Just the dock: windows float and are moved out of the way by
           // hand, so reserving room for one would push the map around every
@@ -946,6 +952,59 @@ export default function MapShell({
         />
       </FloatWindow>
 
+      {/* The landing for a stranger is a modal, not a window.
+          Centred over the map rather than parked in a corner: the chips
+          behind it are the argument, and a panel pinned to the left edge
+          sits on top of half of them. It also has no business offering
+          minimise and maximise — there is one thing to do here. */}
+      {!signedIn && wins.signin.open ? (
+        <div className="fixed inset-0 z-[60] grid place-items-center p-3">
+          <div
+            className="absolute inset-0"
+            // Light enough that the chips behind stay readable: they are the
+            // argument, and a scrim that hides them wastes it.
+            style={{ background: "color-mix(in srgb, var(--bg) 42%, transparent)" }}
+            onClick={() => win("signin", { open: false })}
+            aria-hidden="true"
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Sign in"
+            className="floating-panel panel-enter relative flex max-h-[92dvh] w-full max-w-[380px] flex-col overflow-y-auto p-4"
+          >
+            <button
+              type="button"
+              onClick={() => win("signin", { open: false })}
+              aria-label="Close"
+              className="absolute right-3 top-3 grid h-7 w-7 place-items-center rounded-full tap"
+              style={{ background: "var(--sunk)", color: "var(--ink-soft)" }}
+            >
+              <IconX size={14} />
+            </button>
+        <SignInPanel
+          preview={data.preview}
+          onDone={async (wasOnboarded) => {
+            if (pendingJoin) {
+              // Best-effort: a failed join still leaves them signed in on
+              // the map rather than stuck.
+              await fetch(`/api/boards/${pendingJoin}/join`, { method: "POST" }).catch(() => {});
+            }
+            win("signin", { open: false });
+            // Straight into the profile when there's nothing to match on
+            // yet — the whole point of signing in.
+            if (!wasOnboarded) openWin("profile");
+            // Re-resolve the network from the URL. The first render happened
+            // without a session, so `?net=` fell back to the open map —
+            // membership couldn't be checked for somebody who wasn't signed
+            // in yet. Signing in is exactly when that becomes answerable.
+            const fromUrl = new URLSearchParams(window.location.search).get("net");
+            void load({ net: pendingJoin ?? fromUrl ?? null });
+          }}
+        />
+          </div>
+        </div>
+      ) : (
       <FloatWindow
         title="Sign in"
         state={visible("signin") ? wins.signin : { ...wins.signin, open: false }}
@@ -975,6 +1034,7 @@ export default function MapShell({
           }}
         />
       </FloatWindow>
+      )}
 
       <MapDock
         active={

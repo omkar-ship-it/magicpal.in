@@ -161,8 +161,9 @@ export type ShellPerson = MapProfile & {
  * sixteen members draws as one stack — a map that looks empty because of
  * how it is plotted rather than because of who is on it. The offset is
  * derived from the real id, so a person sits in the same spot on every
- * load, and it is under ~3km: well inside the city the row already
- * claimed, and no more precise a statement than `base` ever made.
+ * load, and it stays under ~10km: well inside a metro the size of the
+ * ones this runs in, and no more precise a statement than `base` — which
+ * only ever meant "this city" — was already making.
  *
  * Never applied to an exact or live pin, which mean what they say.
  */
@@ -171,7 +172,7 @@ function scatter<T extends { id: string; lat: number; lng: number; placed: strin
   let h = 0;
   for (let i = 0; i < p.id.length; i++) h = (h * 31 + p.id.charCodeAt(i)) >>> 0;
   const angle = (h % 360) * (Math.PI / 180);
-  const radiusKm = 0.6 + ((h >>> 9) % 1000) / 1000 * 2.2;
+  const radiusKm = 1.5 + ((h >>> 9) % 1000) / 1000 * 8.5;
   return {
     ...p,
     lat: p.lat + (radiusKm / 111) * Math.sin(angle),

@@ -95,40 +95,54 @@ export default function SignInPanel({
       {step === "email" ? (
         <form onSubmit={requestCode} className="flex flex-col gap-3">
           <div>
-            <h2 className="text-[16px] font-semibold">
-              {preview.length > 0 ? "They\u2019re already on the map" : "Sign in"}
-            </h2>
-            <p className="mt-1 text-[12.5px] leading-[1.5] text-[var(--ink-soft)]">
-              {preview.length > 0
-                ? "Sign in to see everyone, and to say what you\u2019re after so the right ones find you."
-                : "No password \u2014 we\u2019ll email you a one-time code. The map stays where it is."}
-            </p>
-            {preview.length > 0 && (
-              <ul className="mt-3 flex flex-col gap-2">
-                {preview.map((m) => (
-                  <li
-                    key={m.name}
-                    className="rounded-2xl border p-2.5"
-                    style={{ borderColor: "var(--line)", background: "var(--card)" }}
-                  >
-                    <span className="flex items-center gap-2">
-                      <Avatar name={m.name} photoUrl={m.photoUrl} size={32} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[12.5px] font-semibold">{m.name}</span>
-                        <span className="block truncate text-[11px] text-[var(--ink-soft)]">
-                          {[m.headline, m.where].filter(Boolean).join(" \u00b7 ")}
+            {preview.length > 0 ? (
+              <>
+                {/* The headline is the whole pitch, so it says the thing
+                    the product does rather than naming the control. The
+                    two halves are coloured because they are the two
+                    halves everywhere else on the map. */}
+                <h2 className="text-[26px] font-bold leading-[1.1] tracking-[-0.02em]">
+                  See who&rsquo;s{" "}
+                  <span style={{ color: "var(--brand)" }}>around you.</span>
+                </h2>
+                <p className="mt-2 text-[13.5px] leading-[1.5] text-[var(--ink-soft)]">
+                  Founders, builders and investors near you, with what they&rsquo;re{" "}
+                  <strong style={{ color: "var(--need)" }}>looking for</strong> and what they{" "}
+                  <strong style={{ color: "var(--offer)" }}>can help with</strong>.
+                </p>
+                <ul className="mt-3 flex flex-col gap-2">
+                  {preview.map((m) => (
+                    <li
+                      key={m.name}
+                      className="rounded-2xl border p-2.5"
+                      style={{ borderColor: "var(--line)", background: "var(--card)" }}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Avatar name={m.name} photoUrl={m.photoUrl} size={32} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[12.5px] font-semibold">{m.name}</span>
+                          <span className="block truncate text-[11px] text-[var(--ink-soft)]">
+                            {[m.headline, m.where].filter(Boolean).join(" · ")}
+                          </span>
                         </span>
                       </span>
-                    </span>
-                    {(m.need || m.offer) && (
-                      <span className="mt-1.5 flex flex-col gap-1">
-                        {m.need && <Ask side="need" lines={[m.need]} compact />}
-                        {m.offer && <Ask side="offer" lines={[m.offer]} compact />}
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
+                      {(m.need || m.offer) && (
+                        <span className="mt-1.5 flex flex-col gap-1">
+                          {m.need && <Ask side="need" lines={[m.need]} compact />}
+                          {m.offer && <Ask side="offer" lines={[m.offer]} compact />}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <>
+                <h2 className="text-[16px] font-semibold">Sign in</h2>
+                <p className="mt-1 text-[12.5px] leading-[1.5] text-[var(--ink-soft)]">
+                  No password &mdash; we&rsquo;ll email you a one-time code. The map stays where it is.
+                </p>
+              </>
             )}
           </div>
           <div>
@@ -150,6 +164,14 @@ export default function SignInPanel({
           <button type="submit" disabled={busy} className="btn btn-primary">
             {busy ? "Sending…" : "Send me a code"}
           </button>
+          {/* The two objections somebody has at this exact moment: how
+              long is this going to take, and what are you about to do
+              with where I am. */}
+          {preview.length > 0 && (
+            <p className="text-center text-[11.5px] leading-[1.45] text-[var(--ink-soft)]">
+              Free · takes a minute · your city is shown, never your exact location
+            </p>
+          )}
         </form>
       ) : (
         <form onSubmit={verify} className="flex flex-col gap-3">
