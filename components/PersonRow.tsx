@@ -1,107 +1,155 @@
 "use client";
 
 import type { ShellPerson } from "@/lib/shell";
+import { sectorById } from "@/lib/intents";
 import Avatar from "./Avatar";
 import VerifiedBadge from "./VerifiedBadge";
+import { Ask, askLines } from "./Asks";
 import { IconCity, IconHidden, IconPin } from "./Icons";
-import { tagsOf } from "@/lib/directory";
 
 /**
- * One person as a line, not a card.
+ * One person, as a card you could act on.
  *
- * A card per person is right when there are six of them and you're being
- * asked to choose; it's wrong at two hundred, where the job is finding a
- * name you already half-remember. So the row carries only what you'd scan
- * for — face, name, what they do — and everything else waits behind a tap.
+ * This was a line: face, name, headline, and the two intents crushed into
+ * grey eight-point text underneath. It read as a phone book, which is the
+ * wrong object — a phone book is for finding a name you already know, and
+ * nobody opens this knowing the name. They open it asking "who here is
+ * worth an hour", and the answer to that is what somebody needs and what
+ * they can give, which were the two least legible things on the row.
  *
- * The icon on the right is where they are *allowed* to be, not where they
- * are: a pin for an exact position, a building for city-only, a struck-out
- * eye for somebody off the map entirely. It means a member who is invisible
- * on the map is still visibly *here*, which is the difference between a
- * directory and a map with gaps in it.
+ * So the two asks get the space, the labels and the colours they get
+ * everywhere else (see Asks.tsx), and the sectors underneath say what
+ * world the person is in. The whole card opens the profile; the button
+ * says what the next move actually is, which depends on whether you have
+ * already made it.
  */
 export default function PersonRow({
   person,
-  showTags,
   onOpen,
 }: {
   person: ShellPerson;
-  /**
-   * Inside a cluster, where the row has to carry a reason.
-   *
-   * Four hundred people in one building filtered by what they offer and
-   * need is only useful if the rows say which of those they are. Without
-   * the two lines a directory of four hundred is four hundred job titles,
-   * and the chips above it have nothing to land on.
-   */
-  showTags?: boolean;
   onOpen: () => void;
 }) {
-  const tags = showTags ? tagsOf(person) : null;
+  const needs = askLines(person.lookingFor, person.customLookingFor, "need");
+  const offers = askLines(person.canHelpWith, person.customCanHelpWith, "offer");
+
+  /**
+   * What world they're in, which is the question the asks don't answer.
+   *
+   * Sectors first because they are a closed vocabulary two people can
+   * actually share; free-text skills fill the rest of the row for somebody
+   * who never picked one.
+   */
+  const tags = [
+    ...person.interests.map((id) => sectorById(id)?.label).filter(Boolean),
+    ...person.customInterests,
+    ...person.skills,
+  ]
+    .filter(Boolean)
+    .slice(0, 4) as string[];
+
+  // Where they are *allowed* to be, not where they are — a pin for an
+  // exact position, a building for city-only, a struck-out eye for
+  // somebody off the map, so a member invisible on the map is still
+  // visibly here.
   const placed = person.unplaced ? "off" : person.placed;
-  const icon =
-    placed === "off" ? (
-      <IconHidden size={14} />
-    ) : placed === "base" ? (
-      <IconCity size={14} />
-    ) : (
-      <IconPin size={14} />
-    );
-  const placeTitle =
+  const placeIcon =
+    placed === "off" ? <IconHidden size={11} /> : placed === "base" ? <IconCity size={11} /> : <IconPin size={11} />;
+  const placeText =
     placed === "off"
-      ? "Keeps themselves off the map"
-      : placed === "base"
-        ? `${person.locationLabel ?? "City"} · city only`
-        : (person.locationLabel ?? "On the map");
+      ? "Not on the map"
+      : `${person.locationLabel ?? "Somewhere"}${placed === "base" ? " · city only" : ""}`;
+
+  const action =
+    person.connectionStatus === "connected"
+      ? "Message"
+      : person.connectionStatus === "pending"
+        ? "Request sent"
+        : "Connect";
 
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="flex w-full items-center gap-3 rounded-xl px-1.5 py-2 text-left tap hover:bg-[var(--sunk)]"
+    <div
+      className="card @container flex flex-col gap-2.5 p-3"
+      style={{ borderColor: "var(--line)" }}
     >
-      <Avatar name={person.name} photoUrl={person.photoUrl} size={38} />
-
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-1.5">
-          <span className="min-w-0 truncate text-[13px] font-semibold">{person.name}</span>
-          {person.verified && <VerifiedBadge size={13} label="Verified by this community" />}
-          {/* So a list of people you are scanning for strangers does not
-              make you stop on your own face wondering who that is. */}
-          {person.self && (
-            <span
-              className="pill flex-none"
-              style={{ background: "color-mix(in srgb, var(--brand) 14%, transparent)", color: "var(--brand)" }}
-            >
-              You
-            </span>
-          )}
-          {person.hereNow && (
-            <span
-              className="pill flex-none"
-              style={{ background: "color-mix(in srgb, var(--good) 14%, transparent)", color: "var(--good)" }}
-            >
-              Here
-            </span>
-          )}
-        </span>
-        <span className="block truncate text-[11.5px] text-[var(--ink-soft)]">
-          {person.headline}
-          {person.company ? ` · ${person.company}` : ""}
-        </span>
-        {tags?.offers && (
-          <span className="block truncate text-[11px] text-[var(--ink-soft)]">Offers {tags.offers}</span>
-        )}
-        {tags?.needs && (
-          <span className="block truncate text-[11px]" style={{ color: "var(--brand)" }}>
-            Needs {tags.needs}
+      {/* The head is the clickable part. A whole card that is one button
+          cannot hold a button of its own, and the action below has to be
+          separately reachable by a keyboard. */}
+      <button type="button" onClick={onOpen} className="flex w-full items-start gap-2.5 text-left tap">
+        <Avatar name={person.name} photoUrl={person.photoUrl} size={38} />
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-1.5">
+            <span className="min-w-0 truncate text-[13px] font-semibold">{person.name}</span>
+            {person.verified && <VerifiedBadge size={13} label="Verified by this community" />}
+            {person.self && (
+              <span
+                className="pill flex-none"
+                style={{ background: "color-mix(in srgb, var(--brand) 14%, transparent)", color: "var(--brand)" }}
+              >
+                You
+              </span>
+            )}
+            {person.hereNow && (
+              <span
+                className="pill flex-none"
+                style={{ background: "color-mix(in srgb, var(--good) 14%, transparent)", color: "var(--good)" }}
+              >
+                Here now
+              </span>
+            )}
           </span>
-        )}
-      </span>
+          {(person.headline || person.company) && (
+            <span className="block truncate text-[11.5px] text-[var(--ink-soft)]">
+              {person.headline}
+              {person.company ? ` · ${person.company}` : ""}
+            </span>
+          )}
+          <span className="mt-0.5 flex items-center gap-1 text-[11px] text-[var(--ink-soft)]">
+            <span className="flex-none">{placeIcon}</span>
+            <span className="truncate">{placeText}</span>
+          </span>
+        </span>
+      </button>
 
-      <span className="flex-none text-[var(--ink-soft)]" title={placeTitle} aria-label={placeTitle}>
-        {icon}
-      </span>
-    </button>
+      {/* Side by side once the card is wide enough to hold two columns
+          without breaking every line — a container query, because the
+          panel is resizable and the viewport says nothing about how much
+          room this particular card has. */}
+      {(needs.length > 0 || offers.length > 0) && (
+        <div className="grid grid-cols-1 gap-1.5 @[300px]:grid-cols-2">
+          <Ask side="need" lines={needs} compact />
+          <Ask side="offer" lines={offers} compact />
+        </div>
+      )}
+
+      {needs.length === 0 && offers.length === 0 && (
+        // Said rather than left blank: a thin card otherwise looks like a
+        // rendering fault, and this is the one fact about them that would
+        // change whether you bothered.
+        <p className="text-[11.5px] italic text-[var(--ink-soft)]">
+          Hasn&rsquo;t said what they&rsquo;re looking for yet.
+        </p>
+      )}
+
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {tags.map((t) => (
+            <span key={t} className="pill" style={{ background: "var(--sunk)", color: "var(--ink-soft)" }}>
+              {t}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {!person.self && (
+        <button
+          type="button"
+          onClick={onOpen}
+          className={`btn btn-sm w-full ${person.connectionStatus === "pending" ? "btn-ghost" : "btn-primary"}`}
+        >
+          {action}
+        </button>
+      )}
+    </div>
   );
 }

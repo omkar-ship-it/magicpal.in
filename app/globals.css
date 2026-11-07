@@ -19,7 +19,7 @@
      map-layer palettes above because this distinction outranks both — it
      is the thing somebody reads a card to find out. */
   --need: #c23f23;
-  --offer: #1d5fb8;
+  --offer: #157f55;
   /* Connection-status scheme: green = connected, amber = pending, orange = not yet connected. */
   --pending: #d99a00;
   --status-new: #f0591a;
@@ -58,7 +58,7 @@
     --good: #45c98b;
     --warn: #ff9252;
     --need: #ffb59e;
-    --offer: #8fbaf7;
+    --offer: #52cf96;
     --pending: #f0c330;
     --status-new: #ff8257;
     --layer-event: #a996ff;
@@ -89,7 +89,7 @@
   --good: #45c98b;
   --warn: #ff9252;
   --need: #ffb59e;
-  --offer: #8fbaf7;
+  --offer: #52cf96;
   --pending: #f0c330;
   --status-new: #ff8257;
   --layer-event: #a996ff;

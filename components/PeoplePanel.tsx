@@ -192,10 +192,13 @@ export default function PeoplePanel({
                 : "Share the board's QR code and it fills as people scan it."}
         </PanelNote>
       ) : (
-        <ul className="stagger flex flex-col">
+        // A grid rather than a column: the cards hold two columns of
+        // their own now, and in a maximised window a single file of them
+        // wastes most of the width the reader just asked for.
+        <ul className="stagger grid grid-cols-1 gap-2 [grid-template-columns:repeat(auto-fill,minmax(248px,1fr))]">
           {shown.map((p) => (
             <li key={p.id}>
-              <PersonRow person={p} showTags={inCluster} onOpen={() => onOpenPerson(p.id)} />
+              <PersonRow person={p} onOpen={() => onOpenPerson(p.id)} />
             </li>
           ))}
         </ul>

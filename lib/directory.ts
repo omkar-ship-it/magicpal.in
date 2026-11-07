@@ -122,18 +122,3 @@ export function clusterFacets(
   return out.length > 1 ? out : [];
 }
 
-/** The two lines a row carries in a cluster, in the vocabulary's own words. */
-export function tagsOf(p: ShellPerson): { offers: string | null; needs: string | null } {
-  const label = (ids: readonly string[], custom: readonly string[], side: "offer" | "need") => {
-    const named = ids
-      .map((id) => topicById(id))
-      .filter((t): t is NonNullable<typeof t> => Boolean(t))
-      .map((t) => (side === "offer" ? t.offer : t.need));
-    const all = [...named, ...custom];
-    return all.length > 0 ? all.slice(0, 2).join(" · ") : null;
-  };
-  return {
-    offers: label(p.canHelpWith, p.customCanHelpWith, "offer"),
-    needs: label(p.lookingFor, p.customLookingFor, "need"),
-  };
-}

@@ -35,15 +35,15 @@ function prefersDark(): boolean {
 const PRECISE_ZOOM = 11;
 
 /**
- * Above this, a pile of people at one point opens out into a ring.
+ * Neighbourhood level: the middle rung of how finely pins are grouped.
  *
- * Higher than PRECISE_ZOOM on purpose. The fan is sized in screen pixels,
- * so the same ring covers a couple of kilometres at zoom 11 and a hundred
- * metres at 15 — and a ring that spans half a city implies a spread that
- * isn't there, however clearly the spokes say otherwise. Neighbourhood
- * level is where it starts telling the truth.
+ * A pile here used to open out into a ring of faces on spokes. It is
+ * gone — at any real density the spokes crossed into a web over the
+ * streets, and the honest answer to "who are these forty people" was
+ * never a drawing, it was the directory. The zoom band earns its keep as
+ * a grouping precision and nothing more.
  */
-const FAN_ZOOM = 13;
+const NEIGHBOURHOOD_ZOOM = 13;
 
 /**
  * Street level, where a stack should mean "the same doorway" and nothing
@@ -292,7 +292,7 @@ export default function MapCanvas({
    */
   const [precise, setPrecise] = useState(initialZoom >= PRECISE_ZOOM);
   /** Same reasoning as `precise`: a boolean, so only the crossing re-renders. */
-  const [fanned, setFanned] = useState(initialZoom >= FAN_ZOOM);
+  const [neighbourhood, setNeighbourhood] = useState(initialZoom >= NEIGHBOURHOOD_ZOOM);
   const [close, setClose] = useState(initialZoom >= CLOSE_ZOOM);
 
   /**
@@ -340,7 +340,7 @@ export default function MapCanvas({
   const onMove = useCallback((e: ViewStateChangeEvent) => {
     // Same value on most frames; React compares and does nothing.
     setPrecise(e.viewState.zoom >= PRECISE_ZOOM);
-    setFanned(e.viewState.zoom >= FAN_ZOOM);
+    setNeighbourhood(e.viewState.zoom >= NEIGHBOURHOOD_ZOOM);
     setClose(e.viewState.zoom >= CLOSE_ZOOM);
     applyPinScale(e.target?.getContainer(), e.viewState.zoom);
   }, []);
@@ -358,10 +358,9 @@ export default function MapCanvas({
      * could not.
      *
      * 11km, 1.1km, 110m, 11m. By street level a stack means the same
-     * doorway, and whatever genuinely shares a doorway is fanned out into a
-     * ring below rather than piled up.
+     * doorway, and a stack of those is a "+N" into the directory.
      */
-    const digits = close ? 4 : fanned ? 3 : precise ? 2 : 1;
+    const digits = close ? 4 : neighbourhood ? 3 : precise ? 2 : 1;
     const groups = new Map<string, Array<MapProfile & { hereNow?: boolean }>>();
     for (const p of people) {
       // Somebody who has not published a position has no pin. `unplaced`
@@ -383,7 +382,7 @@ export default function MapCanvas({
       lng: group[0].lng,
       group,
     }));
-  }, [people, precise, fanned, close]);
+  }, [people, precise, neighbourhood, close]);
 
   if (!token) {
     return (
@@ -549,7 +548,6 @@ export default function MapCanvas({
               locked={locked}
               group={s.group}
               highlighted={highlighted}
-              fanned={fanned}
               onSelect={onSelectPerson}
               onOpenStack={onOpenStack}
             />
@@ -655,84 +653,7 @@ function PinCardHover({ pin }: { pin: PinRef }) {
   );
 }
 
-const FACE = 40;
-/** Face plus the smallest gap two of them read as separate across. */
-const STEP = 48;
-/** Radius of the innermost ring once a pile needs more than one. */
-const RING_0 = 78;
-
-/**
- * How many faces fit on a ring of this radius.
- *
- * The honest limit: circumference divided by how much room a face needs.
- * Pushing past it is how a ring becomes a pile drawn in a circle.
- */
-function ringCapacity(r: number): number {
-  return Math.max(1, Math.floor((2 * Math.PI * r) / STEP));
-}
-
-/**
- * Three rings, and the reason is the phone.
- *
- * A fourth ring puts the outermost faces 222px from the centre — 444px
- * across before you count the faces themselves — which is wider than the
- * screen most of this is read on. Three reaches 48 people and still fits.
- * Past that the directory is the better answer and it is already open.
- */
-const MAX_RINGS = 3;
-export const FAN_MAX = Array.from({ length: MAX_RINGS }, (_, i) => ringCapacity(RING_0 + i * STEP)).reduce(
-  (a, b) => a + b,
-  0
-);
-
-function ringPoints(n: number, r: number, turn: number) {
-  return Array.from({ length: n }, (_, i) => {
-    // Starting at the top and going round, so a pile of two reads as one
-    // above the other rather than as an arbitrary diagonal.
-    const a = (i / n) * Math.PI * 2 - Math.PI / 2 + turn;
-    return { x: Math.round(Math.cos(a) * r), y: Math.round(Math.sin(a) * r) };
-  });
-}
-
-/**
- * Where each face sits when a pile is opened out.
- *
- * A small pile gets one ring sized to its own contents, so two people sit
- * close together rather than on a circle built for twelve.
- *
- * A bigger one flowers into concentric rings — and the faces are spread
- * across them in proportion to what each ring holds, not packed into the
- * inner one until it overflows. Filling inward-first drew eleven faces in
- * a tight ring with a single straggler orbiting outside it; proportional
- * gives 5 and 7, which reads as one object.
- */
-function fanRing(n: number): Array<{ x: number; y: number }> {
-  const snug = Math.max(FACE * 0.95, (STEP * n) / (2 * Math.PI));
-  if (snug <= RING_0) return ringPoints(n, snug, 0);
-
-  const caps: number[] = [];
-  let total = 0;
-  while (caps.length < MAX_RINGS && total < n) {
-    const c = ringCapacity(RING_0 + caps.length * STEP);
-    caps.push(c);
-    total += c;
-  }
-
-  const out: Array<{ x: number; y: number }> = [];
-  let placed = 0;
-  caps.forEach((cap, i) => {
-    const last = i === caps.length - 1;
-    const take = last ? n - placed : Math.min(cap, Math.round((n * cap) / total));
-    if (take <= 0) return;
-    // Half a slot of rotation on alternate rings, so faces don't line up
-    // radially and leave spokes of white through the flower.
-    out.push(...ringPoints(take, RING_0 + i * STEP, i % 2 ? Math.PI / take : 0));
-    placed += take;
-  });
-  return out;
-}
-
-/** One person, identically whether they are stacked or fanned. */
+/** One person, wherever they are drawn. */
 /**
  * A person-shaped smudge, for a reader who has stated nothing.
  *
@@ -802,7 +723,6 @@ function Face({
 function FaceStack({
   group,
   highlighted,
-  fanned,
   locked,
   onSelect,
   onOpenStack,
@@ -810,8 +730,6 @@ function FaceStack({
   group: Array<MapProfile & { hereNow?: boolean; verified?: boolean }>;
   highlighted: Set<string>;
   locked?: boolean;
-  /** Close enough in to open the pile out instead of overlapping it. */
-  fanned: boolean;
   onSelect?: (id: string) => void;
   /** The whole pile, handed to the directory. See the +N button below. */
   onOpenStack?: (ids: string[]) => void;
@@ -864,113 +782,6 @@ function FaceStack({
    * in metres as you zoom in — which is the right way round, since the
    * further in you are the more precisely the dot locates them.
    */
-  if (fanned && sorted.length > 1) {
-    const shown = sorted.slice(0, FAN_MAX);
-    const rest = sorted.length - shown.length;
-    // Faces only. The overflow count used to take a slot on the ring, which
-    // meant a pile of eleven drew nine faces and a chip — it lives in the
-    // hub now, so ten of them fan.
-    const slots = fanRing(shown.length);
-    const reach = Math.max(...slots.map((s) => Math.hypot(s.x, s.y)));
-    const openList = () =>
-      onOpenStack ? onOpenStack(sorted.map((p) => p.id)) : onSelect?.(sorted[0].id);
-
-    return (
-      <span className="pin-scale" style={{ position: "relative", display: "block", width: 0, height: 0 }}>
-        <svg
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            left: -reach,
-            top: -reach,
-            width: reach * 2,
-            height: reach * 2,
-            overflow: "visible",
-            pointerEvents: "none",
-          }}
-        >
-          {slots.map((s, i) => (
-            <line
-              key={i}
-              x1={reach}
-              y1={reach}
-              x2={reach + s.x}
-              y2={reach + s.y}
-              stroke="var(--line)"
-              strokeWidth={1.5}
-            />
-          ))}
-        </svg>
-
-        {/**
-         * The hub: the real position, and the way into the list.
-         *
-         * It was a seven-pixel dot marked aria-hidden, which left the only
-         * route from a pile to a directory on the "+N" chip — so a pile of
-         * six, which fans completely and has no chip, had no route at all.
-         * The affordance existed for crowds of a hundred and was missing
-         * for the crowds you are most likely to work through.
-         *
-         * Above ten it carries the overflow count, so there is one thing to
-         * press at every size rather than a dot sometimes and a chip
-         * elsewhere on the ring other times.
-         *
-         * The positioning sits on the wrapper, never on the button:
-         * `.map-pin` animates `transform` on hover, which would replace the
-         * centring translate and throw the hub off its own coordinate.
-         */}
-        <span style={{ position: "absolute", left: 0, top: 0, transform: "translate(-50%, -50%)" }}>
-          <button
-            type="button"
-            className="map-pin grid place-items-center rounded-full"
-            onClick={openList}
-            aria-label={`${sorted.length} people here — open the directory`}
-            style={
-              rest > 0
-                ? {
-                    minWidth: 34,
-                    height: 34,
-                    padding: "0 9px",
-                    background: "var(--card)",
-                    color: "var(--ink-soft)",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    boxShadow: "0 0 0 2px var(--card), var(--shadow)",
-                  }
-                : // Transparent, and far bigger than the dot it contains: a
-                  // seven-pixel target is not a target on a phone.
-                  { width: 34, height: 34, background: "transparent" }
-            }
-          >
-            {rest > 0 ? (
-              `+${rest}`
-            ) : (
-              <span
-                style={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: 999,
-                  background: "var(--ink-soft)",
-                  boxShadow: "0 0 0 2px var(--card)",
-                }}
-              />
-            )}
-          </button>
-        </span>
-
-        {shown.map((p, i) => (
-          <span
-            key={p.id}
-            className="hover-host"
-            style={{ position: "absolute", left: slots[i].x, top: slots[i].y, transform: "translate(-50%, -50%)" }}
-          >
-            <Face p={p} lit={highlighted.has(p.id)} locked={locked} onSelect={onSelect} />
-          </span>
-        ))}
-      </span>
-    );
-  }
-
   const faces = sorted.slice(0, 3);
   const extra = sorted.length - faces.length;
 
