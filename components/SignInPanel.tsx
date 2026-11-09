@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useIsNarrow } from "@/lib/useIsNarrow";
 import { useRouter } from "next/navigation";
 import { IconChevronLeft, IconLinkedIn } from "./Icons";
 
@@ -86,6 +87,47 @@ export default function SignInPanel({
     }
   }
 
+  /**
+   * LinkedIn leads on a desktop and follows on a phone.
+   *
+   * Not a preference — a fact about where sessions live. LinkedIn
+   * publishes thousands of universal-link rules and none of them covers
+   * `/oauth`, so a mobile browser can never hand the flow to the app;
+   * it stays in Safari or Chrome, where almost nobody is signed in,
+   * and the button's reward for being prominent is a password prompt.
+   * On a desktop the opposite holds: the session is usually live and
+   * this genuinely is one tap that brings a name and a photo with it.
+   *
+   * Same two routes on both, and the email code is never hidden. What
+   * changes is which one is asking for a tap first.
+   */
+  const narrow = useIsNarrow();
+  const linkedinFirst = linkedin ? (
+    <>
+      {narrow && (
+        <div className="flex items-center gap-2" aria-hidden="true">
+          <span className="h-px flex-1" style={{ background: "var(--line)" }} />
+          <span className="text-[11px] text-[var(--ink-soft)]">or</span>
+          <span className="h-px flex-1" style={{ background: "var(--line)" }} />
+        </div>
+      )}
+      <a
+        href="/api/auth/linkedin/start"
+        className={`btn w-full ${narrow ? "btn-ghost" : "btn-primary"}`}
+        style={narrow ? { color: "#0a66c2" } : { background: "#0a66c2", boxShadow: "0 10px 22px -12px #0a66c2" }}
+      >
+        <IconLinkedIn size={16} /> Continue with LinkedIn
+      </a>
+      {!narrow && (
+        <div className="flex items-center gap-2" aria-hidden="true">
+          <span className="h-px flex-1" style={{ background: "var(--line)" }} />
+          <span className="text-[11px] text-[var(--ink-soft)]">or</span>
+          <span className="h-px flex-1" style={{ background: "var(--line)" }} />
+        </div>
+      )}
+    </>
+  ) : null;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {step === "email" ? (
@@ -109,29 +151,7 @@ export default function SignInPanel({
               </>
             )}
           </div>
-          {/* Primary, and above the email field.
-              Everybody arriving here is being asked to describe
-              themselves professionally, and most of them already have
-              done — on LinkedIn. One tap brings the name and the photo
-              across, which is most of the first onboarding step gone
-              before they have typed anything. The code still works, and
-              is the only route for anybody without a LinkedIn. */}
-          {linkedin && (
-            <>
-              <a
-                href="/api/auth/linkedin/start"
-                className="btn btn-primary w-full"
-                style={{ background: "#0a66c2", boxShadow: "0 10px 22px -12px #0a66c2" }}
-              >
-                <IconLinkedIn size={16} /> Continue with LinkedIn
-              </a>
-              <div className="flex items-center gap-2" aria-hidden="true">
-                <span className="h-px flex-1" style={{ background: "var(--line)" }} />
-                <span className="text-[11px] text-[var(--ink-soft)]">or</span>
-                <span className="h-px flex-1" style={{ background: "var(--line)" }} />
-              </div>
-            </>
-          )}
+          {!narrow && linkedinFirst}
 
           <div>
             <label className="label" htmlFor="signin-email">
@@ -161,6 +181,7 @@ export default function SignInPanel({
           <button type="submit" disabled={busy} className="btn btn-primary">
             {busy ? "Sending…" : "Send me a code"}
           </button>
+          {narrow && linkedinFirst}
           {/* The objections somebody has at this exact moment: how long
               is this going to take, and what are you about to do with
               where I am. The answer to the second is the honest one —
