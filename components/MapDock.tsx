@@ -63,9 +63,9 @@ export default function MapDock({
   onProfile: () => void;
 }) {
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-2 pb-[max(10px,env(safe-area-inset-bottom))]">
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-1 pb-[max(10px,env(safe-area-inset-bottom))] sm:px-2">
       <div
-        className="scroll-none pointer-events-auto flex max-w-full items-center gap-0.5 overflow-x-auto rounded-[24px] border p-1.5"
+        className="scroll-none pointer-events-auto flex max-w-full items-center gap-0 overflow-x-auto rounded-[24px] border p-1.5 sm:gap-0.5"
         style={{
           background: "color-mix(in srgb, var(--chrome) 94%, transparent)",
           borderColor: "var(--chrome-line)",
@@ -93,7 +93,7 @@ export default function MapDock({
             type="button"
             onClick={onProfile}
             aria-label="Your profile"
-            className="ml-0.5 flex w-[42px] sm:w-[60px] flex-none flex-col items-center justify-center gap-1 rounded-2xl py-2 tap"
+            className="flex w-[40px] sm:ml-0.5 sm:w-[60px] flex-none flex-col items-center justify-center gap-1 rounded-2xl py-2 tap"
             style={{ background: "color-mix(in srgb, var(--chrome-ink) 10%, transparent)" }}
           >
             <Avatar name={me.name} photoUrl={me.photoUrl} size={21} />
@@ -119,8 +119,16 @@ export default function MapDock({
   );
 }
 
+/**
+ * Narrower on a phone, because nine of these have to fit one.
+ *
+ * Eight slots plus your own face came to about 408px of content inside
+ * 374px of screen, so the dock overflowed and the first slot — Home —
+ * was clipped to "ome". Forty each with no gap leaves ten pixels spare
+ * at 390, which is the width this is actually used at.
+ */
 const SLOT =
-  "dock-slot flex w-[42px] sm:w-[60px] flex-none flex-col items-center justify-center gap-1 rounded-2xl py-2 tap";
+  "dock-slot flex w-[40px] sm:w-[60px] flex-none flex-col items-center justify-center gap-1 rounded-2xl py-2 tap";
 
 function DockButton({
   on,
@@ -160,9 +168,17 @@ function DockButton({
             not have to read. */}
         {urgent && count != null && count > 0 && (
           <span
-            className="absolute -right-1.5 -top-1 h-2 w-2 rounded-full"
+            className="absolute -right-1.5 -top-1 h-2 w-2 rounded-full sm:block"
             style={{ background: "var(--brand)", boxShadow: "0 0 0 2px var(--chrome)" }}
           />
+        )}
+        {!urgent && count != null && count > 0 && (
+          <span
+            className="absolute -right-2 -top-1.5 grid h-[14px] min-w-[14px] place-items-center rounded-full px-[3px] text-[8.5px] font-bold leading-none text-white sm:hidden"
+            style={{ background: tint, boxShadow: "0 0 0 1.5px var(--chrome)" }}
+          >
+            {count}
+          </span>
         )}
       </span>
       <span
@@ -170,7 +186,12 @@ function DockButton({
         style={{ color: on ? "var(--brand)" : "var(--chrome-ink)" }}
       >
         {label}
-        {count != null && count > 0 && <span style={{ color: tint }}> {count}</span>}
+        {count != null && count > 0 && (
+          <span className="hidden sm:inline" style={{ color: tint }}>
+            {" "}
+            {count}
+          </span>
+        )}
       </span>
     </button>
   );

@@ -86,18 +86,21 @@ export default function MapTopBar({
       className={`pointer-events-none absolute inset-x-0 top-0 p-2.5 ${picking || filtering ? "z-50" : "z-30"}`}
     >
       <div className="pointer-events-auto mx-auto max-w-2xl">
-        {/* Two rows on a phone. One row meant the switcher, a search box and
-            a Filters button sharing 390px, which truncated the search to
-            "Search peo|" — the one control that has to be readable. */}
+        {/* Two rows on a phone, and only two.
+            One row truncated the search to "Search peo|", so it moved to
+            its own line — but a column stretches every child to full
+            width, which gave the bell and "My network" a bare row each
+            and cost four rows of a phone screen to show four controls.
+            Wrapping instead: the small controls share the first line and
+            the search, alone in being full-width, takes the second. */}
         <div
-          className="flex flex-col gap-2 rounded-[22px] border px-2.5 py-2 backdrop-blur sm:flex-row sm:items-center sm:rounded-full"
+          className="flex flex-wrap items-center gap-2 rounded-[22px] border px-2.5 py-2 backdrop-blur sm:flex-nowrap sm:rounded-full"
           style={{
             background: "color-mix(in srgb, var(--chrome) 94%, transparent)",
             borderColor: "var(--chrome-line)",
             boxShadow: "var(--shadow-lift)",
           }}
         >
-          <div className="flex items-center gap-2">
           {/* ------------------------------------------- network switcher */}
           <button
             type="button"
@@ -139,10 +142,14 @@ export default function MapTopBar({
           >
             Filters{activeCount > 0 ? ` ${activeCount}` : ""}
           </button>
-          </div>
 
-          {/* -------------------------------------------------- search box */}
-          <div className="relative min-w-0 flex-1">
+          {/* Last on a phone and a full basis, so it wraps to its own line
+              while everything else stays on the first.
+              `basis-full`, not `w-full`: a flex item's width is ignored
+              once flex-basis is set, so pairing w-full with flex-1 — whose
+              basis is 0 — collapsed the search to a circle on the first
+              row instead of moving it to the second. */}
+          <div className="relative order-last min-w-0 basis-full sm:order-none sm:basis-auto sm:flex-1">
             <IconSearch
               size={13}
               className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2"
