@@ -42,10 +42,8 @@ const USES: Array<{ hue: number; icon: React.ReactNode; title: string; body: Rea
     title: "At a conference",
     body: (
       <>
-        Eight hundred badges over three days, and the one person who&rsquo;d change your quarter is in the next
-        room. Drop a fixed pin so people can find you at the venue, then run <strong>For you</strong> over the
-        attendee list: five names at a time, each with the reason, refilling as you work through them. Whoever you
-        didn&rsquo;t get to is kept as a follow-up list for the train home.
+        Eight hundred badges, and the one person who&rsquo;d change your quarter is in the next room. Pin
+        yourself at the venue and run <strong>For you</strong> over the attendee list.
       </>
     ),
   },
@@ -55,9 +53,9 @@ const USES: Array<{ hue: number; icon: React.ReactNode; title: string; body: Rea
     title: "In a co-working space",
     body: (
       <>
-        You sit next to forty people for six months and speak to two. Set a pin for the day and narrow to{" "}
-        <strong>this building</strong> — it needs live location, because a city pin can&rsquo;t tell who is on
-        your floor. You get the handful worth interrupting, not a staff directory.
+        You sit next to forty people for six months and speak to two. Narrow to{" "}
+        <strong>this building</strong> — live location only, since a city pin can&rsquo;t tell who&rsquo;s on
+        your floor.
       </>
     ),
   },
@@ -67,9 +65,8 @@ const USES: Array<{ hue: number; icon: React.ReactNode; title: string; body: Rea
     title: "Your community's own map",
     body: (
       <>
-        An alumni network, a company, a meetup group — a private board with its own map, members, events and feed.
-        See where your people have actually ended up in the world, and reach them as one of their own rather than
-        as a stranger. Members see each other there even when they&rsquo;re off the public map.
+        An alumni network, a company, a meetup group — a private board with its own map, members and events.
+        Members see each other there even when they&rsquo;re off the public map.
       </>
     ),
   },
@@ -79,9 +76,8 @@ const USES: Array<{ hue: number; icon: React.ReactNode; title: string; body: Rea
     title: "Let serendipity work for you",
     body: (
       <>
-        Flights, trains, long bus rides, the airport lounge at 6am. Turn live sharing on while you&rsquo;re moving
-        and it stops by itself when you close the app. Open it while you&rsquo;re waiting and see who else is —
-        the people you&rsquo;d never have spoken to are the ones sitting four seats away.
+        Airports, trains, the 6am lounge. Turn live sharing on while you&rsquo;re moving — it stops by itself
+        when you close the app — and see who else is waiting.
       </>
     ),
   },
@@ -91,8 +87,8 @@ const USES: Array<{ hue: number; icon: React.ReactNode; title: string; body: Rea
     title: "Landing in a new city",
     body: (
       <>
-        Switch on <strong>My network</strong> before you book anything and see who you already know there. The
-        map keeps the answer to &ldquo;do I know anyone in Dubai&rdquo; so you don&rsquo;t have to.
+        Switch on <strong>My network</strong> before you book. The map remembers who you know in Dubai so you
+        don&rsquo;t have to.
       </>
     ),
   },
@@ -103,7 +99,7 @@ const USES: Array<{ hue: number; icon: React.ReactNode; title: string; body: Rea
     body: (
       <>
         Drop a pin that expires — &ldquo;working from here till six, say hello&rdquo; — and choose how far it
-        carries, from this building to the whole city. Gone by morning, with nothing left on your profile.
+        carries. Gone by morning.
       </>
     ),
   },
@@ -287,20 +283,19 @@ export default function OpenHome({
         <Section title="How it works" icon={<IconSparkle size={12} />}>
           <ol className="flex flex-col gap-2.5">
             <Beat n={1} title="Everyone here chose to be here">
-              Nobody is on this map by default. Each person picked whether to show a street-level pin, their city
-              only, or nothing at all — and can change it in a tap.
+              Nobody is here by default. Each person chose a street pin, their city, or nothing — and can
+              change it in a tap.
             </Beat>
             <Beat n={2} title="Every recommendation says why">
               <button type="button" className="font-semibold" style={{ color: "var(--brand)" }} onClick={onOpenForYou}>
                 For you
               </button>{" "}
-              never shows a score. It shows a sentence — &ldquo;you&rsquo;re raising and they invest&rdquo; — that
-              you can check against the profile next to it. If it can&rsquo;t explain itself, it doesn&rsquo;t
-              appear.
+              never shows a score — it shows a sentence you can check against the profile beside it. If it
+              can&rsquo;t explain itself, it doesn&rsquo;t appear.
             </Beat>
             <Beat n={3} title="Nobody can message you out of nowhere">
-              There is no open inbox. Reaching someone is a connection request they have to accept, which is also
-              why a connection here is worth something.
+              No open inbox. Reaching someone is a request they accept, which is why a connection here is worth
+              something.
             </Beat>
           </ol>
         </Section>
@@ -331,20 +326,20 @@ export default function OpenHome({
           >
             <ul className="flex flex-col gap-2 py-2 pr-2">
               <Rule icon={<IconUser size={12} />} title="Be who you say you are">
-                There are no anonymous profiles here. A tick means a community you both belong to has confirmed
-                that person is really one of theirs — it is never a claim this product makes on its own.
+                No anonymous profiles. A tick means a community you both belong to vouched for them — never a
+                claim this product makes alone.
               </Rule>
               <Rule icon={<IconLock size={12} />} title="Your location stays yours">
-                Off, your city, a fixed pin, or live while you&rsquo;re out. Live sharing stops on its own when you
-                close the app. Changing your mind takes one tap and applies everywhere immediately.
+                Off, your city, a fixed pin, or live while you&rsquo;re out. Live stops on its own; changing
+                your mind takes one tap.
               </Rule>
               <Rule icon={<IconPeople size={12} />} title="An introduction, not a broadcast">
-                Connection requests carry one short note. No bulk messaging, no cold inbox, and nobody sees your
-                contact details until you&rsquo;ve both agreed.
+                One short note with a request. No bulk messaging, and nobody sees your details until you both
+                agree.
               </Rule>
               <Rule icon={<IconPin size={12} />} title="Show up as yourself">
-                This only works if the person who walks over meets the person they read about. Say what you
-                actually need — the vague profiles are the ones nothing can match.
+                The person who walks over should meet the person they read about. Vague profiles are the ones
+                nothing can match.
               </Rule>
             </ul>
           </div>
@@ -352,10 +347,8 @@ export default function OpenHome({
 
         <Section title="Communities are different" icon={<IconPeople size={12} />}>
           <p className="max-w-[60ch] text-[12.5px] leading-[1.6] text-[var(--ink-soft)]">
-            This map is the public square. A community — an alumni network, a company, a meetup group — is a
-            private board inside it, with its own members, events, feed and front page. Members are visible to each
-            other there even when they&rsquo;re off the public map, and the people running it can vouch for who is
-            really one of theirs. You join one by scanning its code or following its link.
+            This map is the public square; a community is a private board inside it, with its own members and
+            events. Whoever runs it can vouch for who really belongs. Join by scanning its code.
           </p>
           {signedIn && (
             <button type="button" className="btn btn-ghost btn-sm mt-2.5" onClick={onProfile}>
