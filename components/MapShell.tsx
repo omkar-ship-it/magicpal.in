@@ -80,6 +80,8 @@ export default function MapShell({
   initialOverlay = null,
   pendingJoin = null,
   initialEvent = null,
+  linkedin = false,
+  linkedinError = null,
   signedIn,
   onboarded,
   myVisibility,
@@ -96,6 +98,10 @@ export default function MapShell({
   pendingJoin?: string | null;
   /** From ?event= — a QR scan opens on the event it was printed for. */
   initialEvent?: string | null;
+  /** The LinkedIn app is configured — see lib/linkedin. */
+  linkedin?: boolean;
+  /** From ?li= — why the last LinkedIn attempt came back empty-handed. */
+  linkedinError?: string | null;
   signedIn: boolean;
   onboarded: boolean;
   myVisibility: "off" | "base" | "exact" | "live";
@@ -218,7 +224,7 @@ export default function MapShell({
      */
     signin: {
       ...DEFAULT_WINDOW,
-      open: initialOverlay === "signin" || (initialOverlay === null && !signedIn),
+      open: initialOverlay === "signin" || Boolean(linkedinError) || (initialOverlay === null && !signedIn),
       x: 240,
       y: 96,
       // Tall enough that the two member cards, the email field and the
@@ -993,6 +999,8 @@ export default function MapShell({
             </button>
         <SignInPanel
           landing={!signedIn}
+          linkedin={linkedin}
+          linkedinError={linkedinError}
           onDone={async (wasOnboarded) => {
             if (pendingJoin) {
               // Best-effort: a failed join still leaves them signed in on
@@ -1024,6 +1032,8 @@ export default function MapShell({
       >
         <SignInPanel
           landing={!signedIn}
+          linkedin={linkedin}
+          linkedinError={linkedinError}
           onDone={async (wasOnboarded) => {
             if (pendingJoin) {
               // Best-effort: a failed join still leaves them signed in on

@@ -242,6 +242,31 @@ export function IconSearch(p: Props) {
   );
 }
 
+/**
+ * The one filled glyph in the set, because it is a trademark.
+ *
+ * Everything else here is a 1.75-stroke outline that inherits
+ * currentColor. A brand mark is not ours to restyle into the house
+ * idiom — a stroked approximation of LinkedIn's logo is both less
+ * recognisable and a worse thing to put on a button that claims to be
+ * LinkedIn, so this one is drawn solid, as published.
+ */
+export function IconLinkedIn({ size = 18, className, style }: Props) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+      style={style}
+      aria-hidden="true"
+    >
+      <path d="M20.45 20.45h-3.56v-5.57c0-1.33-.03-3.04-1.85-3.04-1.86 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05a3.74 3.74 0 0 1 3.37-1.85c3.6 0 4.27 2.37 4.27 5.46v6.28ZM5.34 7.43a2.07 2.07 0 1 1 0-4.14 2.07 2.07 0 0 1 0 4.14Zm1.78 13.02H3.55V9h3.57v11.45ZM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.22.79 24 1.77 24h20.45c.98 0 1.78-.78 1.78-1.73V1.73C24 .77 23.2 0 22.22 0Z" />
+    </svg>
+  );
+}
+
 export function IconChevronLeft(p: Props) {
   return (
     <Svg {...p}>

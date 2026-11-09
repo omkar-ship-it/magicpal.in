@@ -27,6 +27,19 @@ export const users = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     email: text("email").notNull().unique(),
 
+    /**
+     * LinkedIn's `sub` claim — their stable, opaque id for a member.
+     *
+     * The subject, never the vanity URL: a URL changes when somebody
+     * renames themselves and is not unique over time, which makes it
+     * exactly the wrong thing to hang an account on. Null for everybody
+     * who arrived by email, which is most people and always will be.
+     *
+     * Uniqueness is a partial index (see drizzle/manual/0008) rather than
+     * a column constraint, so the nulls don't collide.
+     */
+    linkedinSub: text("linkedin_sub"),
+
     // ------------------------------------------------------------ profile
     // Null until onboarding completes. A user can exist (has signed in) with
     // no profile yet — that's the state right after their first OTP verify.

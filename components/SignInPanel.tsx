@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { IconChevronLeft } from "./Icons";
+import { IconChevronLeft, IconLinkedIn } from "./Icons";
 
 /**
  * Signing in without leaving the map.
@@ -17,8 +17,14 @@ import { IconChevronLeft } from "./Icons";
  */
 export default function SignInPanel({
   landing = false,
+  linkedin = false,
+  linkedinError = null,
   onDone,
 }: {
+  /** The LinkedIn app is configured — see lib/linkedin. */
+  linkedin?: boolean;
+  /** Why the last LinkedIn round-trip came back empty-handed, from ?li=. */
+  linkedinError?: string | null;
   /**
    * This is the first thing a stranger sees, rather than a form they
    * opened on purpose. The map behind it is already carrying the
@@ -103,6 +109,30 @@ export default function SignInPanel({
               </>
             )}
           </div>
+          {/* Primary, and above the email field.
+              Everybody arriving here is being asked to describe
+              themselves professionally, and most of them already have
+              done — on LinkedIn. One tap brings the name and the photo
+              across, which is most of the first onboarding step gone
+              before they have typed anything. The code still works, and
+              is the only route for anybody without a LinkedIn. */}
+          {linkedin && (
+            <>
+              <a
+                href="/api/auth/linkedin/start"
+                className="btn btn-primary w-full"
+                style={{ background: "#0a66c2", boxShadow: "0 10px 22px -12px #0a66c2" }}
+              >
+                <IconLinkedIn size={16} /> Continue with LinkedIn
+              </a>
+              <div className="flex items-center gap-2" aria-hidden="true">
+                <span className="h-px flex-1" style={{ background: "var(--line)" }} />
+                <span className="text-[11px] text-[var(--ink-soft)]">or</span>
+                <span className="h-px flex-1" style={{ background: "var(--line)" }} />
+              </div>
+            </>
+          )}
+
           <div>
             <label className="label" htmlFor="signin-email">
               Email address
@@ -118,6 +148,15 @@ export default function SignInPanel({
               onChange={(e) => setEmail(e.target.value)}
             />
           </div>
+          {!error && linkedinError && (
+            <p className="text-[12.5px] font-medium" style={{ color: "var(--warn)" }}>
+              {linkedinError === "cancelled"
+                ? "LinkedIn sign-in was cancelled. You can use your email instead."
+                : linkedinError === "unavailable"
+                  ? "LinkedIn sign-in isn't switched on yet — your email works."
+                  : "LinkedIn couldn't sign you in. Your email will."}
+            </p>
+          )}
           {error && <p className="text-[12.5px] font-medium text-[var(--warn)]">{error}</p>}
           <button type="submit" disabled={busy} className="btn btn-primary">
             {busy ? "Sending…" : "Send me a code"}

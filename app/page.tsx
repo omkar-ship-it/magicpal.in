@@ -2,6 +2,7 @@ import { getSessionUser } from "@/lib/session";
 import { parseScope, shellPayload } from "@/lib/shell";
 import { DEFAULT_RADIUS_KM } from "@/lib/rules";
 import MapShell from "@/components/MapShellLoader";
+import { linkedinEnabled } from "@/lib/linkedin";
 
 /**
  * The app opens on the map — no landing page.
@@ -15,9 +16,9 @@ import MapShell from "@/components/MapShellLoader";
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ net?: string; panel?: string; join?: string; event?: string }>;
+  searchParams: Promise<{ net?: string; panel?: string; join?: string; event?: string; li?: string }>;
 }) {
-  const { net, panel, join, event } = await searchParams;
+  const { net, panel, join, event, li } = await searchParams;
   const user = await getSessionUser();
 
   // Fetched here rather than in the client: the first thing a visitor has
@@ -52,6 +53,8 @@ export default async function Home({
             ? null
             : "signin"
       }
+      linkedin={linkedinEnabled}
+      linkedinError={li ?? null}
       pendingJoin={join ?? null}
       initialEvent={event ?? null}
       signedIn={Boolean(user)}
