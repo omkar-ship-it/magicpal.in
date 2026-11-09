@@ -258,6 +258,16 @@ h1, h2, h3 {
   outline: none;
 }
 .input:focus-visible { border-color: var(--brand); }
+/**
+ * Room for an icon sitting inside the field.
+ *
+ * Stated here rather than as a `pl-9` utility on the element, because
+ * these component classes live outside `@layer` and Tailwind's utilities
+ * live inside one — so unlayered wins, and the padding utility was
+ * silently losing to `.input`'s own shorthand. The magnifier was drawn
+ * at 12px and the placeholder began at 14px, one on top of the other.
+ */
+.input-icon { padding-left: 36px; }
 
 .label {
   display: block;

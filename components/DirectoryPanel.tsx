@@ -45,7 +45,7 @@ export default function DirectoryPanel({
             <IconSearch size={14} />
           </span>
           <input
-            className="input pl-9"
+            className="input input-icon"
             type="search"
             value={query}
             placeholder={placeholder}
