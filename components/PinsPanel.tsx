@@ -13,7 +13,6 @@ import {
 import { TOPICS, topicById } from "@/lib/intents";
 import Avatar from "./Avatar";
 import PanelNote from "./PanelNote";
-import LockedNote from "./LockedNote";
 import VenuePicker from "./VenuePicker";
 import { type Place } from "./PlaceSearch";
 import { resolveTypedPlace } from "@/lib/resolvePlace";
@@ -28,8 +27,6 @@ import { IconBeacon, IconCheck, IconChevronLeft, IconClock, IconPin, IconPlus, I
  * one line about what you're up for, how long, and who can see it.
  */
 export default function PinsPanel({
-  locked,
-  onLockedProfile,
   pins,
   signedIn,
   onboarded,
@@ -39,9 +36,6 @@ export default function PinsPanel({
   onOpenPerson,
   onSignIn,
 }: {
-  /** Nothing stated: a pin names whoever dropped it. See lib/shell `anonymise`. */
-  locked?: boolean;
-  onLockedProfile?: () => void;
   pins: PinRef[];
   signedIn: boolean;
   onboarded: boolean;
@@ -51,7 +45,6 @@ export default function PinsPanel({
   onOpenPerson: (id: string) => void;
   onSignIn: () => void;
 }) {
-  if (locked) return <LockedNote what="who's out right now" onProfile={onLockedProfile} />;
 
   const [dropping, setDropping] = useState(false);
 

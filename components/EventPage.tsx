@@ -30,7 +30,6 @@ import { IconBeacon, IconCalendar, IconCheck, IconClock, IconPeople, IconPin, Ic
 export default function EventPage({
   event,
   sharing,
-  locked = false,
   signedIn,
   onboarded,
   hasSignals,
@@ -54,7 +53,6 @@ export default function EventPage({
    * withheld is everybody else, here as everywhere. See lib/shell
    * `anonymise`.
    */
-  locked?: boolean;
   signedIn: boolean;
   onboarded: boolean;
   /** False when the viewer has stated no needs, offers or interests. */
@@ -197,9 +195,7 @@ export default function EventPage({
   );
   // The counts live on the section heading rather than under the chips, so
   // the answer and the tally aren't two separate things to read.
-  const rsvpLine = locked
-    ? ""
-    : `${event.going} going${event.capacity != null ? ` of ${event.capacity}` : ""}${
+  const rsvpLine = `${event.going} going${event.capacity != null ? ` of ${event.capacity}` : ""}${
         full && mine !== "going" ? " · full" : ""
       }`;
 
@@ -404,7 +400,7 @@ export default function EventPage({
         </Section>
       )}
 
-      {!locked && extra && extra.attendees.length > 0 && (
+      {extra && extra.attendees.length > 0 && (
         <Section
           title="Who's coming"
           icon={<IconPeople size={12} />}

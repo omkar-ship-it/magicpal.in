@@ -10,7 +10,6 @@ import { IconBeacon, IconCalendar } from "./Icons";
 import { sinceLabel, whenLabel } from "@/lib/time";
 import Avatar from "./Avatar";
 import PanelNote from "./PanelNote";
-import LockedNote from "./LockedNote";
 
 /**
  * What's happening in this network, and what people are saying about it.
@@ -26,7 +25,6 @@ import LockedNote from "./LockedNote";
  * this worth opening rather than scrolling.
  */
 export default function FeedPanel({
-  locked,
   onProfile,
   items,
   loading,
@@ -42,8 +40,6 @@ export default function FeedPanel({
   onChanged,
   onSignIn,
 }: {
-  /** Nothing stated: the feed is a list of who did what. See lib/shell `anonymise`. */
-  locked?: boolean;
   onProfile?: () => void;
   items: FeedItem[];
   loading: boolean;
@@ -60,7 +56,6 @@ export default function FeedPanel({
   onChanged: () => void;
   onSignIn: () => void;
 }) {
-  if (locked) return <LockedNote what="what people are up to" onProfile={onProfile} />;
 
   // Pinned above the early returns: hooks must run in the same order every
   // render, and Date.now() during render is impure — it also stops the

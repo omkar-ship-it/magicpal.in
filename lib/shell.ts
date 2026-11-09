@@ -135,25 +135,9 @@ export type ShellPerson = MapProfile & {
   self?: boolean;
 };
 
-/**
- * Everyone else, with everything that identifies them removed.
- *
- * The map is meant to work as pull rather than push: you say what you
- * need and what you can give, it stays up, and the right person comes to
- * you. That trade only holds if both sides make it — somebody reading a
- * room they have told nothing about themselves is taking the value and
- * leaving the cost, and more practically they are the reason the map
- * fills with faces that cannot be matched on.
- *
- * So until a reader has stated a need, an offer or an interest, they get
- * shape without substance: pins where people are, and nothing to read.
- *
- * Stripped on the server, not blurred in CSS. A blur is a picture of a
- * secret — the names would still be sitting in the payload for anyone who
- * opened devtools, which is a poor promise from a product whose whole
- * subject is who can see you. The id goes too, so nothing on the screen
- * can be turned back into a person by asking another endpoint for it.
- */
+
+
+
 /**
  * Nudge a city-pinned person off the exact centroid, deterministically.
  *
@@ -179,37 +163,6 @@ function scatter<T extends { id: string; lat: number; lng: number; placed: strin
     lng: p.lng + (radiusKm / (111 * Math.cos((p.lat * Math.PI) / 180) || 1)) * Math.cos(angle),
   };
 }
-
-function anonymise(p: ShellPerson): ShellPerson {
-  return {
-    ...scatter(p),
-    id: `hidden-${Math.random().toString(36).slice(2, 11)}`,
-    name: "",
-    headline: null,
-    company: null,
-    bio: null,
-    skills: [],
-    photoUrl: null,
-    locationLabel: null,
-    linkedinUrl: null,
-    instagramUrl: null,
-    websiteUrl: null,
-    lookingFor: [],
-    canHelpWith: [],
-    interests: [],
-    customLookingFor: [],
-    customCanHelpWith: [],
-    customInterests: [],
-    stage: null,
-    workingOn: null,
-    verified: false,
-    verifiedHere: false,
-    connectionStatus: "none",
-    role: undefined,
-  };
-}
-
-
 
 /**
  * You, as a row in your own directory.
@@ -329,14 +282,6 @@ export type ShellPayload = {
    * and no events.
    */
   selfEvent: EventRef | null;
-  /**
-   * The reader has stated nothing, so everyone else arrives anonymised.
-   *
-   * Set by the server, which has already done the stripping — the client
-   * reads it to stop drawing counts and hover cards for rows that have
-   * nothing in them, not to decide what to hide. See `anonymise`.
-   */
-  locked: boolean;
   networks: NetworkOption[];
   waiting: number;
   radiusKm: number;
@@ -436,16 +381,6 @@ export async function shellPayload(opts: {
   // Words somebody typed themselves count every bit as much as a ticked
   // box — otherwise the one person who described exactly what they need is
   // told they have "stated nothing to match on".
-  /**
-   * Hiding people is for members who haven't held up their end — never
-   * for a stranger.
-   *
-   * The reciprocity argument only works against somebody who is already
-   * *on* the map taking value out of it. A visitor who has not signed up
-   * is not free-riding, they are deciding whether to; hiding the product
-   * from them is just a worse shop window, and it showed — sixteen grey
-   * blurs over Hyderabad argued that nobody was there.
-   */
   const hasSignals = Boolean(
     me &&
       ((me.lookingFor?.length ?? 0) > 0 ||
@@ -455,9 +390,6 @@ export async function shellPayload(opts: {
         (me.customCanHelpWith?.length ?? 0) > 0 ||
         (me.customInterests?.length ?? 0) > 0)
   );
-
-  /** Signed in, and still hasn't said a thing. See the note above. */
-  const gated = Boolean(opts.userId) && !hasSignals;
 
   // ------------------------------------------------------------- board
   if (opts.scope.kind === "board") {
@@ -511,7 +443,7 @@ export async function shellPayload(opts: {
       const self = me ? selfRow(me) : null;
       // You are never hidden from yourself — your own pin is how you check
       // that your visibility setting does what you think it does.
-      const roster = gated ? members.map(anonymise) : opts.userId ? members : members.map(scatter);
+      const roster = opts.userId ? members : members.map(scatter);
       const people = self ? [self, ...roster] : roster;
       const surface = board.type as Surface;
       const matches =
@@ -561,8 +493,6 @@ export async function shellPayload(opts: {
         // `memberCount` overridden because toEventRefs can't know it: it
         // builds refs for child rows, where the count shown is the RSVP
         // tally. Here the roster is the people already loaded above.
-        locked: gated,
-        // `members`, not `roster` — the latter is already stripped.
         selfEvent:
           board.type === "event"
             ? { ...(await toEventRefs([board], opts.userId))[0], memberCount: people.length }
@@ -696,15 +626,10 @@ export async function shellPayload(opts: {
     scope: { kind: "open", slug: null, name: "Open network", blurb: null, logoUrl: null, home: null },
     // No `self` to spare here — the open-map query excludes the viewer,
     // who is drawn from `you` instead.
-    people: gated
-      ? withStatus.map(anonymise)
-      : opts.userId
-        ? withStatus
-        : withStatus.map(scatter),
+    people: opts.userId ? withStatus : withStatus.map(scatter),
     matches,
     events: eventRefs,
     selfEvent: null,
-    locked: gated,
     networks,
     waiting,
     radiusKm,

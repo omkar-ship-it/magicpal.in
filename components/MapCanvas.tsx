@@ -148,7 +148,6 @@ export default function MapCanvas({
   bottomInset = 0,
   showZoom = false,
   highlightIds = [],
-  locked = false,
   spread = false,
   chip = false,
   onSelectPerson,
@@ -195,15 +194,6 @@ export default function MapCanvas({
   showZoom?: boolean;
   /** Recommended people — drawn with a ring so the list and map agree. */
   highlightIds?: string[];
-  /**
-   * The reader has stated nothing, so there is nothing to show them.
-   *
-   * The rows arrive already stripped (see `anonymise` in lib/shell); this
-   * only stops the map drawing affordances that would now be empty — a
-   * hover card with no text in it, a click that opens nobody, a "+4" that
-   * counts people the reader is not allowed to meet.
-   */
-  locked?: boolean;
   /**
    * Draw every pin where it says it is, without collapsing piles.
    *
@@ -587,7 +577,6 @@ export default function MapCanvas({
         stacks.map((s) => (
           <Marker key={s.key} latitude={s.lat} longitude={s.lng} anchor="center">
             <FaceStack
-              locked={locked}
               chip={chip}
               group={s.group}
               highlighted={highlighted}
@@ -752,51 +741,18 @@ function Chip({
   );
 }
 
-/**
- * A member who hasn't said anything yet, as seen by another one.
- *
- * Only ever drawn for somebody signed in who has stated no need, offer
- * or interest — never for a visitor, who sees the map as it is.
- *
- * A silhouette rather than a blur. The blurred version read as dirt on
- * the screen: sixteen brown smudges over a city argued that the map was
- * damaged, not that there were people on it. A plain figure in a ring
- * is unmistakably a person whose identity is withheld, which is the
- * thing actually being said.
- */
-function Hidden() {
-  return (
-    <span
-      className="map-pin grid place-items-center rounded-full"
-      aria-hidden="true"
-      style={{
-        width: 34,
-        height: 34,
-        background: "var(--sunk)",
-        color: "color-mix(in srgb, var(--ink-soft) 55%, transparent)",
-        boxShadow: "0 0 0 2px var(--card), var(--shadow)",
-      }}
-    >
-      <IconUser size={17} />
-    </span>
-  );
-}
-
 function Face({
   p,
   lit,
-  locked,
   chip,
   onSelect,
 }: {
   p: MapProfile & { hereNow?: boolean; verified?: boolean };
   lit: boolean;
-  locked?: boolean;
   /** Draw the labelled version — see Chip. */
   chip?: boolean;
   onSelect?: (id: string) => void;
 }) {
-  if (locked) return <Hidden />;
   if (chip && p.name) {
     const needs = askLines(p.lookingFor, p.customLookingFor, "need");
     const offers = askLines(p.canHelpWith, p.customCanHelpWith, "offer");
@@ -849,14 +805,12 @@ function Face({
 function FaceStack({
   group,
   highlighted,
-  locked,
   chip,
   onSelect,
   onOpenStack,
 }: {
   group: Array<MapProfile & { hereNow?: boolean; verified?: boolean }>;
   highlighted: Set<string>;
-  locked?: boolean;
   chip?: boolean;
   onSelect?: (id: string) => void;
   /** The whole pile, handed to the directory. See the +N button below. */
@@ -870,12 +824,7 @@ function FaceStack({
     [group, highlighted]
   );
 
-  const more = (n: number, ids: string[]) =>
-    locked ? (
-      <span className="relative">
-        <Hidden />
-      </span>
-    ) : (
+  const more = (n: number, ids: string[]) => (
     <button
       type="button"
       className="map-pin grid h-[40px] w-[40px] place-items-center rounded-full text-[12px] font-semibold"
@@ -894,7 +843,7 @@ function FaceStack({
     >
       +{n}
     </button>
-    );
+  );
 
   /**
    * Close in, a pile opens out into a ring around where it actually is.
@@ -917,7 +866,7 @@ function FaceStack({
     <span className="pin-scale flex items-center -space-x-3">
       {faces.map((p) => (
         <span key={p.id} className="hover-host relative">
-          <Face p={p} lit={highlighted.has(p.id)} locked={locked} chip={chip && group.length === 1} onSelect={onSelect} />
+          <Face p={p} lit={highlighted.has(p.id)} chip={chip && group.length === 1} onSelect={onSelect} />
         </span>
       ))}
       {extra > 0 && more(extra, sorted.map((p) => p.id))}

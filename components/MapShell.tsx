@@ -127,39 +127,33 @@ export default function MapShell({
   const needsSetup = !signedIn || !initial.hasSignals || myVisibility === "off";
 
   /**
-   * The reader has stated nothing, so the room is shape without substance.
+   * No headcounts for a visitor.
    *
-   * The server has already stripped the rows (lib/shell `anonymise`); this
-   * is only about what the chrome says. Every number goes with them — a
-   * count is the one thing a young map must not volunteer, because the
-   * honest answer is small and reads as "nobody is here" rather than as
-   * "here is what you are missing".
-   */
-  const locked = data.locked;
-  /**
-   * No headcounts for anybody who hasn't earned the room.
-   *
-   * A gated member shouldn't see them, and nor should a visitor — on a
-   * map this young the honest number is the least persuasive fact
+   * On a map this young the honest number is the least persuasive fact
    * available, and the named chips behind the sign-in panel already make
    * the case without it.
    */
-  const hideCounts = locked || !signedIn;
+  const hideCounts = !signedIn;
 
   /**
-   * Signed in, and not yet on the map.
+   * Signed in with nothing to show for it yet.
    *
-   * Somebody who answered the first onboarding question and closed the tab
-   * came back to the About panel and a "finish setting up" checklist —
-   * a different surface, with different buttons, instead of the step they
-   * were standing on. The flow saves after every step precisely so that
-   * coming back is cheap, and then the shell dropped them somewhere else.
+   * Narrowed from "not yet on the map" to "we do not even know their
+   * name". Somebody arriving by LinkedIn has a name and a photo before
+   * they have typed anything, and meeting a three-step form at that
+   * moment is a toll booth in front of a product they have not seen —
+   * so they go to the map, and `OffMapNudge` asks for the rest once they
+   * have a reason to care.
    *
-   * `off` is the column default and the picker no longer offers it, so it
-   * means "never answered" and cannot be a state anybody chose. Nobody
-   * who has finished can be sent back here.
+   * Email sign-up is still sent straight to the form, because there is
+   * genuinely nothing else to show: no name, no face, nothing to put on
+   * a map.
+   *
+   * It still returns people mid-flow to the step they stopped on rather
+   * than to a checklist about it, which is why it keys off the draft
+   * rather than a completion flag.
    */
-  const midOnboarding = signedIn && (!onboarded || myVisibility === "off");
+  const midOnboarding = signedIn && !onboarded;
 
   /**
    * Arriving inside an event opens the event, not the deck.
@@ -387,7 +381,7 @@ export default function MapShell({
     // Not fetched while locked: the feed is a list of who did what, which
     // is the one thing this state withholds. Not fetching beats fetching
     // and hiding.
-    if (next === "feed" && !locked) void loadFeed(data.scope.slug);
+    if (next === "feed") void loadFeed(data.scope.slug);
   }
 
   /**
@@ -509,9 +503,8 @@ export default function MapShell({
           people={shown}
           you={data.you}
           events={data.events}
-          pins={locked ? [] : data.pins}
-          locked={locked}
-          spread={locked || !signedIn}
+          pins={data.pins}
+          spread={!signedIn}
           chip={!signedIn}
           onSelectPin={() => openWin("pins")}
           // Opening Events turns the map into a map of events. Asking
@@ -623,7 +616,6 @@ export default function MapShell({
           <EventPage
             event={data.selfEvent}
             sharing={sharingHome}
-            locked={hideCounts}
             signedIn={signedIn}
             onboarded={onboarded}
             hasSignals={data.hasSignals}
@@ -648,7 +640,6 @@ export default function MapShell({
           </div>
         ) : isOpenNet ? (
           <OpenHome
-            locked={locked}
             signedIn={signedIn}
             hasSignals={data.hasSignals}
             visibility={myVisibility}
@@ -665,7 +656,6 @@ export default function MapShell({
           />
         ) : (
           <CommunityHome
-            locked={locked}
             scope={data.scope}
             events={data.events}
             people={data.people}
@@ -742,7 +732,6 @@ export default function MapShell({
         onFocus={() => focus("feed")}
       >
         <FeedPanel
-          locked={locked}
           onProfile={() => openWin(signedIn ? "profile" : "signin")}
           items={feed}
           loading={feedLoading}
@@ -783,7 +772,6 @@ export default function MapShell({
         onFocus={() => focus("people")}
       >
         <PeoplePanel
-          locked={locked}
           onProfile={() => openWin(signedIn ? "profile" : "signin")}
           people={shown}
           scopeName={data.scope.name}
@@ -807,8 +795,6 @@ export default function MapShell({
         onFocus={() => focus("pins")}
       >
         <PinsPanel
-          locked={locked}
-          onLockedProfile={() => openWin(signedIn ? "profile" : "signin")}
           pins={data.pins}
           signedIn={signedIn}
           onboarded={onboarded}
@@ -839,7 +825,6 @@ export default function MapShell({
           signedIn={signedIn}
           onboarded={onboarded}
           hasSignals={data.hasSignals}
-          locked={locked}
           openSlug={activeEvent}
           onOpenSlug={setActiveEvent}
           /**
@@ -1092,7 +1077,9 @@ export default function MapShell({
         <PublicOptIn networkName={data.scope.name} onDone={() => void load({})} />
       )}
 
-      {signedIn && onboarded && myVisibility === "off" && isOpenNet && <OffMapNudge />}
+      {signedIn && onboarded && (myVisibility === "off" || !data.hasSignals) && isOpenNet && (
+        <OffMapNudge needsPin={myVisibility === "off"} onProfile={() => openWin("profile")} />
+      )}
     </div>
   );
 }
@@ -1282,22 +1269,39 @@ function ReachOut({
   );
 }
 
-function OffMapNudge() {
+/**
+ * The ask, now that it is the only one.
+ *
+ * Arriving by LinkedIn no longer meets a three-step form, so this is
+ * where the rest of the profile gets asked for — which makes two things
+ * that were survivable before into bugs. It was `hidden lg:block`,
+ * invisible on the device most people use. And it only knew about the
+ * missing pin, when the more valuable gap is usually the other one:
+ * somebody can be on the map and still be unmatchable, because the
+ * matcher runs on what you need and what you can give, not on where you
+ * stand.
+ *
+ * Dismissible, and it stays dismissed for the session. A nudge that
+ * cannot be put down is a modal wearing a smaller hat.
+ */
+function OffMapNudge({ needsPin, onProfile }: { needsPin: boolean; onProfile: () => void }) {
   const [shown, setShown] = useState(true);
   if (!shown) return null;
   return (
-    <div className="pointer-events-auto absolute bottom-[96px] right-3 z-20 hidden max-w-[280px] lg:block">
+    <div className="pointer-events-auto absolute inset-x-3 bottom-[96px] z-20 lg:inset-x-auto lg:right-3 lg:max-w-[300px]">
       <div className="card p-3.5">
         <p className="label label-icon m-0">
-          <IconHidden size={12} /> You&rsquo;re not on this map
+          <IconHidden size={12} /> {needsPin ? "You're not on this map yet" : "Nobody can match you yet"}
         </p>
         <p className="mt-1 text-[12.5px] leading-[1.5] text-[var(--ink-soft)]">
-          You can see everyone; nobody can see you. Showing your city is enough to be found without being locatable.
+          {needsPin
+            ? "You can see everyone; nobody can see you. Your city is enough to be found without being locatable."
+            : "Say what you're looking for and what you can help with — it's what puts you in front of the right people."}
         </p>
         <div className="mt-2.5 flex gap-2">
-          <Link href="/you" className="btn btn-primary btn-sm">
-            Choose what to show
-          </Link>
+          <button type="button" className="btn btn-primary btn-sm" onClick={onProfile}>
+            {needsPin ? "Choose what to show" : "Add what you're after"}
+          </button>
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShown(false)}>
             Not now
           </button>

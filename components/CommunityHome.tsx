@@ -36,7 +36,6 @@ export default function CommunityHome({
   scope,
   events,
   people,
-  locked = false,
   memberCount,
   onOpenEvents,
   onOpenPeople,
@@ -52,7 +51,6 @@ export default function CommunityHome({
    * — the rows arrive stripped, so the avatar strip would be blank discs
    * over a number that reads as "this group is small".
    */
-  locked?: boolean;
   memberCount: number;
   onOpenEvents: () => void;
   onOpenPeople: () => void;
@@ -162,7 +160,7 @@ export default function CommunityHome({
 
           {/* Faces, immediately under the name: a community page with no
               people on it reads as empty however large the headcount is. */}
-          {!locked && faces.length > 0 && (
+          {faces.length > 0 && (
             <button
               type="button"
               onClick={onOpenPeople}
@@ -215,8 +213,7 @@ export default function CommunityHome({
           </div>
         )}
 
-        {!locked && (
-        <div className="reveal">
+                <div className="reveal">
           <Stats>
             <Stat icon={<IconPeople size={14} />} value={memberCount} label="members" onClick={onOpenPeople} />
             {/* The number that answers "do I know who these people are?" —
@@ -238,7 +235,6 @@ export default function CommunityHome({
             />
           </Stats>
         </div>
-        )}
 
         {home.details ? (
           <Section title="What this community is for" icon={<IconSparkle size={12} />}>

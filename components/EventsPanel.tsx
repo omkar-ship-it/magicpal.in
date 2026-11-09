@@ -26,7 +26,6 @@ export default function EventsPanel({
   signedIn,
   onboarded,
   hasSignals,
-  locked,
   openSlug,
   onOpenSlug,
   onShow,
@@ -45,7 +44,6 @@ export default function EventsPanel({
   /** False when the viewer has stated no needs, offers or interests. */
   hasSignals: boolean;
   /** Nothing stated, so no rosters or tallies. See lib/shell `anonymise`. */
-  locked?: boolean;
   /** Controlled by the shell so a map click and this list agree. */
   openSlug: string | null;
   onOpenSlug: (slug: string | null) => void;
@@ -138,7 +136,6 @@ export default function EventsPanel({
           signedIn={signedIn}
           onboarded={onboarded}
           hasSignals={hasSignals}
-          locked={locked}
           onShare={() => setSharing(sharing === open.slug ? null : open.slug)}
           onShow={() => onShow(open)}
           onOpen={open.standalone ? () => onOpenBoard(open) : undefined}

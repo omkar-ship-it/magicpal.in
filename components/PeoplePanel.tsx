@@ -7,7 +7,6 @@ import { clusterFacets } from "@/lib/directory";
 import DirectoryPanel from "./DirectoryPanel";
 import PersonRow from "./PersonRow";
 import PanelNote from "./PanelNote";
-import LockedNote from "./LockedNote";
 
 /**
  * Everybody here, as something you can actually search.
@@ -28,7 +27,6 @@ import LockedNote from "./LockedNote";
  * lib/directory: same window, same rows, different question.
  */
 export default function PeoplePanel({
-  locked,
   onProfile,
   people,
   scopeName,
@@ -42,8 +40,6 @@ export default function PeoplePanel({
   onClearCluster,
   onOpenPerson,
 }: {
-  /** Nothing to list: the reader has stated nothing. See lib/shell `anonymise`. */
-  locked?: boolean;
   onProfile?: () => void;
   people: ShellPerson[];
   scopeName: string;
@@ -116,8 +112,6 @@ export default function PeoplePanel({
    * the least persuasive fact available, and the pins behind this panel
    * already make the only argument that works — people are here.
    */
-  if (locked) return <LockedNote what="who's here" onProfile={onProfile} />;
-
   return (
     <DirectoryPanel
       query={query}
