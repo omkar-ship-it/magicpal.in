@@ -80,6 +80,22 @@ export async function identityFromCode({
 }): Promise<LinkedInIdentity | null> {
   if (!linkedinEnabled) return null;
 
+  /**
+   * Said out loud, because the alternative is guessing.
+   *
+   * This exchange is the one part of the flow nobody can rehearse: it
+   * needs a real member consenting, so the first time it runs in anger
+   * is in front of somebody we are trying to keep. If it fails we get
+   * one word in a query string, which is the right amount for them and
+   * useless for us — so the reason goes to the server log.
+   *
+   * Status codes and LinkedIn's own error strings only. No token, no
+   * email, no name: a log is a place personal data goes to be forgotten
+   * about, and the thing that would be most useful here is also the
+   * thing we should least like to leave lying around.
+   */
+  const note = (what: string) => console.warn(`[linkedin] ${what}`);
+
   const tokenRes = await fetch(TOKEN, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -91,15 +107,36 @@ export async function identityFromCode({
       client_secret: process.env.LINKEDIN_CLIENT_SECRET ?? "",
     }),
   }).catch(() => null);
-  if (!tokenRes?.ok) return null;
+  if (!tokenRes) {
+    note("token exchange: request never completed");
+    return null;
+  }
+  if (!tokenRes.ok) {
+    // LinkedIn answers with JSON naming the cause — invalid_redirect_uri,
+    // invalid_client, invalid_grant — which is exactly what we need.
+    const why = await tokenRes.text().catch(() => "");
+    note(`token exchange: ${tokenRes.status} ${why.slice(0, 300)}`);
+    return null;
+  }
 
   const token = (await tokenRes.json().catch(() => null)) as { access_token?: string } | null;
-  if (!token?.access_token) return null;
+  if (!token?.access_token) {
+    note("token exchange: 200 but no access_token in the body");
+    return null;
+  }
 
   const meRes = await fetch(USERINFO, {
     headers: { Authorization: `Bearer ${token.access_token}` },
   }).catch(() => null);
-  if (!meRes?.ok) return null;
+  if (!meRes) {
+    note("userinfo: request never completed");
+    return null;
+  }
+  if (!meRes.ok) {
+    const why = await meRes.text().catch(() => "");
+    note(`userinfo: ${meRes.status} ${why.slice(0, 300)}`);
+    return null;
+  }
 
   const me = (await meRes.json().catch(() => null)) as {
     sub?: string;
@@ -118,7 +155,15 @@ export async function identityFromCode({
    * forgeable — claim somebody's email on LinkedIn, sign in, inherit
    * their account.
    */
-  if (!me?.sub || !me.email || me.email_verified === false) return null;
+  if (!me?.sub || !me.email || me.email_verified === false) {
+    // Which claim, never its value.
+    note(
+      `userinfo: unusable claims — sub=${me?.sub ? "yes" : "missing"} email=${
+        me?.email ? "yes" : "missing"
+      } email_verified=${String(me?.email_verified)}`
+    );
+    return null;
+  }
 
   return {
     sub: me.sub,
