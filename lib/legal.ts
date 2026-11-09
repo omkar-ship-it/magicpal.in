@@ -79,15 +79,24 @@ export function copyrightLine(): string {
  * are joining, and an agreement to the previous wording was an agreement
  * to something that did not say it.
  *
+ * Raised again on removing the "what this notice does not do" paragraph
+ * from the privacy policy. Nothing anybody agreed to actually changed —
+ * that paragraph granted nothing and restricted nothing, it restated
+ * duties the DPDP Act and the GDPR impose whether or not a policy
+ * mentions them. But the log's claim is about *text*, not about
+ * substance, and a row reading 2026-11-05.1 has to keep pointing at the
+ * words that carried that number. Leaving it would have been the first
+ * entry in the log that was not quite true.
+ *
  * The version is written into the consent row, so "when did they agree, and
  * to what" is answerable from the log alone — which is the only question an
  * audit, a complaint or a deletion request ever asks of it. Never reuse a
  * version after editing the text.
  */
-export const LEGAL_VERSION = "2026-11-05.1";
+export const LEGAL_VERSION = "2026-11-09.1";
 
 /** Shown on both documents. Human-readable twin of LEGAL_VERSION. */
-export const LEGAL_EFFECTIVE = "5 November 2026";
+export const LEGAL_EFFECTIVE = "9 November 2026";
 
 /**
  * The single consent kind covering both documents.

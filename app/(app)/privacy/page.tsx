@@ -45,14 +45,6 @@ export default function PrivacyPage() {
           system: the operator can read the production database to fix a fault, answer your request or
           investigate a report. §9 says what that access is limited to.
         </p>
-        <p>
-          <strong>What this notice does not do.</strong> It does not reduce our obligations as a Data
-          Fiduciary under the Digital Personal Data Protection Act, 2023, or as a controller under the UK or
-          EU GDPR. It is not a substitute for your consent, it does not permit any use of your data not
-          described in this policy, and it does not limit your rights under §11 or your right to complain
-          under §12. An early product is still held to the same standard; being unfinished is an explanation,
-          never an excuse.
-        </p>
       </Notice>
 
       <Clause n={1} title="Who is responsible for your data">
