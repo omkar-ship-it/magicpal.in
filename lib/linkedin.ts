@@ -15,6 +15,10 @@
  * somebody else's domain where we cannot explain it.
  */
 
+import { eq } from "drizzle-orm";
+import { db, hasDb } from "./db";
+import { users } from "./db/schema";
+
 const AUTHORIZE = "https://www.linkedin.com/oauth/v2/authorization";
 const TOKEN = "https://www.linkedin.com/oauth/v2/accessToken";
 const USERINFO = "https://api.linkedin.com/v2/userinfo";
@@ -122,4 +126,56 @@ export async function identityFromCode({
     name: me.name?.trim() || null,
     picture: me.picture?.trim() || null,
   };
+}
+
+/**
+ * One LinkedIn member, resolved to one row.
+ *
+ * Separate from the route so the part with the decisions in it can be
+ * driven directly in a test — the HTTP exchange above is thin and the
+ * interesting behaviour is all here: does a second sign-in find the
+ * same person, and where do they land afterwards.
+ *
+ * By subject first, then by verified email. The email arm is what links
+ * somebody who joined with a one-time code months ago to the LinkedIn
+ * button they just pressed, instead of handing them a second, empty
+ * account and a map that has forgotten them.
+ */
+export async function signInWithLinkedIn(
+  who: LinkedInIdentity
+): Promise<{ userId: string; created: boolean } | null> {
+  if (!hasDb || !db) return null;
+
+  let [user] = await db.select().from(users).where(eq(users.linkedinSub, who.sub)).limit(1);
+  if (!user) {
+    [user] = await db.select().from(users).where(eq(users.email, who.email)).limit(1);
+  }
+
+  if (!user) {
+    // New: take the name and picture, which is most of the first
+    // onboarding step done before they have typed anything.
+    const [made] = await db
+      .insert(users)
+      .values({ email: who.email, linkedinSub: who.sub, name: who.name, photoUrl: who.picture })
+      .returning();
+    return { userId: made.id, created: true };
+  }
+
+  /**
+   * Only ever fills blanks.
+   *
+   * Somebody who set their own name or uploaded their own photo chose
+   * those, and a later LinkedIn sign-in is not a reason to overwrite
+   * them with whatever their employer's profile picture happens to be.
+   */
+  await db
+    .update(users)
+    .set({
+      linkedinSub: who.sub,
+      ...(user.name ? {} : { name: who.name }),
+      ...(user.photoUrl ? {} : { photoUrl: who.picture }),
+    })
+    .where(eq(users.id, user.id));
+
+  return { userId: user.id, created: false };
 }

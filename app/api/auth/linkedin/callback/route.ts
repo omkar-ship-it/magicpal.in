@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { eq } from "drizzle-orm";
-import { db, hasDb } from "@/lib/db";
-import { users } from "@/lib/db/schema";
+import { hasDb } from "@/lib/db";
 import { createSession, setSessionCookie } from "@/lib/session";
-import { identityFromCode, linkedinEnabled, LINKEDIN_STATE_COOKIE } from "@/lib/linkedin";
+import {
+  identityFromCode,
+  linkedinEnabled,
+  LINKEDIN_STATE_COOKIE,
+  signInWithLinkedIn,
+} from "@/lib/linkedin";
 
 /**
  * Back from LinkedIn, with a code or with an excuse.
@@ -19,7 +22,7 @@ export async function GET(req: Request) {
   const origin = url.origin;
   const back = (why: string) => NextResponse.redirect(`${origin}/?panel=signin&li=${why}`);
 
-  if (!hasDb || !db || !linkedinEnabled) return back("unavailable");
+  if (!hasDb || !linkedinEnabled) return back("unavailable");
 
   // The member pressed cancel, or LinkedIn refused the app.
   if (url.searchParams.get("error")) return back("cancelled");
@@ -37,53 +40,26 @@ export async function GET(req: Request) {
   const who = await identityFromCode({ code, origin });
   if (!who) return back("failed");
 
+  const resolved = await signInWithLinkedIn(who);
+  if (!resolved) return back("failed");
+
+  await setSessionCookie(await createSession(resolved.userId));
+
   /**
-   * Same person, one row.
+   * Back to the map, and nothing more specific than that.
    *
-   * By LinkedIn's subject first, then by the verified email — which is
-   * what links somebody who signed up with a code months ago to the
-   * LinkedIn button they just pressed, instead of handing them a second,
-   * empty account and a map that has forgotten them.
+   * This used to send everybody to `?panel=profile`, which is right on
+   * the first visit and wrong on every one after it — a member who
+   * finished weeks ago was dropped into the profile editor each time
+   * they signed in, as though the product had forgotten them.
+   *
+   * The shell already knows the difference and knows it better: it has
+   * the whole payload, and `midOnboarding` turns on for anybody with no
+   * pin yet — which is exactly the state a brand-new LinkedIn member is
+   * in, since the name and photo arrive filled but the location does
+   * not. So saying nothing here opens the profile for the people who
+   * need it and the recommendations for everybody else, without this
+   * route guessing from two columns.
    */
-  let [user] = await db.select().from(users).where(eq(users.linkedinSub, who.sub)).limit(1);
-  if (!user) {
-    [user] = await db.select().from(users).where(eq(users.email, who.email)).limit(1);
-  }
-
-  if (!user) {
-    // New: take the name and picture, which is most of the first
-    // onboarding step done before they have typed anything.
-    [user] = await db
-      .insert(users)
-      .values({
-        email: who.email,
-        linkedinSub: who.sub,
-        name: who.name,
-        photoUrl: who.picture,
-      })
-      .returning();
-  } else {
-    /**
-     * Only ever fills blanks.
-     *
-     * Somebody who set their own name or uploaded their own photo chose
-     * those, and a later LinkedIn sign-in is not a reason to overwrite
-     * them with whatever their employer's profile picture happens to be.
-     */
-    await db
-      .update(users)
-      .set({
-        linkedinSub: who.sub,
-        ...(user.name ? {} : { name: who.name }),
-        ...(user.photoUrl ? {} : { photoUrl: who.picture }),
-      })
-      .where(eq(users.id, user.id));
-    user = { ...user, name: user.name ?? who.name, photoUrl: user.photoUrl ?? who.picture };
-  }
-
-  await setSessionCookie(await createSession(user.id));
-
-  // Straight on to the part LinkedIn cannot answer: what they're looking
-  // for and what they can help with.
-  return NextResponse.redirect(`${origin}/?panel=profile`);
+  return NextResponse.redirect(`${origin}/`);
 }
