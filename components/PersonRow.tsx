@@ -141,6 +141,36 @@ export default function PersonRow({
         </div>
       )}
 
+      {/* Your own row says how finished you are, and what to do next.
+          The directory is where somebody checks how they read to the
+          room, so it is the right place to be told the room cannot see
+          half of you yet. Nobody else's row carries this — their
+          completeness is not your business. */}
+      {person.self && person.completion && (
+        <button type="button" onClick={onOpen} className="block w-full text-left tap">
+          <span className="flex items-center justify-between gap-2">
+            <span className="text-[11.5px] font-semibold" style={{ color: "var(--brand)" }}>
+              {person.completion.next} →
+            </span>
+            <span className="text-[11.5px] font-semibold tabular-nums text-[var(--ink-soft)]">
+              {person.completion.percent}%
+            </span>
+          </span>
+          <span
+            className="mt-1 block h-1.5 overflow-hidden rounded-full"
+            style={{ background: "var(--line)" }}
+          >
+            <span
+              className="block h-full rounded-full"
+              style={{
+                width: `${person.completion.percent}%`,
+                background: "linear-gradient(90deg, var(--brand), var(--brand-deep))",
+              }}
+            />
+          </span>
+        </button>
+      )}
+
       {!person.self && (
         <button
           type="button"

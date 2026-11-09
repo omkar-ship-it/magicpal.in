@@ -18,6 +18,7 @@ import { listAcceptedConnections } from "./connections";
 import { livePinsFor, myLivePin, type PinRef } from "./pins";
 import { unreadAlerts } from "./alerts";
 import { DEFAULT_RADIUS_KM, MATCHES_SHOWN, MAX_PIN_REACH_KM } from "./rules";
+import { completion } from "./completion";
 import { cityLabel } from "./cityLabel";
 import { topicById } from "./intents";
 
@@ -96,6 +97,15 @@ export type SelfMarker = {
   placed: "exact" | "base";
   /** `off` still draws, muted: it's your own screen, and it answers the question. */
   visibility: "off" | "base" | "exact" | "live";
+  /**
+   * How finished you are, and the next thing worth doing.
+   *
+   * Null once it reaches a hundred — a progress ring on a finished
+   * profile is a reminder of nothing, and the marker is cleaner without
+   * it. Only ever on your own marker; nobody else's completeness is any
+   * of your business. See lib/completion.
+   */
+  completion: { percent: number; next: string } | null;
 };
 
 /**
@@ -125,6 +135,10 @@ export type ShellPerson = MapProfile & {
    * an accepted connection — `accepted` is never emitted.
    */
   connectionStatus?: "connected" | "pending" | "none";
+  /**
+   * Your own progress, on your own row. See SelfMarker.completion.
+   */
+  completion?: { percent: number; next: string } | null;
   /**
    * This is the viewer.
    *
@@ -178,7 +192,7 @@ function scatter<T extends { id: string; lat: number; lng: number; placed: strin
  * "where would I be", and the profile panel is where the published version
  * is stated.
  */
-function selfRow(me: {
+function selfRow(progress: ShellPerson["completion"], me: {
   id: string;
   name: string | null;
   headline: string | null;
@@ -238,6 +252,7 @@ function selfRow(me: {
     active: true,
     unplaced: !point,
     self: true,
+    completion: progress,
   };
 }
 
@@ -362,6 +377,18 @@ export async function shellPayload(opts: {
 
   const connections = accepted.length;
 
+  /**
+   * Computed once and attached to both places the viewer sees themselves:
+   * the marker on the map and their row in the directory. Two surfaces,
+   * one number — a profile that reads 60% in a list and 80% on a pin is
+   * worse than no number at all.
+   */
+  const selfProgress = me ? completion(me) : null;
+  const selfCompletion =
+    selfProgress && selfProgress.percent < 100 && selfProgress.next
+      ? { percent: selfProgress.percent, next: selfProgress.next }
+      : null;
+
   // Drawn from the row directly rather than through place(), which exists to
   // decide what *other* people may see. You always get your real position,
   // including when you're off the map — that's the point of showing it.
@@ -375,6 +402,7 @@ export async function shellPayload(opts: {
           lng: me.visibility === "base" ? (me.baseLng ?? me.lng!) : (me.lng ?? me.baseLng!),
           placed: me.visibility === "base" ? "base" : "exact",
           visibility: (me.visibility as SelfMarker["visibility"]) ?? "off",
+          completion: selfCompletion,
         }
       : null;
 
@@ -440,7 +468,7 @@ export async function shellPayload(opts: {
         opts.userId ? similarCandidates(opts.userId) : new Map<string, number>(),
       ]);
       // You, at the top of your own board's list.
-      const self = me ? selfRow(me) : null;
+      const self: ShellPerson | null = me ? selfRow(selfCompletion, me) : null;
       // You are never hidden from yourself — your own pin is how you check
       // that your visibility setting does what you think it does.
       const roster = opts.userId ? members : members.map(scatter);
@@ -589,7 +617,7 @@ export async function shellPayload(opts: {
 
   // First, because it is the one row whose answer the reader already knows
   // and is checking rather than discovering.
-  const self = me ? selfRow(me) : null;
+  const self: ShellPerson | null = me ? selfRow(selfCompletion, me) : null;
   const people = [...(self ? [self] : []), ...placed, ...unplaced];
 
   const matches = me?.name

@@ -559,6 +559,22 @@ export default function MapCanvas({
               }}
             >
               <Avatar name={you.name} photoUrl={you.photoUrl} size={42} ring={3} />
+              {/* A ring that closes as the profile fills.
+                  Drawn around your own face because that is where the
+                  question lives — "how do I look to this room" — and a
+                  number on a pin is read without being opened, which a
+                  panel is not. Gone at a hundred: a full ring says
+                  nothing a plain face doesn't. */}
+              {you.completion && (
+                <span
+                  className="pointer-events-none absolute -inset-[3px] rounded-full"
+                  style={{
+                    background: `conic-gradient(var(--brand) ${you.completion.percent}%, color-mix(in srgb, var(--ink-soft) 25%, transparent) 0)`,
+                    WebkitMask: "radial-gradient(circle, transparent 0 22px, #000 22px)",
+                    mask: "radial-gradient(circle, transparent 0 22px, #000 22px)",
+                  }}
+                />
+              )}
             </span>
             <span
               className="pointer-events-none absolute left-1/2 top-full mt-1 -translate-x-1/2 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[9.5px] font-bold"
@@ -567,7 +583,11 @@ export default function MapCanvas({
                 color: "#fff",
               }}
             >
-              {you.visibility === "off" ? "Hidden" : "You"}
+              {you.completion
+                ? `${you.completion.percent}%`
+                : you.visibility === "off"
+                  ? "Hidden"
+                  : "You"}
             </span>
           </span>
         </Marker>
