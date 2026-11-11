@@ -79,7 +79,15 @@ export default function PeoplePanel({
   const active = facets.find((f) => f.id === facet) ?? null;
 
   const filters = inCluster
-    ? facets.map((f) => ({ id: f.id, label: f.label, count: f.id === "all" ? undefined : f.count }))
+    ? facets.map((f) => ({
+        id: f.id,
+        label: f.label,
+        // "Everyone" carries the total now rather than nothing: it is the
+        // menu's resting label, and a control reading just "Everyone"
+        // tells you less than the row of chips it replaced.
+        count: f.count,
+        group: f.group,
+      }))
     : [
         { id: "all", label: "Everywhere" },
         ...[...tally.entries()]

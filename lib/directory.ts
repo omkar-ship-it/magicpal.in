@@ -26,6 +26,17 @@ export type Facet = {
   id: string;
   label: string;
   count: number;
+  /**
+   * The heading this sits under in the filter menu.
+   *
+   * The reason the flat row read as clutter: "Worth meeting", "Offers
+   * peers" and "Needs career advice" are three different kinds of
+   * question — is this one worth my time, what can they do for me, what
+   * can I do for them — and a single row of chips says they are all the
+   * same kind. Ungrouped entries sit at the top, which is where the two
+   * that are not about a topic belong.
+   */
+  group?: string;
   /** Membership, precomputed: the list filters with a set lookup. */
   ids: Set<string>;
 };
@@ -56,6 +67,8 @@ const MIN_FOR_FACETS = 16;
  * One that holds everybody narrows nothing, and one that holds a single
  * person is a row with extra steps. Both were on screen.
  */
+const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
 function divides(count: number, total: number): boolean {
   return count >= 2 && count <= total * 0.8;
 }
@@ -109,7 +122,11 @@ export function clusterFacets(
           // field" — and prefixed with Offers/Needs they became chips a
           // whole row wide. Eight of those buried the list underneath
           // them, which is the one thing a filter must never do.
-          label: `${side === "offer" ? "Offers" : "Needs"} ${t?.short ?? topicId}`,
+          // No "Offers"/"Needs" prefix any more: the menu groups these
+          // under a heading that says which side they are, so repeating
+          // it on every row was the same word eight times.
+          label: capitalise(t?.short ?? topicId),
+          group: side === "offer" ? "Can help with" : "Looking for",
           count: ids.size,
           ids,
         };
