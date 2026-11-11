@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { IconCheck, IconChevronDown, IconSearch } from "./Icons";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { IconCheck, IconChevronLeft, IconChevronRight, IconSearch } from "./Icons";
 
 export type DirectoryFilter = {
   id: string;
   label: string;
   count?: number;
-  /** Heading this sits under when the filters become a menu. */
+  /** The axis in words, for the chip's accessible name. */
   group?: string;
+  /** The axis in colour. See the note on Facet in lib/directory. */
+  tone?: "need" | "offer";
 };
 
 /**
@@ -48,10 +50,7 @@ export default function DirectoryPanel({
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {/* Raised, so the filter menu opens over the list rather than
-          under it. The list is a sibling, not a parent, so it cannot
-          clip the menu — only stack above it. */}
-      <div className="relative z-20 flex-none pb-2.5">
+      <div className="relative flex-none pb-2.5">
         <div className="relative">
           <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-soft)]">
             <IconSearch size={14} />
@@ -80,22 +79,28 @@ export default function DirectoryPanel({
 }
 
 /**
- * Chips when there are a few, one menu when there are many.
+ * One row of chips that scrolls sideways, and admits that it does.
  *
- * Not inconsistency — a threshold. Three options are faster to read than
- * to open, and a dropdown over them costs a tap to see what you could
- * already see. Eight is the opposite: at panel width they wrapped to
- * four rows of chrome above the list they were filtering, which on a
- * stack of sixteen people left room for one of them.
+ * The standing objection to a horizontal rail is that it hides its own
+ * tail, so the filter you want is always the one off-screen. That is a
+ * real failure of rails that are built carelessly, and it is a problem
+ * with affordances rather than with the idea: a fade at each live edge
+ * says there is more that way, arrows move it a screenful at a time
+ * where there is a pointer to use them, and the active chip is scrolled
+ * back into view so a narrowing you set earlier is never invisible.
  *
- * The menu also fixes what shortening the labels could not. A flat row
- * implies every chip is the same kind of question. These are three
- * kinds — is this person worth my time, what can they help with, what
- * are they after — and a heading over each group is the whole
- * explanation, stated once instead of repeated on every chip.
+ * What the rail buys over a menu is that the options are *there*. A
+ * dropdown costs a tap before anything can be read, and on the one
+ * surface whose job is "show me these sixteen people" that tap is the
+ * whole interaction. Chips are also direct: see it, hit it.
+ *
+ * The axis is carried in colour instead of a heading, because a heading
+ * needs a second row and the row is the point. Green is what somebody
+ * can help with, red is what they are after — the same two colours the
+ * person cards directly underneath print those words in, so the code is
+ * taught on the same screen it is used on. `group` repeats it in words
+ * for the accessible name, since colour alone never carries meaning.
  */
-const INLINE_MAX = 4;
-
 function FilterControl({
   filters,
   active,
@@ -105,39 +110,82 @@ function FilterControl({
   active?: string;
   onPick?: (id: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const box = useRef<HTMLDivElement | null>(null);
+  const rail = useRef<HTMLDivElement | null>(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
 
-  /** Dismissed by the two gestures everybody already knows. */
+  const measure = useCallback(() => {
+    const el = rail.current;
+    if (!el) return;
+    // A couple of pixels of slack: sub-pixel widths otherwise leave a
+    // fade showing on a rail that is already at its end.
+    setEdges({
+      left: el.scrollLeft > 2,
+      right: el.scrollLeft + el.clientWidth < el.scrollWidth - 2,
+    });
+  }, []);
+
   useEffect(() => {
-    if (!open) return;
-    const away = (e: MouseEvent) => {
-      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
-    };
-    const esc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", away);
-    document.addEventListener("keydown", esc);
+    const el = rail.current;
+    if (!el) return;
+    measure();
+    el.addEventListener("scroll", measure, { passive: true });
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
     return () => {
-      document.removeEventListener("mousedown", away);
-      document.removeEventListener("keydown", esc);
+      el.removeEventListener("scroll", measure);
+      ro.disconnect();
     };
-  }, [open]);
+  }, [measure, filters.length]);
 
-  if (filters.length <= INLINE_MAX) {
-    return (
-      <div className="mt-2 flex flex-wrap gap-1.5">
+  /** Bring the current filter back into view, so one set earlier and
+   *  scrolled past is never a narrowing you cannot see. */
+  useEffect(() => {
+    const el = rail.current?.querySelector('[data-on="true"]') as HTMLElement | null;
+    el?.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" });
+  }, [active]);
+
+  const nudge = (dir: 1 | -1) => {
+    const el = rail.current;
+    if (!el) return;
+    el.scrollBy({ left: dir * Math.max(el.clientWidth - 72, 120), behavior: "smooth" });
+  };
+
+  return (
+    <div className="relative mt-2">
+      <div ref={rail} className="scroll-none flex gap-1.5 overflow-x-auto scroll-smooth pb-0.5">
         {filters.map((f) => {
           const on = f.id === active;
+          const tint = f.tone === "offer" ? "var(--offer)" : f.tone === "need" ? "var(--need)" : null;
           return (
             <button
               key={f.id}
               type="button"
-              className="chip-toggle tap"
+              className="chip-toggle tap flex-none"
               data-on={on ? "true" : "false"}
               aria-pressed={on}
+              // Colour never carries the axis on its own.
+              aria-label={f.group ? `${f.label} — ${f.group.toLowerCase()}` : f.label}
+              title={f.group}
               onClick={() => onPick?.(f.id)}
+              /**
+               * Selected is a fill; unselected is an outline. Shape, not
+               * hue — the default active colour and the "can help with"
+               * tone are nearly the same green in dark mode, so a reader
+               * could not tell a selected chip from an offer chip by
+               * colour alone.
+               *
+               * The fill's text is `--card`, the panel's own background:
+               * the tones are dark in the light theme and light in the
+               * dark one, and the surface colour is the only value that
+               * is guaranteed to contrast with all of them in both.
+               */
+              style={
+                on
+                  ? { borderColor: tint ?? "var(--good)", background: tint ?? "var(--good)", color: "var(--card)" }
+                  : tint
+                    ? { borderColor: `color-mix(in srgb, ${tint} 38%, var(--line))`, color: tint }
+                    : undefined
+              }
             >
               {on && <IconCheck size={11} />}
               {f.label}
@@ -146,88 +194,52 @@ function FilterControl({
           );
         })}
       </div>
-    );
-  }
 
-  const current = filters.find((f) => f.id === active) ?? filters[0];
-  /* The first entry is the reset — "Everyone", "Everywhere" — so anything
-     else is a narrowing, and the control says so in colour. A filter you
-     forgot you set is the one real hazard of putting them behind a menu. */
-  const narrowing = current.id !== filters[0].id;
+      {/* The tail, made visible. Each edge only appears when there is
+          genuinely more that way, so an empty fade never implies content
+          that is not there. */}
+      <Edge side="left" show={edges.left} onNudge={() => nudge(-1)} />
+      <Edge side="right" show={edges.right} onNudge={() => nudge(1)} />
+    </div>
+  );
+}
 
-  /** Ungrouped first, then each heading once, in the order given. */
-  const groups: Array<{ name: string | null; items: DirectoryFilter[] }> = [];
-  for (const f of filters) {
-    const name = f.group ?? null;
-    const last = groups[groups.length - 1];
-    if (last && last.name === name) last.items.push(f);
-    else groups.push({ name, items: [f] });
-  }
-
+/**
+ * A fade everywhere, plus an arrow where there is a pointer to use it.
+ *
+ * A phone swipes the rail and needs no button; a laptop with a plain
+ * mouse has no horizontal gesture at all, which is the case where a rail
+ * genuinely does strand its tail.
+ */
+function Edge({ side, show, onNudge }: { side: "left" | "right"; show: boolean; onNudge: () => void }) {
+  if (!show) return null;
+  const isLeft = side === "left";
   return (
-    <div ref={box} className="relative mt-2">
+    <>
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-y-0 w-10"
+        style={{
+          [isLeft ? "left" : "right"]: 0,
+          background: `linear-gradient(to ${isLeft ? "right" : "left"}, var(--card), transparent)`,
+        }}
+      />
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        aria-haspopup="listbox"
-        className="chip-toggle tap w-full justify-between"
-        data-on={narrowing ? "true" : "false"}
+        onClick={onNudge}
+        aria-label={isLeft ? "Scroll filters left" : "Scroll filters right"}
+        tabIndex={-1}
+        className="absolute top-1/2 hidden h-6 w-6 -translate-y-1/2 place-items-center rounded-full border sm:grid"
+        style={{
+          [isLeft ? "left" : "right"]: 0,
+          background: "var(--card)",
+          borderColor: "var(--line)",
+          color: "var(--ink-soft)",
+          boxShadow: "var(--shadow-lift)",
+        }}
       >
-        <span className="flex min-w-0 items-center gap-1.5">
-          {narrowing && <IconCheck size={11} />}
-          <span className="truncate">{current.label}</span>
-          {current.count != null && current.count > 0 && <span className="opacity-60">{current.count}</span>}
-        </span>
-        <IconChevronDown size={13} />
+        {isLeft ? <IconChevronLeft size={13} /> : <IconChevronRight size={13} />}
       </button>
-
-      {open && (
-        <div
-          role="listbox"
-          className="absolute inset-x-0 top-full z-30 mt-1 max-h-[280px] overflow-y-auto rounded-xl border p-1"
-          style={{
-            background: "var(--card)",
-            borderColor: "var(--line)",
-            boxShadow: "var(--shadow-lift)",
-          }}
-        >
-          {groups.map((g) => (
-            <div key={g.name ?? "_"}>
-              {g.name && (
-                <p className="px-2 pb-0.5 pt-2 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-soft)]">
-                  {g.name}
-                </p>
-              )}
-              {g.items.map((f) => {
-                const on = f.id === current.id;
-                return (
-                  <button
-                    key={f.id}
-                    type="button"
-                    role="option"
-                    aria-selected={on}
-                    onClick={() => {
-                      onPick?.(f.id);
-                      setOpen(false);
-                    }}
-                    className="tap flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12.5px]"
-                    style={on ? { background: "color-mix(in srgb, var(--brand) 12%, transparent)" } : undefined}
-                  >
-                    <span className="w-3 flex-none" style={{ color: "var(--brand)" }}>
-                      {on && <IconCheck size={12} />}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate font-medium">{f.label}</span>
-                    {f.count != null && f.count > 0 && (
-                      <span className="flex-none text-[11.5px] tabular-nums text-[var(--ink-soft)]">{f.count}</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+    </>
   );
 }

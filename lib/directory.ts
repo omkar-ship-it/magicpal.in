@@ -27,16 +27,21 @@ export type Facet = {
   label: string;
   count: number;
   /**
-   * The heading this sits under in the filter menu.
+   * Which axis this chip belongs to, in words and in colour.
    *
-   * The reason the flat row read as clutter: "Worth meeting", "Offers
-   * peers" and "Needs career advice" are three different kinds of
-   * question — is this one worth my time, what can they do for me, what
-   * can I do for them — and a single row of chips says they are all the
-   * same kind. Ungrouped entries sit at the top, which is where the two
-   * that are not about a topic belong.
+   * The reason a flat row read as clutter: "Worth meeting", "Peers" and
+   * "Career advice" are three different kinds of question — is this one
+   * worth my time, what can they do for me, what can I do for them — and
+   * an undifferentiated row says they are all the same kind.
+   *
+   * Carried as a tone rather than as a heading so the row can stay one
+   * row. The two colours are the ones the person cards underneath
+   * already use for "Can help with" and "Looking for", so the code is
+   * taught on the same screen it is used on; `group` is the same fact in
+   * words, for the chip's accessible name.
    */
   group?: string;
+  tone?: "need" | "offer";
   /** Membership, precomputed: the list filters with a set lookup. */
   ids: Set<string>;
 };
@@ -127,6 +132,7 @@ export function clusterFacets(
           // it on every row was the same word eight times.
           label: capitalise(t?.short ?? topicId),
           group: side === "offer" ? "Can help with" : "Looking for",
+          tone: side,
           count: ids.size,
           ids,
         };

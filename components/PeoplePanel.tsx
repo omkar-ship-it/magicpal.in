@@ -82,11 +82,11 @@ export default function PeoplePanel({
     ? facets.map((f) => ({
         id: f.id,
         label: f.label,
-        // "Everyone" carries the total now rather than nothing: it is the
-        // menu's resting label, and a control reading just "Everyone"
-        // tells you less than the row of chips it replaced.
+        // "Everyone" carries the total: it is the chip you come back to,
+        // and one reading just "Everyone" says less than its neighbours.
         count: f.count,
         group: f.group,
+        tone: f.tone,
       }))
     : [
         { id: "all", label: "Everywhere" },
