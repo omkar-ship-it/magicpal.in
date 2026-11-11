@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { JobOrigin, JobRef } from "@/lib/jobs";
 import type { SelfMarker } from "@/lib/shell";
 import {
@@ -13,7 +13,7 @@ import {
   jobIsPlaced,
   jobModeLabel,
 } from "@/lib/rules";
-import { TOPICS, topicById } from "@/lib/intents";
+import { cityLabel } from "@/lib/cityLabel";
 import { resolveTypedPlace } from "@/lib/resolvePlace";
 import Avatar from "./Avatar";
 import PanelNote from "./PanelNote";
@@ -27,6 +27,7 @@ import {
   IconGlobe,
   IconPin,
   IconPlus,
+  IconSearch,
   IconX,
 } from "./Icons";
 
@@ -71,7 +72,54 @@ export default function JobsPanel({
   onProfile: () => void;
 }) {
   const [posting, setPosting] = useState(false);
+  const [q, setQ] = useState("");
+  /**
+   * Your city, from your own profile label.
+   *
+   * The default, not a suggestion. Almost nobody opens a job board to
+   * browse the planet — they want to know what is going on where they
+   * are — and a list that opens on "everywhere" buries the four roles
+   * down the road under forty that are not. Widening is one tap, and the
+   * chip says the city by name so the narrowing is never invisible.
+   */
+  const myCity = cityLabel(you?.placeLabel ?? null) || null;
+  const [nearOnly, setNearOnly] = useState(Boolean(myCity));
 
+  const mineCount = jobs.filter((j) => j.mine).length;
+
+  /**
+   * One box over everything the role says.
+   *
+   * The same reach the people directory has, and over the same kind of
+   * material: nobody hunts for work by picking a category, they type
+   * "payments" or "design" or the name of a company they would like to
+   * work at. Free text in, free text searched.
+   */
+  const needle = q.trim().toLowerCase();
+  const shown = useMemo(
+    () =>
+      jobs.filter((j) => {
+        // Remote roles survive every city filter, and that is not a
+        // loophole — a remote job genuinely is available from where you
+        // are, which is the whole claim it is making.
+        if (nearOnly && myCity && jobIsPlaced(j.workMode) && cityLabel(j.placeLabel) !== myCity) return false;
+        if (!needle) return true;
+        return [j.title, j.company, j.blurb ?? "", j.placeLabel ?? "", jobModeLabel(j.workMode), j.person.name]
+          .join(" ")
+          .toLowerCase()
+          .includes(needle);
+      }),
+    [jobs, needle, nearOnly, myCity]
+  );
+  const narrowed = needle.length > 0 || (nearOnly && Boolean(myCity));
+  /** Where the "Remote" group starts, so it can be labelled rather than
+   *  left looking like the furthest-away roles. Only meaningful when
+   *  there is an origin — without one the list is by recency. */
+  const firstRemote = origin ? shown.findIndex((j) => !j.mine && j.distanceKm == null) : -1;
+
+  /* Below every hook, deliberately. React counts hooks per render, so an
+     early return above the useMemo changes the count the moment this
+     flips and the panel throws instead of opening the form. */
   if (posting) {
     return (
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -87,12 +135,6 @@ export default function JobsPanel({
     );
   }
 
-  const mineCount = jobs.filter((j) => j.mine).length;
-  /** Where the "Remote" group starts, so it can be labelled rather than
-   *  left looking like the furthest-away roles. Only meaningful when
-   *  there is an origin — without one the list is by recency. */
-  const firstRemote = origin ? jobs.findIndex((j) => !j.mine && j.distanceKm == null) : -1;
-
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto">
       {jobs.length === 0 ? (
@@ -102,20 +144,97 @@ export default function JobsPanel({
         </PanelNote>
       ) : (
         <>
+          <div className="relative">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-soft)]">
+              <IconSearch size={14} />
+            </span>
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search roles, companies, what the work is"
+              aria-label="Search roles"
+              className="input input-icon"
+            />
+            {q && (
+              <button
+                type="button"
+                onClick={() => setQ("")}
+                aria-label="Clear search"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--ink-soft)] tap"
+              >
+                <IconX size={13} />
+              </button>
+            )}
+          </div>
+
+          {/* Only offered when there is a city to offer. Somebody with no
+              location on their profile has no "here" to narrow to, and a
+              chip that cannot do anything is worse than no chip. */}
+          {myCity && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                className="chip-toggle tap"
+                data-on={nearOnly ? "true" : "false"}
+                aria-pressed={nearOnly}
+                onClick={() => setNearOnly(true)}
+              >
+                {nearOnly && <IconCheck size={11} />}
+                In {myCity}
+              </button>
+              <button
+                type="button"
+                className="chip-toggle tap"
+                data-on={!nearOnly ? "true" : "false"}
+                aria-pressed={!nearOnly}
+                onClick={() => setNearOnly(false)}
+              >
+                {!nearOnly && <IconCheck size={11} />}
+                Anywhere
+              </button>
+            </div>
+          )}
+
+          {narrowed && (
+            <p className="px-0.5 text-[11.5px] font-semibold text-[var(--ink-soft)]">
+              {shown.length} of {jobs.length} {jobs.length === 1 ? "role" : "roles"}
+            </p>
+          )}
+
           <OriginNote origin={origin} signedIn={signedIn} onProfile={onProfile} />
-          <ul className="stagger flex flex-col gap-2">
-            {jobs.map((job, i) => (
-              <li key={job.id}>
-                {i === firstRemote && <GroupLabel n={jobs.length - firstRemote} />}
-                <JobCard
-                  job={job}
-                  onChanged={onChanged}
-                  onShow={() => onShow(job)}
-                  onOpenPerson={() => onOpenPerson(job.person.id)}
-                />
-              </li>
-            ))}
-          </ul>
+
+          {shown.length === 0 ? (
+            <PanelNote title="Nothing matches that">
+              {needle && nearOnly && myCity ? (
+                <>
+                  No role in {myCity} matches &ldquo;{q.trim()}&rdquo;.{" "}
+                  <button
+                    type="button"
+                    className="font-semibold text-[var(--brand)] hover:underline"
+                    onClick={() => setNearOnly(false)}
+                  >
+                    Look anywhere
+                  </button>
+                </>
+              ) : (
+                <>Try fewer words, or a company name.</>
+              )}
+            </PanelNote>
+          ) : (
+            <ul className="stagger flex flex-col gap-2">
+              {shown.map((job, i) => (
+                <li key={job.id}>
+                  {i === firstRemote && <GroupLabel n={shown.length - firstRemote} />}
+                  <JobCard
+                    job={job}
+                    onChanged={onChanged}
+                    onShow={() => onShow(job)}
+                    onOpenPerson={() => onOpenPerson(job.person.id)}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
         </>
       )}
 
@@ -194,7 +313,7 @@ function JobCard({
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const topic = topicById(job.topic ?? "");
+  const [open, setOpen] = useState(false);
   const placed = jobIsPlaced(job.workMode);
 
   async function close() {
@@ -233,7 +352,29 @@ function JobCard({
         </span>
       </div>
 
-      {job.blurb && <p className="mt-1.5 text-[12.5px] leading-[1.45]">{job.blurb}</p>}
+      {/* Free text, so it can be a paragraph. Clamped on the card and
+          shown whole once somebody expands it — a directory you scan and a
+          description you read are two different jobs for one string. */}
+      {job.blurb && (
+        <p
+          className="mt-1.5 whitespace-pre-line text-[12.5px] leading-[1.45]"
+          style={open ? undefined : { display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}
+        >
+          {/* Collapsed, the paragraph breaks are spent on nothing: a blank
+              line costs one of the three visible lines and shows the reader
+              no words. Expanded, they are the shape the author wrote. */}
+          {open ? job.blurb : job.blurb.replace(/\n{2,}/g, "\n")}
+        </p>
+      )}
+      {job.blurb && job.blurb.length > 150 && (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="mt-0.5 text-[11.5px] font-semibold text-[var(--brand)] hover:underline"
+        >
+          {open ? "Less" : "More"}
+        </button>
+      )}
 
       <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11.5px] text-[var(--ink-soft)]">
         {job.placeLabel && (
@@ -246,15 +387,6 @@ function JobCard({
           {job.daysLeft === 0 ? "closes today" : job.daysLeft === 1 ? "1 day left" : `${job.daysLeft} days left`}
         </span>
       </p>
-
-      {topic && (
-        <span
-          className="pill mt-1.5"
-          style={{ background: "color-mix(in srgb, var(--brand) 12%, transparent)", color: "var(--brand)" }}
-        >
-          {topic.need}
-        </span>
-      )}
 
       <button type="button" onClick={onOpenPerson} className="mt-2.5 flex items-center gap-2 text-left tap">
         <Avatar name={job.person.name} photoUrl={job.person.photoUrl} size={26} />
@@ -351,7 +483,6 @@ function PostJob({
   const [typed, setTyped] = useState("");
   const [applyUrl, setApplyUrl] = useState("");
   const [days, setDays] = useState<number>(DEFAULT_JOB_DAYS);
-  const [topic, setTopic] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -396,7 +527,6 @@ function PostJob({
           placeLabel: needsPlace ? where!.label : undefined,
           applyUrl: applyUrl || undefined,
           days,
-          topic: topic || undefined,
         }),
       });
       const data = await res.json();
@@ -446,19 +576,20 @@ function PostJob({
 
       <div>
         <label className="label" htmlFor="job-blurb">
-          One line about it (optional)
+          About the role (optional)
         </label>
         <textarea
           id="job-blurb"
           className="input"
-          rows={2}
+          rows={5}
           maxLength={MAX_JOB_BLURB}
-          placeholder="Payments team, four engineers, you'd own the ledger rewrite."
+          placeholder={"Payments team, four engineers. You'd own the ledger rewrite.\n\nWe care more about having shipped something hard than about years. Happy to talk before you decide whether to apply."}
           value={blurb}
           onChange={(e) => setBlurb(e.target.value)}
         />
         <p className="mt-1.5 text-[12px] leading-[1.45] text-[var(--ink-soft)]">
-          The specific thing is what makes somebody read the rest.
+          Write it however you like — the specific thing is what makes somebody read the rest. This is also what
+          people search, so the words you&rsquo;d want them to find it by are worth including.
         </p>
       </div>
 
@@ -559,25 +690,6 @@ function PostJob({
         <p className="mt-1.5 text-[12px] leading-[1.45] text-[var(--ink-soft)]">
           It takes itself down afterwards. You can close it sooner the moment it&rsquo;s filled.
         </p>
-      </div>
-
-      <div>
-        <p className="label">About (optional)</p>
-        <div className="flex flex-wrap gap-1.5">
-          {TOPICS.slice(0, 6).map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className="chip-toggle tap"
-              data-on={topic === t.id ? "true" : "false"}
-              aria-pressed={topic === t.id}
-              onClick={() => setTopic(topic === t.id ? "" : t.id)}
-            >
-              {topic === t.id && <IconCheck size={11} />}
-              {t.need}
-            </button>
-          ))}
-        </div>
       </div>
 
       {error && <p className="text-[12.5px] font-medium text-[var(--warn)]">{error}</p>}

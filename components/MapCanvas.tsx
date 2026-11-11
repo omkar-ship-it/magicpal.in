@@ -143,7 +143,7 @@ export default function MapCanvas({
   jobs = [],
   onSelectPin,
   onSelectJob,
-  eventsOnly = false,
+  layer = "people",
   activeEventSlug = null,
   initialLat,
   initialLng,
@@ -179,13 +179,19 @@ export default function MapCanvas({
   onSelectPin?: (id: string) => void;
   onSelectJob?: (id: string) => void;
   /**
-   * Events instead of faces.
+   * Which single thing the map is of.
    *
-   * When somebody opens Events they're asking what's happening, not who's
-   * nearby — and a map carrying both at once answers neither question well,
-   * since the events disappear into a crowd of people.
+   * One layer at a time, because each panel asks a different question and
+   * a map carrying all three answers none of them: open Events and the
+   * evenings disappear into a crowd of faces; open Jobs and the offices
+   * do. Somebody who opened a panel has already said which question they
+   * are asking, so the map follows rather than hedging.
+   *
+   * `people` is the default and carries the live pins with it — somebody
+   * in a café two streets away right now is the most time-sensitive thing
+   * on the screen, and it belongs with the faces.
    */
-  eventsOnly?: boolean;
+  layer?: "people" | "events" | "jobs";
   activeEventSlug?: string | null;
   initialLat: number;
   initialLng: number;
@@ -521,8 +527,9 @@ export default function MapCanvas({
     >
       {showZoom && <NavigationControl position="bottom-right" showCompass={false} />}
 
-      {events.map((ev) =>
-        ev.lat != null && ev.lng != null ? (
+      {layer === "events" &&
+        events.map((ev) =>
+          ev.lat != null && ev.lng != null ? (
           <Marker key={ev.slug} latitude={ev.lat} longitude={ev.lng} anchor="bottom">
             <span className="hover-host relative">
               <button
@@ -543,14 +550,11 @@ export default function MapCanvas({
               <EventCard event={ev} />
             </span>
           </Marker>
-        ) : null
-      )}
+          ) : null
+        )}
 
-      {/* Roles, at the office rather than at the person who posted them.
-          Hidden under `eventsOnly` with the faces: somebody asking what is
-          happening this week is not asking who is hiring, and a map
-          carrying both answers neither. */}
-      {!eventsOnly &&
+      {/* Roles, at the office rather than at the person who posted them. */}
+      {layer === "jobs" &&
         jobs.map((job) =>
           job.lat != null && job.lng != null ? (
             <Marker key={job.id} latitude={job.lat} longitude={job.lng} anchor="bottom" style={{ zIndex: 5 }}>
@@ -570,10 +574,12 @@ export default function MapCanvas({
           ) : null
         )}
 
-      {/* Pins stay visible in every mode. An event map that hid "somebody
-          is in a café two streets away, right now" would be hiding the most
-          time-sensitive thing on the screen. */}
-      {pins.map((pin) => (
+      {/* Pins ride with the faces. "Somebody is in a café two streets away,
+          right now" is the most time-sensitive thing on the screen and it is
+          a fact about a person — so it belongs on the people map and nowhere
+          else. A jobs map with a stranger's coffee on it is not a jobs map. */}
+      {layer === "people" &&
+        pins.map((pin) => (
         <Marker key={pin.id} latitude={pin.lat} longitude={pin.lng} anchor="bottom" style={{ zIndex: 6 }}>
           <span className="hover-host relative">
             <button
@@ -594,10 +600,10 @@ export default function MapCanvas({
             </button>
             <PinCardHover pin={pin} />
           </span>
-        </Marker>
-      ))}
+          </Marker>
+        ))}
 
-      {!eventsOnly && you && (
+      {layer !== "events" && you && (
         <Marker latitude={you.lat} longitude={you.lng} anchor="center">
           <span className="pin-scale relative flex items-center">
             <span
@@ -656,7 +662,7 @@ export default function MapCanvas({
         </Marker>
       )}
 
-      {!eventsOnly &&
+      {layer === "people" &&
         stacks.map((s) => (
           <Marker key={s.key} latitude={s.lat} longitude={s.lng} anchor="center">
             <FaceStack

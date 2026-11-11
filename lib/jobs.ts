@@ -48,7 +48,6 @@ export type JobRef = {
   lng: number | null;
   placeLabel: string | null;
   applyUrl: string | null;
-  topic: string | null;
   postedAt: string;
   expiresAt: string;
   /** Whole days, floored at zero. Shown so a stale-looking board isn't. */
@@ -127,7 +126,6 @@ export async function jobsFor(opts: {
       lng: jobs.lng,
       placeLabel: jobs.placeLabel,
       applyUrl: jobs.applyUrl,
-      topic: jobs.topic,
       createdAt: jobs.createdAt,
       expiresAt: jobs.expiresAt,
       userId: users.id,
@@ -156,7 +154,6 @@ export async function jobsFor(opts: {
       lng: r.lng,
       placeLabel: r.placeLabel,
       applyUrl: r.applyUrl,
-      topic: r.topic,
       postedAt: r.createdAt.toISOString(),
       expiresAt: r.expiresAt.toISOString(),
       daysLeft: Math.max(0, Math.floor((r.expiresAt.getTime() - Date.now()) / 86_400_000)),
@@ -212,7 +209,6 @@ export async function postJob(input: {
   lng?: number | null;
   placeLabel?: string | null;
   applyUrl?: string | null;
-  topic?: string | null;
   days?: number;
 }): Promise<string | null> {
   if (!hasDb || !db) return null;
@@ -237,7 +233,6 @@ export async function postJob(input: {
       lng,
       placeLabel: placed ? input.placeLabel ?? null : null,
       applyUrl: input.applyUrl ?? null,
-      topic: input.topic ?? null,
       expiresAt: new Date(Date.now() + days * 86_400_000),
     })
     .returning();

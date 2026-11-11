@@ -11,7 +11,6 @@ import {
   MAX_JOB_TITLE,
   jobIsPlaced,
 } from "@/lib/rules";
-import { TOPIC_BY_ID } from "@/lib/intents";
 
 /**
  * Live roles.
@@ -82,7 +81,6 @@ export async function POST(req: Request) {
   const workMode = JOB_MODE_IDS.includes(body?.workMode) ? (body.workMode as string) : "onsite";
   const point = validPoint(body?.lat, body?.lng);
   const days = JOB_DURATION_DAYS.includes(Number(body?.days)) ? Number(body.days) : DEFAULT_JOB_DAYS;
-  const topic = TOPIC_BY_ID.has(body?.topic) ? (body.topic as string) : null;
   const rawUrl = typeof body?.applyUrl === "string" ? body.applyUrl.trim() : "";
   const applyUrl = cleanUrl(rawUrl);
 
@@ -117,7 +115,6 @@ export async function POST(req: Request) {
     lng: point?.lng ?? null,
     placeLabel: typeof body?.placeLabel === "string" ? body.placeLabel.slice(0, 160) : null,
     applyUrl,
-    topic,
     days,
   });
   if (!id) return NextResponse.json({ error: "Couldn't post that." }, { status: 500 });

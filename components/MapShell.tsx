@@ -502,6 +502,28 @@ export default function MapShell({
    */
   const inEvent = Boolean(data.selfEvent);
 
+  /**
+   * What the map is a map of: people, events, or jobs.
+   *
+   * Opening a panel is somebody saying which question they are asking, so
+   * the map answers that one instead of hedging — three layers on one map
+   * answers none of them, since the evenings and the offices both vanish
+   * into a crowd of faces.
+   *
+   * Decided by whichever of the two is in front rather than by whether
+   * either is open: on a desktop both can be up at once, and the one
+   * somebody last reached for is the one they are reading.
+   */
+  const mapLayer: "people" | "events" | "jobs" = (() => {
+    const up = (w: WindowState) => w.open && !w.min;
+    const events = up(wins.events) && !inEvent;
+    const jobs = up(wins.jobs) && isOpenNet;
+    if (events && jobs) return wins.jobs.z > wins.events.z ? "jobs" : "events";
+    if (jobs) return "jobs";
+    if (events) return "events";
+    return "people";
+  })();
+
   return (
     <div className="relative h-dvh w-full overflow-hidden">
       <div className="absolute inset-0">
@@ -516,10 +538,7 @@ export default function MapShell({
           spread={!signedIn}
           chip={!signedIn}
           onSelectPin={() => openWin("pins")}
-          // Opening Events turns the map into a map of events. Asking
-          // "what's happening" and "who's nearby" at the same time answers
-          // neither: the event pins vanish into the crowd.
-          eventsOnly={wins.events.open && !wins.events.min}
+          layer={mapLayer}
           activeEventSlug={activeEvent}
           initialLat={data.centre?.lat ?? initial.centre?.lat ?? 17.4065}
           initialLng={data.centre?.lng ?? initial.centre?.lng ?? 78.4772}

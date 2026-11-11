@@ -482,4 +482,22 @@ export const JOB_DURATION_DAYS: readonly number[] = JOB_DURATIONS.map((d) => d.d
 
 export const MAX_JOB_TITLE = 90;
 export const MAX_JOB_COMPANY = 80;
-export const MAX_JOB_BLURB = 240;
+
+/**
+ * The description, as one free-flow field rather than a line plus a set
+ * of tags.
+ *
+ * It was a 240-character one-liner above a row of topic chips, and both
+ * halves were wrong. The chips came from the networking vocabulary —
+ * "Funding", "A co-founder", "Product feedback" — which are things a
+ * person wants from a room, not categories a job falls into, so none of
+ * them fitted a role and the field taught people nothing. And a
+ * one-liner is not enough room to describe a job, so the first thing
+ * anybody did was retype the title into it.
+ *
+ * One box, long enough to actually say what the role is. It is also what
+ * the search reads, which is the other half of why free text beats a
+ * closed list here: nobody hunts for a job by picking a category, they
+ * type "payments" or "design" or "remote".
+ */
+export const MAX_JOB_BLURB = 1200;

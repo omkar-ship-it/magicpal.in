@@ -1,0 +1,15 @@
+-- Retire the job topic column.
+--
+-- Jobs briefly carried a topic from the networking vocabulary in
+-- lib/intents — "Funding", "A co-founder", "Product feedback". Those are
+-- things a person wants from a room, not categories a role falls into,
+-- so none of them fitted a job and the chips taught nobody anything. The
+-- description is free text now, and free text is what the directory
+-- searches, which is the better answer for a surface people arrive at
+-- typing "payments" rather than picking a label.
+--
+-- APPLY THIS AFTER the deploy that stops reading the column, not before.
+-- The running code selects an explicit column list, so dropping it
+-- underneath a live deploy would break every read until the new one
+-- lands. Dropping it afterwards breaks nothing: nothing references it.
+alter table jobs drop column if exists topic;

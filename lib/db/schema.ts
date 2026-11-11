@@ -1046,9 +1046,6 @@ export const jobs = pgTable(
      *  message the person who posted it, which is the product. */
     applyUrl: text("apply_url"),
 
-    /** Optional, from the shared vocabulary in lib/intents.ts. */
-    topic: text("topic"),
-
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     /** Filled, or withdrawn. Set rather than deleted, so the poster's own
      *  history survives taking a role down. */
