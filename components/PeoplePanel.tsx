@@ -130,11 +130,11 @@ export default function PeoplePanel({
             {/* Only claim there are filters when there are. Below the size
                 at which they earn their space, clusterFacets returns none
                 and this sentence was describing a row that wasn't there. */}
+            {/* Kept to one line. This sits between the filters and the
+                people, and every line of it is a person the reader came
+                here to see and cannot. */}
             {facets.length > 0 ? (
-              <>
-                All {pool.length} of these are in the same place, so the filters are what they can help with
-                and what they&rsquo;re after — not where they are.{" "}
-              </>
+              <>All {pool.length} are in one place, so the filters are what they need and offer.{" "}</>
             ) : (
               <>All {pool.length} of these are in the same place.{" "}</>
             )}

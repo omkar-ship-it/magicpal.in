@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { IconCheck, IconSearch } from "./Icons";
 
 /**
@@ -37,6 +38,23 @@ export default function DirectoryPanel({
   footer?: React.ReactNode;
   children: React.ReactNode;
 }) {
+  const [allFilters, setAllFilters] = useState(false);
+
+  /**
+   * A filter row is a lid on the list, not a feature of it.
+   *
+   * Clicking a stack of sixteen people opened a panel whose header was
+   * eight full-width chips and a three-line note, leaving about eighty
+   * pixels for the sixteen people it was opened to show. The chips are
+   * short now, but shortness is not a guarantee — a board with a wide
+   * vocabulary will grow this row again — so the cap is structural.
+   * Six is roughly two rows at panel width; the rest are one tap away
+   * and say how many they are.
+   */
+  const CAP = 6;
+  const hidden = Math.max(0, (filters?.length ?? 0) - CAP);
+  const visible = filters && !allFilters && hidden > 0 ? filters.slice(0, CAP) : filters;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex-none pb-2.5">
@@ -57,7 +75,7 @@ export default function DirectoryPanel({
           // Wraps rather than scrolling sideways: a horizontal strip hides
           // its own tail, and the filter you want is always the hidden one.
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {filters.map((f) => {
+            {visible!.map((f) => {
               const on = f.id === activeFilter;
               return (
                 <button
@@ -76,6 +94,16 @@ export default function DirectoryPanel({
                 </button>
               );
             })}
+            {hidden > 0 && (
+              <button
+                type="button"
+                className="chip-toggle tap"
+                data-on="false"
+                onClick={() => setAllFilters((v) => !v)}
+              >
+                {allFilters ? "Fewer" : `+${hidden} more`}
+              </button>
+            )}
           </div>
         )}
 

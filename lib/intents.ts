@@ -40,6 +40,21 @@ export type Topic = {
   needGerund: string;
   offerVerb: string;
   /**
+   * One or two words naming the subject, for somewhere a chip has to fit.
+   *
+   * `need` and `offer` are checkbox labels and are written to be read on
+   * their own line — "Good people in my field", "Mentoring and career
+   * advice". Prefixed with "Needs" or "Offers" they became thirty-
+   * character filter chips, one per row, and eight of them buried the
+   * list they were meant to filter.
+   *
+   * Deliberately one string rather than a short-need and a short-offer:
+   * both sides of a topic are the same subject, and the chip already
+   * carries which side it is. "Needs go-to-market" and "Offers
+   * go-to-market" are the pair, and they read correctly both ways.
+   */
+  short: string;
+  /**
    * True when wanting the thing is itself what the other person wants —
    * need matches need, and `offer` is never used for the pairing.
    */
@@ -49,6 +64,7 @@ export type Topic = {
 export const TOPICS: Topic[] = [
   {
     id: "funding",
+    short: "funding",
     need: "Funding",
     needGerund: "raising",
     offer: "Investing or angel intros",
@@ -56,6 +72,7 @@ export const TOPICS: Topic[] = [
   },
   {
     id: "role",
+    short: "a role",
     need: "A new role",
     needGerund: "looking for a role",
     offer: "Hiring right now",
@@ -63,6 +80,7 @@ export const TOPICS: Topic[] = [
   },
   {
     id: "hiring",
+    short: "hiring help",
     need: "Help hiring",
     needGerund: "hiring",
     offer: "Recruiting and talent",
@@ -70,6 +88,7 @@ export const TOPICS: Topic[] = [
   },
   {
     id: "cofounder",
+    short: "a co-founder",
     need: "A co-founder",
     needGerund: "looking for a co-founder",
     offer: "A co-founder",
@@ -78,6 +97,7 @@ export const TOPICS: Topic[] = [
   },
   {
     id: "technical",
+    short: "engineering",
     need: "Technical help",
     needGerund: "after technical help",
     offer: "Engineering depth",
@@ -85,6 +105,7 @@ export const TOPICS: Topic[] = [
   },
   {
     id: "product",
+    short: "product help",
     need: "Product feedback",
     needGerund: "after product feedback",
     offer: "Product and design craft",
@@ -92,6 +113,7 @@ export const TOPICS: Topic[] = [
   },
   {
     id: "gtm",
+    short: "go-to-market",
     need: "First customers",
     needGerund: "hunting first customers",
     offer: "Sales and go-to-market",
@@ -99,6 +121,7 @@ export const TOPICS: Topic[] = [
   },
   {
     id: "growth",
+    short: "growth",
     need: "Growth help",
     needGerund: "working on growth",
     offer: "Marketing and growth",
@@ -106,6 +129,7 @@ export const TOPICS: Topic[] = [
   },
   {
     id: "market",
+    short: "market entry",
     need: "A way into a new market",
     needGerund: "entering a new market",
     offer: "Local market knowledge",
@@ -113,6 +137,7 @@ export const TOPICS: Topic[] = [
   },
   {
     id: "advice",
+    short: "career advice",
     need: "Career advice",
     needGerund: "after career advice",
     offer: "Mentoring and career advice",
@@ -120,6 +145,7 @@ export const TOPICS: Topic[] = [
   },
   {
     id: "peers",
+    short: "peers",
     need: "Good people in my field",
     needGerund: "here to meet good people",
     offer: "Good people in my field",

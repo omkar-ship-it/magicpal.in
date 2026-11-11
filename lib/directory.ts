@@ -104,10 +104,12 @@ export function clusterFacets(
         const t = topicById(topicId);
         return {
           id: `${side}-${topicId}`,
-          // The vocabulary already carries both sides of every topic in the
-          // right grammar, so the chip reads as a sentence fragment rather
-          // than as a tag: "Offers hiring", "Needs funding".
-          label: `${side === "offer" ? "Offers" : "Needs"} ${(t ? (side === "offer" ? t.offer : t.need) : topicId).toLowerCase()}`,
+          // The short name, not the checkbox label. The checkbox labels
+          // are written to be read on their own line — "Good people in my
+          // field" — and prefixed with Offers/Needs they became chips a
+          // whole row wide. Eight of those buried the list underneath
+          // them, which is the one thing a filter must never do.
+          label: `${side === "offer" ? "Offers" : "Needs"} ${t?.short ?? topicId}`,
           count: ids.size,
           ids,
         };
