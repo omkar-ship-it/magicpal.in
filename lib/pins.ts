@@ -57,7 +57,7 @@ const liveNow = () => and(gt(pins.expiresAt, new Date()), isNull(pins.endedAt));
  * to the city centroid, same rule as `place()` in lib/profiles — somebody
  * who closed the tab this morning is not in the room now.
  */
-async function viewerPosition(
+export async function viewerPosition(
   viewerId: string
 ): Promise<{ lat: number; lng: number; precise: boolean } | null> {
   if (!hasDb || !db) return null;

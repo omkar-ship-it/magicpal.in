@@ -16,6 +16,7 @@ import { attachConnectionStatus } from "./connections";
 import { waitingCount } from "./messages";
 import { listAcceptedConnections } from "./connections";
 import { livePinsFor, myLivePin, type PinRef } from "./pins";
+import { jobsFor, type JobOrigin, type JobRef } from "./jobs";
 import { unreadAlerts } from "./alerts";
 import { DEFAULT_RADIUS_KM, MATCHES_SHOWN, MAX_PIN_REACH_KM } from "./rules";
 import { completion } from "./completion";
@@ -95,6 +96,17 @@ export type SelfMarker = {
   lat: number;
   lng: number;
   placed: "exact" | "base";
+  /**
+   * Your own place and employer, in words, so a form can offer them back.
+   *
+   * Only ever your own — these are on the self marker, which is the one
+   * row nobody else receives. Posting a job asks for a company and an
+   * office, and both are already on the profile of the person asking;
+   * making them type it again is the difference between a feature people
+   * use and one they mean to get round to.
+   */
+  placeLabel: string | null;
+  company: string | null;
   /** `off` still draws, muted: it's your own screen, and it answers the question. */
   visibility: "off" | "base" | "exact" | "live";
   /**
@@ -311,6 +323,17 @@ export type ShellPayload = {
   /** Ad-hoc "here now" markers, visible in every scope. */
   pins: PinRef[];
   myPinId: string | null;
+  /**
+   * Live roles, and where their distances were measured from.
+   *
+   * Open network only — empty inside a board. A community's hiring is its
+   * own conversation and belongs in its feed, where the members who
+   * joined it are the audience; the open network has no feed and no
+   * conversation, which is exactly why a structured surface works there
+   * and a chronological one did not.
+   */
+  jobs: JobRef[];
+  jobOrigin: JobOrigin;
 };
 
 export const OPEN_NETWORK: NetworkOption = {
@@ -401,6 +424,11 @@ export async function shellPayload(opts: {
           lat: me.visibility === "base" ? (me.baseLat ?? me.lat!) : (me.lat ?? me.baseLat!),
           lng: me.visibility === "base" ? (me.baseLng ?? me.lng!) : (me.lng ?? me.baseLng!),
           placed: me.visibility === "base" ? "base" : "exact",
+          // The label that matches the coordinate above, so a form that
+          // offers "use my work location" names the place it is about to use.
+          placeLabel:
+            (me.visibility === "base" ? me.baseLabel ?? me.locationLabel : me.locationLabel ?? me.baseLabel) ?? null,
+          company: me.company ?? null,
           visibility: (me.visibility as SelfMarker["visibility"]) ?? "off",
           completion: selfCompletion,
         }
@@ -537,6 +565,11 @@ export async function shellPayload(opts: {
         // away is worth knowing about whichever community you're looking at.
         pins: pinsHere,
         myPinId: mine_pin?.id ?? null,
+        // Jobs are an open-network surface. A community already has a feed,
+        // which is where its own hiring belongs and where the people who
+        // joined it will see it.
+        jobs: [],
+        jobOrigin: null,
       };
     }
   }
@@ -577,7 +610,7 @@ export async function shellPayload(opts: {
    * things that could all have arrived at once. `publicEvents` joins them
    * because it depends on nothing at all.
    */
-  const [placed, unplaced, pins, events, similar] = await Promise.all([
+  const [placed, unplaced, pins, events, similar, roles] = await Promise.all([
     getOpenMapProfiles({
       excludeUserId: opts.userId,
       centerLat: centre.lat,
@@ -613,6 +646,10 @@ export async function shellPayload(opts: {
     // when there is no key, no extension or no embedding yet — all of
     // which are ordinary, and none of which changes anything else here.
     opts.userId ? similarCandidates(opts.userId) : new Map<string, number>(),
+    // Not narrowed by the people-radius either, and for a stronger reason
+    // than the pins: people move cities for a job. The distance is shown
+    // and sorted on rather than used to hide anything.
+    jobsFor({ viewerId: opts.userId, centerLat: centre.lat, centerLng: centre.lng }),
   ]);
 
   // First, because it is the one row whose answer the reader already knows
@@ -668,6 +705,8 @@ export async function shellPayload(opts: {
     alerts,
     pins,
     myPinId: mine_pin?.id ?? null,
+    jobs: roles.jobs,
+    jobOrigin: roles.origin,
   };
 }
 

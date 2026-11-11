@@ -18,6 +18,7 @@ import { applyFacets, facetsActive, NO_FACETS, type Facets } from "@/lib/search"
 import { distanceKm } from "@/lib/geo";
 import MapCanvas from "./MapCanvas";
 import MapDock, { type DockTab } from "./MapDock";
+import JobsPanel from "./JobsPanel";
 import FloatWindow, { DEFAULT_WINDOW, type WindowState } from "./FloatWindow";
 import AlertSettings from "./AlertSettings";
 import LiveLocation from "./LiveLocation";
@@ -188,6 +189,9 @@ export default function MapShell({
       z: 2,
     },
     feed: { ...DEFAULT_WINDOW, x: 56, y: 112 },
+    // Same corner as the feed it replaces on the open network: the two are
+    // never offered at once, so they are the same slot in every sense.
+    jobs: { ...DEFAULT_WINDOW, x: 56, y: 112 },
     people: { ...DEFAULT_WINDOW, x: 96, y: 152 },
     pins: { ...DEFAULT_WINDOW, x: 116, y: 172 },
     events: { ...DEFAULT_WINDOW, x: 136, y: 192 },
@@ -240,6 +244,9 @@ export default function MapShell({
    * the compiler is right to refuse it.
    */
   const [aim, setAim] = useState<{ id: string; at: number } | null>(null);
+  /** Point the camera at a coordinate — a job's office, which has a
+   *  position and no row in `people` for `aim` to resolve. */
+  const [goTo, setGoTo] = useState<{ lat: number; lng: number; at: number } | null>(null);
 
   /**
    * The stack of co-located people the viewer opened from the map, if any.
@@ -504,6 +511,8 @@ export default function MapShell({
           you={data.you}
           events={data.events}
           pins={data.pins}
+          jobs={data.jobs}
+          onSelectJob={() => openWin("jobs")}
           spread={!signedIn}
           chip={!signedIn}
           onSelectPin={() => openWin("pins")}
@@ -528,6 +537,7 @@ export default function MapShell({
           showZoom
           highlightIds={data.matches.map((m) => m.id)}
           focus={aim}
+          goTo={goTo}
           onOpenStack={(ids) => {
             setClusterIds(ids);
             openWin("people");
@@ -754,6 +764,32 @@ export default function MapShell({
               openWin("person");
             }
           }}
+        />
+      </FloatWindow>
+
+      <FloatWindow
+        title={data.jobs.length > 0 ? `Jobs · ${data.jobs.length}` : "Jobs"}
+        state={visible("jobs") && isOpenNet ? wins.jobs : { ...wins.jobs, open: false }}
+        onChange={(n) => win("jobs", n)}
+        onClose={() => win("jobs", { open: false })}
+        onFocus={() => focus("jobs")}
+      >
+        <JobsPanel
+          jobs={data.jobs}
+          origin={data.jobOrigin}
+          signedIn={signedIn}
+          onboarded={onboarded}
+          you={data.you}
+          onChanged={() => void load({})}
+          onShow={(job) => {
+            // Remote roles have no office to fly to, and the button that
+            // calls this isn't rendered for them. Guarded anyway.
+            if (job.lat == null || job.lng == null) return;
+            setGoTo((prev) => ({ lat: job.lat!, lng: job.lng!, at: (prev?.at ?? 0) + 1 }));
+          }}
+          onOpenPerson={showPerson}
+          onSignIn={() => openWin("signin")}
+          onProfile={() => openWin(signedIn ? "profile" : "signin")}
         />
       </FloatWindow>
 
@@ -1046,8 +1082,10 @@ export default function MapShell({
           // highlight *that* one — or nothing, when the front sheet is the
           // profile. Otherwise it claims you're somewhere you aren't.
           narrow
-            ? ((["home", "forYou", "feed", "people", "pins", "events", "chats"] as const).find((k) => k === frontId) ?? null)
-            : ((["home", "forYou", "feed", "people", "pins", "events", "chats"] as const).find(
+            ? ((["home", "forYou", "feed", "jobs", "people", "pins", "events", "chats"] as const).find(
+                (k) => k === frontId
+              ) ?? null)
+            : ((["home", "forYou", "feed", "jobs", "people", "pins", "events", "chats"] as const).find(
                 (k) => wins[k].open && !wins[k].min
               ) ?? null)
         }
@@ -1062,9 +1100,23 @@ export default function MapShell({
                 pins: data.pins.length,
                 events: data.events.length,
                 chats: data.waiting,
+                jobs: data.jobs.length,
               }
         }
-        hide={inEvent ? ["events"] : undefined}
+        /**
+         * Feed and Jobs are the same slot, split by scope.
+         *
+         * A board's feed is its own arrivals and its own posts, which is
+         * the question a group of two hundred cannot answer about itself.
+         * The open network's version of that list was strangers' activity
+         * — nothing asked of the reader, nothing to do. Jobs is the
+         * surface that earns the slot there, and it is open-network only
+         * because a community already has somewhere better to put hiring.
+         */
+        hide={[
+          ...(isOpenNet ? (["feed"] as const) : (["jobs"] as const)),
+          ...(inEvent ? (["events"] as const) : []),
+        ]}
         signedIn={signedIn}
         me={me}
         onSelect={openTab}

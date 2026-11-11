@@ -25,6 +25,10 @@
   --status-new: #f0591a;
   /* Map-layer accents — distinct from the people/connection palette above. */
   --layer-event: #7c5cff;
+  /* Jobs. Distinct from the event purple and the brand orange, because a
+     role, an evening and a person are three different things to be able
+     to tell apart at a glance on one map. */
+  --layer-job: #1f7a5a;
   --layer-company: #0ea5b8;
   --layer-institution: #2a5db0;
   /* Ad-hoc meet-up pins get their own hue — not the brand orange every
@@ -62,6 +66,7 @@
     --pending: #f0c330;
     --status-new: #ff8257;
     --layer-event: #a996ff;
+    --layer-job: #4cc99a;
     --layer-company: #4fd4e6;
     --layer-institution: #7fa8f0;
     /* Ad-hoc meet-up pins get their own hue — not the brand orange every
@@ -93,6 +98,7 @@
   --pending: #f0c330;
   --status-new: #ff8257;
   --layer-event: #a996ff;
+  --layer-job: #4cc99a;
   --layer-company: #4fd4e6;
   --layer-institution: #7fa8f0;
   /* Ad-hoc meet-up pins get their own hue — not the brand orange every
@@ -121,6 +127,7 @@
   --color-pending: var(--pending);
   --color-status-new: var(--status-new);
   --color-layer-event: var(--layer-event);
+  --color-layer-job: var(--layer-job);
   --color-layer-company: var(--layer-company);
   --color-layer-institution: var(--layer-institution);
   --color-meetup: var(--meetup);

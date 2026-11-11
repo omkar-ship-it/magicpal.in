@@ -2,6 +2,7 @@
 
 import Avatar from "./Avatar";
 import {
+  IconBriefcase,
   IconCalendar,
   IconChat,
   IconFeed,
@@ -12,12 +13,20 @@ import {
   IconUser,
 } from "./Icons";
 
-export type DockTab = "home" | "forYou" | "feed" | "people" | "pins" | "events" | "chats" | null;
+export type DockTab = "home" | "forYou" | "feed" | "jobs" | "people" | "pins" | "events" | "chats" | null;
 
+/**
+ * Feed and Jobs sit in the same slot, and never together — see `hide` in
+ * MapShell. A community has a feed because two hundred people who joined
+ * the same group want to know who arrived this week; the open network is
+ * strangers, where that list asked nothing of the reader and gave them
+ * nothing to do. A role does both.
+ */
 const SLOTS: Array<{ id: Exclude<DockTab, null>; label: string; icon: React.ReactNode }> = [
   { id: "home", label: "Home", icon: <IconGlobe size={17} /> },
   { id: "forYou", label: "For you", icon: <IconSparkle size={17} /> },
   { id: "feed", label: "Feed", icon: <IconFeed size={17} /> },
+  { id: "jobs", label: "Jobs", icon: <IconBriefcase size={17} /> },
   { id: "people", label: "People", icon: <IconPeople size={17} /> },
   { id: "pins", label: "Now", icon: <IconMeetup size={17} /> },
   { id: "events", label: "Events", icon: <IconCalendar size={17} /> },

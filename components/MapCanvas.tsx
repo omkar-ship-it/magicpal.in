@@ -8,9 +8,11 @@ import MapGL, { Marker, NavigationControl, type ViewStateChangeEvent } from "rea
 import type { MapProfile } from "@/lib/profiles";
 import type { SelfMarker } from "@/lib/shell";
 import type { PinRef } from "@/lib/pins";
+import type { JobRef } from "@/lib/jobs";
+import { jobModeLabel } from "@/lib/rules";
 import Avatar from "./Avatar";
 import { whenLabel } from "@/lib/time";
-import { IconCalendar, IconCity, IconMeetup, IconPin, IconUser } from "./Icons";
+import { IconBriefcase, IconCalendar, IconCity, IconMeetup, IconPin, IconUser } from "./Icons";
 import VerifiedBadge from "./VerifiedBadge";
 import { Ask, askLines } from "./Asks";
 
@@ -138,7 +140,9 @@ export default function MapCanvas({
   you = null,
   events = [],
   pins = [],
+  jobs = [],
   onSelectPin,
+  onSelectJob,
   eventsOnly = false,
   activeEventSlug = null,
   initialLat,
@@ -155,6 +159,7 @@ export default function MapCanvas({
   onMoveEnd,
   onOpenStack,
   focus = null,
+  goTo = null,
 }: {
   people: Array<MapProfile & { hereNow?: boolean; verified?: boolean; unplaced?: boolean; self?: boolean }>;
   /** The viewer, drawn distinctly so they can verify their own visibility. */
@@ -162,7 +167,17 @@ export default function MapCanvas({
   events?: MapEvent[];
   /** Ad-hoc "I'm here now" markers. Always drawn — they're the live layer. */
   pins?: PinRef[];
+  /**
+   * Open roles, drawn where the work happens.
+   *
+   * Only the placed ones ever arrive here — a remote job has no
+   * coordinates by database constraint, and inventing one for it would
+   * put a false fact on a map whose whole claim is that its positions
+   * are real.
+   */
+  jobs?: JobRef[];
   onSelectPin?: (id: string) => void;
+  onSelectJob?: (id: string) => void;
   /**
    * Events instead of faces.
    *
@@ -222,6 +237,8 @@ export default function MapCanvas({
    * camera back, and an unchanged id would look like nothing happened.
    */
   focus?: { id: string; at: number } | null;
+  /** An explicit camera instruction, for things that aren't people. */
+  goTo?: { lat: number; lng: number; at: number } | null;
   /** A whole stack of co-located people, opened as a directory. */
   onOpenStack?: (ids: string[]) => void;
 }) {
@@ -296,6 +313,28 @@ export default function MapCanvas({
       padding: { top: 0, left: 0, right: 0, bottom: bottomInset },
     });
   }, [focus, people, bottomInset]);
+
+  /**
+   * Point at a coordinate rather than at a person.
+   *
+   * `focus` above resolves an id against the people on the map, which is
+   * right for "show me Ananya" and useless for "show me this office" —
+   * a job has a position and no row in `people`, so it needs the camera
+   * instruction without the lookup. Same shape, same once-per-`at` guard.
+   */
+  const went = useRef(0);
+  useEffect(() => {
+    if (!goTo || goTo.at === went.current) return;
+    const m = mapObj.current;
+    if (!m) return;
+    went.current = goTo.at;
+    m.flyTo({
+      center: [goTo.lng, goTo.lat],
+      zoom: Math.max(m.getZoom(), 13),
+      duration: 900,
+      padding: { top: 0, left: 0, right: 0, bottom: bottomInset },
+    });
+  }, [goTo, bottomInset]);
 
   /**
    * Past this zoom, people are shown individually; below it, co-located
@@ -507,6 +546,30 @@ export default function MapCanvas({
         ) : null
       )}
 
+      {/* Roles, at the office rather than at the person who posted them.
+          Hidden under `eventsOnly` with the faces: somebody asking what is
+          happening this week is not asking who is hiring, and a map
+          carrying both answers neither. */}
+      {!eventsOnly &&
+        jobs.map((job) =>
+          job.lat != null && job.lng != null ? (
+            <Marker key={job.id} latitude={job.lat} longitude={job.lng} anchor="bottom" style={{ zIndex: 5 }}>
+              <span className="hover-host relative">
+                <button
+                  type="button"
+                  className="layer-pin tap"
+                  style={{ borderColor: "var(--layer-job)", color: "var(--layer-job)" }}
+                  onClick={() => onSelectJob?.(job.id)}
+                  aria-label={`${job.title} at ${job.company}`}
+                >
+                  <IconBriefcase size={14} />
+                </button>
+                <JobCardHover job={job} />
+              </span>
+            </Marker>
+          ) : null
+        )}
+
       {/* Pins stay visible in every mode. An event map that hid "somebody
           is in a café two streets away, right now" would be hiding the most
           time-sensitive thing on the screen. */}
@@ -682,6 +745,30 @@ function EventCard({ event }: { event: MapEvent }) {
           {event.going} going
         </span>
       )}
+    </span>
+  );
+}
+
+/** Hover preview for a role — the title, the employer, and the commute. */
+function JobCardHover({ job }: { job: JobRef }) {
+  return (
+    <span
+      className="hover-card pointer-events-none absolute z-50 block w-[228px] rounded-2xl border border-[var(--line)] p-2.5 text-left"
+      style={{ background: "var(--card)", boxShadow: "var(--shadow-lift)" }}
+      aria-hidden="true"
+    >
+      <span className="block text-[12.5px] font-semibold leading-[1.3]">{job.title}</span>
+      <span className="block truncate text-[11.5px] text-[var(--ink-soft)]">{job.company}</span>
+      {job.placeLabel && (
+        <span className="mt-0.5 block truncate text-[11px] text-[var(--ink-soft)]">{job.placeLabel}</span>
+      )}
+      <span className="mt-1 block text-[11px] font-semibold" style={{ color: "var(--layer-job)" }}>
+        {job.distanceKm == null
+          ? jobModeLabel(job.workMode)
+          : job.distanceKm < 1
+            ? "under 1 km away"
+            : `${Math.round(job.distanceKm)} km away`}
+      </span>
     </span>
   );
 }

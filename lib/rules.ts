@@ -430,3 +430,56 @@ export type ConnectionStatus = "pending" | "accepted" | "declined";
 export function orderedPair(a: string, b: string): [string, string] {
   return a < b ? [a, b] : [b, a];
 }
+
+/**
+ * Jobs: the shapes a role can take, and how long an advert lives.
+ *
+ * Here rather than in lib/jobs.ts for the same reason as the pin
+ * constants above — that module imports the database, and a client
+ * component importing a value from it drags the Postgres driver into the
+ * browser bundle.
+ */
+export const JOB_MODES = [
+  {
+    id: "onsite",
+    label: "On site",
+    /** Shown while choosing, because the choice decides whether anybody
+     *  more than a city away will ever see the post. */
+    hint: "In the office. Appears on the map and is sorted by how far it is from whoever is reading.",
+  },
+  { id: "hybrid", label: "Hybrid", hint: "Some days in. Still placed on the map, because the commute still counts." },
+  { id: "remote", label: "Remote", hint: "No commute, so no place on the map — listed for everybody, wherever they are." },
+] as const;
+
+export type JobMode = (typeof JOB_MODES)[number]["id"];
+
+export const JOB_MODE_IDS: readonly string[] = JOB_MODES.map((m) => m.id);
+
+export const jobModeLabel = (id: string): string =>
+  JOB_MODES.find((m) => m.id === id)?.label ?? id;
+
+/** A placed role is one with coordinates — the two non-remote modes. */
+export const jobIsPlaced = (mode: string): boolean => mode !== "remote";
+
+/**
+ * How long an advert runs before it stops being shown.
+ *
+ * Capped rather than open-ended, and short by the standards of job
+ * boards, because the characteristic failure of every small board is
+ * that it fills with roles that were filled months ago and nobody
+ * remembers to take down. Thirty days is long enough to hire and short
+ * enough that a forgotten post removes itself. Reposting is one tap.
+ */
+export const JOB_DURATIONS = [
+  { days: 14, label: "2 weeks" },
+  { days: 30, label: "30 days" },
+  { days: 60, label: "60 days" },
+] as const;
+
+export const DEFAULT_JOB_DAYS = 30;
+
+export const JOB_DURATION_DAYS: readonly number[] = JOB_DURATIONS.map((d) => d.days);
+
+export const MAX_JOB_TITLE = 90;
+export const MAX_JOB_COMPANY = 80;
+export const MAX_JOB_BLURB = 240;

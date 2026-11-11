@@ -989,3 +989,71 @@ export const pushSubscriptions = pgTable(
   },
   (t) => [index("push_subscriptions_user_idx").on(t.userId)]
 );
+
+/**
+ * Jobs on the open network — adverts with a place on the map.
+ *
+ * Every job board is a list, and a list can tell you a hundred things
+ * about a role except the one most people decide on first: whether they
+ * could get there. That is the only thing this product is better placed
+ * to answer than anybody else, so a job here is a pin before it is a
+ * posting, and the card leads with the commute.
+ *
+ * Which is also why `workMode` is not cosmetic. A remote role genuinely
+ * has no coordinates, and pretending otherwise — dropping it on the
+ * company's head office, or at 0,0 — would put a false fact on a map
+ * whose entire claim is that the positions on it are real. Remote jobs
+ * are listed and never drawn, and the database enforces the pairing (see
+ * drizzle/manual/0009) rather than trusting every future caller.
+ *
+ * Liveness is a read-time condition — `expiresAt > now() and closedAt is
+ * null` — exactly as it is for pins, so there is no flag to go stale and
+ * no sweeper to forget to run. A board of roles filled six months ago is
+ * the failure mode of every careless job board, and an expiry that is
+ * structural rather than remembered is what prevents it.
+ */
+export const jobs = pgTable(
+  "jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+
+    title: text("title").notNull(),
+    /**
+     * Copied from the poster's profile at post time rather than joined.
+     *
+     * A join would quietly rewrite history: somebody posts a role at one
+     * company, moves to another, and every advert they ever wrote starts
+     * claiming the new employer. The advert should still read correctly
+     * after they leave.
+     */
+    company: text("company").notNull(),
+    /** One line on what the role actually is. */
+    blurb: text("blurb"),
+
+    /** onsite | hybrid | remote. See the note above — this decides whether
+     *  the row is drawable at all. */
+    workMode: text("work_mode").notNull(),
+
+    /** Null if and only if remote, by database constraint. */
+    lat: doublePrecision("lat"),
+    lng: doublePrecision("lng"),
+    placeLabel: text("place_label"),
+
+    /** Where to apply, when there is somewhere. Otherwise the action is to
+     *  message the person who posted it, which is the product. */
+    applyUrl: text("apply_url"),
+
+    /** Optional, from the shared vocabulary in lib/intents.ts. */
+    topic: text("topic"),
+
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    /** Filled, or withdrawn. Set rather than deleted, so the poster's own
+     *  history survives taking a role down. */
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("jobs_user_idx").on(t.userId)]
+);
