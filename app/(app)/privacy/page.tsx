@@ -71,6 +71,14 @@ export default function PrivacyPage() {
           Your email address, and the one-time codes we send to it. There is no password — signing in is a
           code sent to your inbox, so the only credential we hold is your ability to read that inbox.
         </p>
+        <p>
+          We also use that address for one other thing, and only this one: if you have not opened the map for
+          a couple of weeks and something has actually happened that concerns you — somebody is waiting on a
+          reply, people have joined near you, roles have opened near you — we may send a short summary of it.
+          Never more than one a month, never when there is nothing specific to tell you, and every one of them
+          carries an unsubscribe link that works in a single click without signing in. Unsubscribing stops
+          these and nothing else; sign-in codes keep working, because you have to ask for each one.
+        </p>
         <p className="font-semibold">Profile</p>
         <p>
           Your name, headline, company, what you are working on, a short bio, skills, a photo or a generated

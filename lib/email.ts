@@ -91,3 +91,49 @@ export async function sendOtpEmail(to: string, code: string): Promise<SendResult
     devFallbackMessage: `login code for ${to} is ${code}`,
   });
 }
+
+/**
+ * The "here is what you missed" email.
+ *
+ * Two things make this different from the OTP above and both are load
+ * bearing. It is not transactional, so it carries an unsubscribe link
+ * that works in one click with no login — and the template must actually
+ * render it, which only the MSG91 dashboard can guarantee. And its
+ * content is assembled per person in lib/reengage, which sends nothing
+ * when there is nothing true to say.
+ *
+ * Variables are sent under several spellings for the same reason the OTP
+ * sends the brand twice: a merge tag is whatever text somebody typed
+ * into that template's editor, a mismatch returns 200 with a blank where
+ * the value should be, and an unused variable is simply ignored. Read
+ * the live template before trusting any of these names.
+ */
+export async function sendReengagementEmail(opts: {
+  to: string;
+  firstName: string;
+  headline: string;
+  lines: string[];
+  appUrl: string;
+  unsubscribeUrl: string;
+}): Promise<SendResult> {
+  return sendMsg91TemplateEmail({
+    to: opts.to,
+    templateId: process.env.MSG91_REENGAGE_TEMPLATE_ID,
+    variables: {
+      name: opts.firstName,
+      first_name: opts.firstName,
+      headline: opts.headline,
+      line_1: opts.lines[0] ?? "",
+      line_2: opts.lines[1] ?? "",
+      cta_url: opts.appUrl,
+      unsubscribe_url: opts.unsubscribeUrl,
+      company_name: BRAND_NAME,
+      brand_name: BRAND_NAME,
+    },
+    logLabel: "reengage",
+    devFallbackMessage:
+      `to ${opts.to} — "${opts.headline}"` +
+      (opts.lines.length ? ` | ${opts.lines.join(" | ")}` : "") +
+      ` | unsubscribe: ${opts.unsubscribeUrl}`,
+  });
+}

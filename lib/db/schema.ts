@@ -286,6 +286,25 @@ export const users = pgTable(
      */
     lastActiveAt: timestamp("last_active_at", { withTimezone: true }),
 
+    /**
+     * The three columns a non-transactional email needs.
+     *
+     * An OTP is transactional — you asked for it two seconds ago and it
+     * is the only way in. "Here is what you missed" is not, and that
+     * difference is what these are for.
+     *
+     * `unsubscribeToken` is random rather than the user id, because the
+     * id travels in URLs a browser history and a forwarded email both
+     * keep, and an unsubscribe endpoint keyed on a guessable value lets
+     * anybody silence anybody. `emailOptOutAt` is checked on every send
+     * and never cleared by the sender; only the person can undo it.
+     * `reengagedAt` is the frequency cap, stamped in the same statement
+     * that selects the row so a job run twice cannot send twice.
+     */
+    unsubscribeToken: uuid("unsubscribe_token").notNull().defaultRandom(),
+    emailOptOutAt: timestamp("email_optout_at", { withTimezone: true }),
+    reengagedAt: timestamp("reengaged_at", { withTimezone: true }),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
