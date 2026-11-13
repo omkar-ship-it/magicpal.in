@@ -542,12 +542,37 @@ export default function MapShell({
           activeEventSlug={activeEvent}
           initialLat={data.centre?.lat ?? initial.centre?.lat ?? 17.4065}
           initialLng={data.centre?.lng ?? initial.centre?.lng ?? 78.4772}
-          // Closer in for a visitor. The scattered chips span about ten
-          // kilometres, which at city zoom is a hundred and forty pixels —
-          // a clump in the middle of an empty frame. One step in and the
-          // same people fill the screen, which is what they actually look
-          // like once you are looking at a neighbourhood.
-          initialZoom={isOpenNet ? (signedIn ? 10 : 12) : data.scope.kind === "event" ? 12 : 3}
+          /**
+           * Open where you are, at a zoom where "where you are" means
+           * something.
+           *
+           * The centre has always been the viewer's own coordinates (see
+           * lib/shell) — what undid it was the zoom. Signed in opened at
+           * 10, which on a laptop is about two hundred kilometres across:
+           * you were centred on yourself as a dot in a regional view, and
+           * a visitor who had given us nothing got a *closer* look than a
+           * member who had told us exactly where they live.
+           *
+           * Precision sets how far in to go, because it decides what is
+           * even true. An exact or live pin is a real address, so 13 puts
+           * your own streets on screen. A city-only pin is a centroid with
+           * everyone around it scattered over about ten kilometres
+           * (`scatter` in lib/shell), so going closer would frame an empty
+           * street and call it your neighbourhood — 12 holds that spread.
+           *
+           * Nobody placed at all keeps the visitor's 12 for the reason
+           * below it: the scattered chips span roughly ten kilometres, and
+           * further out they are a clump in the middle of an empty frame.
+           */
+          initialZoom={
+            isOpenNet
+              ? data.you?.placed === "exact"
+                ? 13
+                : 12
+              : data.scope.kind === "event"
+                ? 12
+                : 3
+          }
           fitToPeople={!isOpenNet && data.scope.kind === "community"}
           // Just the dock: windows float and are moved out of the way by
           // hand, so reserving room for one would push the map around every
