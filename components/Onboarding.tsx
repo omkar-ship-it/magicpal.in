@@ -142,13 +142,21 @@ export default function Onboarding({
    * What the location picker is showing, which is not what the draft says
    * until somebody touches it.
    *
-   * `off` is the column default, and the picker renders "my city only" as
-   * selected so the gentlest option is the one already chosen. Reading the
-   * draft at save time instead wrote `off` for anybody who picked a city
-   * and never touched the radio — a profile saved as hidden by somebody
-   * looking at a screen that said otherwise.
+   * `off` is the column default, and the picker renders "a fixed location"
+   * as selected — the option the rest of the product is built on. Reading
+   * the draft at save time instead wrote `off` for anybody who picked a
+   * place and never touched the radio — a profile saved as hidden by
+   * somebody looking at a screen that said otherwise.
+   *
+   * This used to land on "my city only". That was the gentler default and
+   * it is the one that fills a map with circles nobody can act on: a
+   * centroid cannot answer a pin's reach, "within 2 km", or the distance
+   * steps in For you. Switching it raises what the step asks for — the
+   * guard below now wants a street-level place rather than a city — which
+   * is the real cost, and the reason both quieter options sit directly
+   * under it rather than behind anything.
    */
-  const visibility: Visibility = draft.visibility === "off" ? "base" : draft.visibility;
+  const visibility: Visibility = draft.visibility === "off" ? "exact" : draft.visibility;
   const hasBase = draft.baseLat != null && (draft.baseLabel?.length ?? 0) > 0;
   const hasExact = draft.lat != null && (draft.locationLabel?.length ?? 0) > 0;
   /**

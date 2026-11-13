@@ -12,19 +12,14 @@ const OPTIONS: Array<{
   recommended?: boolean;
 }> = [
   {
-    id: "base",
-    label: "My city only",
-    detail: "A circle over the city, not a pin. People can find that you're here; they can't find where you are.",
-    icon: <IconCity size={15} />,
-  },
-  {
     id: "exact",
     label: "A fixed location",
     detail:
-      "A pin at the place you chose, street level — and it stays there until you move it. For a conference or a co-working day, when being findable is the point.",
+      "A pin at the place you chose, street level — and it stays there until you move it. Most people use their office, which is the one that makes the map work.",
     icon: <IconPin size={15} />,
     /**
-     * The one setting this product actually works at.
+     * The one setting this product actually works at, and now the one
+     * onboarding starts on.
      *
      * A city circle makes you discoverable but not findable, and nothing
      * downstream can answer a question about metres from it — not a pin's
@@ -32,12 +27,23 @@ const OPTIONS: Array<{
      * better still while you're out, and worse the rest of the time,
      * because it lapses and leaves you on your city.
      *
-     * Marked rather than defaulted: the default stays `off`, because a
-     * location setting that picks itself is not consent. This is a
-     * recommendation with the reason attached, which is the most a privacy
-     * control should do.
+     * It used to be badged here and defaulted nowhere, on the reasoning
+     * that a location setting which picks itself is not consent. That
+     * reasoning held when the alternative was no selection at all; it does
+     * not describe what onboarding actually did, which was pre-select "my
+     * city only" — a default either way, just the quieter one. Given that,
+     * the honest choice is to start on the option the product is for and
+     * keep the consequence written on the card. Nothing is published until
+     * a place is picked and the step is submitted, and the two steps below
+     * are one tap away.
      */
     recommended: true,
+  },
+  {
+    id: "base",
+    label: "My city only",
+    detail: "A circle over the city, not a pin. People can find that you're here; they can't find where you are.",
+    icon: <IconCity size={15} />,
   },
   {
     id: "live",
@@ -58,10 +64,14 @@ const OPTIONS: Array<{
  * to say *why* it's safe — a circle rather than a blurred pin — or people
  * assume it's a pin with the label removed.
  *
- * Listed in order of increasing exposure, which is what makes the list
- * scannable — so the recommended option is *badged* where it sits rather
- * than promoted to the top, where it would break the ladder and read as
- * the product steering rather than advising.
+ * Listed with the recommended option first rather than in order of
+ * increasing exposure. The ladder was the better argument while the
+ * product was arguing for restraint; what it produced was a map of city
+ * circles, which is discoverable and not findable, and on which none of
+ * the distance features can answer anything. So the list now leads with
+ * the setting the product is actually for, badged as the popular choice,
+ * with the two quieter options directly beneath it and the consequence
+ * of each still written on its own card.
  *
  * "Off the map" is no longer one of the choices. It was the most protective
  * of the four and it had stopped being the one that protects anybody: the
@@ -134,7 +144,7 @@ export default function VisibilityPicker({
                         color: "var(--brand)",
                       }}
                     >
-                      Recommended
+                      Popular choice
                     </span>
                   )}
                 </span>
