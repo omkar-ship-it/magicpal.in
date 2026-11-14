@@ -20,7 +20,20 @@ export const maxDuration = 60;
  * actually gets mail, so running it every ten minutes and every hour
  * produce the same emails at different latencies.
  *
- * `?job=daily` — who is worth meeting near you.
+ * `?job=daily` — who is worth meeting near you. Scheduled in
+ * vercel.json at 03:30 UTC, which is 9am IST: morning, local, and well
+ * clear of anybody's quiet hours.
+ *
+ * Only that one is scheduled there. Vercel's Hobby plan allows a single
+ * run per day per cron, so the activity job cannot live in that file at
+ * a useful interval — `*/30` was rejected and took the whole deploy with
+ * it. It is left unscheduled rather than quietly downgraded to daily,
+ * because a once-a-day "you have a message" is a worse product than no
+ * email and would have looked like it was working. Any authenticated GET
+ * drives it, from a GitHub Actions schedule, cron-job.org, or Vercel Pro:
+ *
+ *   curl -H "Authorization: Bearer $CRON_SECRET" \
+ *     'https://www.opennetworks.in/api/notify?job=activity&send=1'
  *
  * **Dry run unless `send=1`.** This is not a debugging convenience: the
  * failure mode of this route is not an exception, it is a tactless email
