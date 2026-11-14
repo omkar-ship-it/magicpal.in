@@ -56,8 +56,6 @@ export type Notification = {
   headline: string;
   lines: string[];
   ctaLabel: string;
-  /** Where the button lands, relative to the site root. */
-  ctaPath: string;
   unsubscribeToken: string;
 };
 
@@ -172,10 +170,13 @@ async function matchCount(me: typeof users.$inferSelect): Promise<number> {
  *   worth meeting        — nobody is waiting; the matcher found people.
  *                          An invitation, not an obligation.
  *
- * Both are true of everybody who receives them, neither reveals a count,
- * and the split decides the button too: there is no point landing
- * somebody on recommendations when the reason they opened the mail is a
- * request sitting unanswered.
+ * Both are true of everybody who receives them and neither reveals a
+ * count. The split changes the wording and nothing else — every button
+ * goes to the front page, because that is the product. Somebody arriving
+ * with a live session lands on their own map with the dock already
+ * carrying their messages, their requests and their recommendations, and
+ * can go wherever the email made them want to go. A deep link would pick
+ * one of those for them and be wrong for anybody who wanted another.
  *
  * Nobody with nothing to say gets an email. A morning digest that
  * arrives whether or not anything happened is a morning digest people
@@ -226,11 +227,6 @@ export async function buildMorningDigest(
           : "New people match what you're looking for, and what you can help with.",
       ],
       ctaLabel: urgent ? "See who's waiting" : "See who",
-      /* Straight to the thing the headline is about. `?panel=forYou` is a
-         real address of the recommendations (see Overlay in MapShell); a
-         request or an unread thread belongs on the map, where the dock
-         carries both counts. */
-      ctaPath: urgent ? "/" : "/?panel=forYou",
       unsubscribeToken: me.unsubscribeToken,
     });
   }

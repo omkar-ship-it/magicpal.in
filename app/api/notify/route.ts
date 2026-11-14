@@ -95,7 +95,6 @@ export async function GET(req: Request) {
       headline: "Someone's waiting to hear from you",
       lines: ["A connection request or a message is sitting unanswered on your map."],
       ctaLabel: "See who's waiting",
-      ctaPath: "/",
       unsubscribeToken: "preview-token-not-a-real-opt-out",
     };
     const n = real ?? sample;
@@ -105,7 +104,7 @@ export async function GET(req: Request) {
       headline: n.headline,
       lines: n.lines,
       ctaLabel: n.ctaLabel,
-      ctaUrl: `${base}${n.ctaPath}`,
+      ctaUrl: base,
       unsubscribeUrl: `${base}/unsubscribe?t=${n.unsubscribeToken}`,
       logLabel: "notify-test",
       templateId,
@@ -129,7 +128,7 @@ export async function GET(req: Request) {
       dryRun: true,
       gapHours: DIGEST_GAP_HOURS,
       wouldSend: batch.length,
-      preview: batch.map((n) => ({ to: n.email, headline: n.headline, lines: n.lines, cta: n.ctaPath })),
+      preview: batch.map((n) => ({ to: n.email, headline: n.headline, lines: n.lines, cta: base })),
     });
   }
 
@@ -149,7 +148,7 @@ export async function GET(req: Request) {
       headline: n.headline,
       lines: n.lines,
       ctaLabel: n.ctaLabel,
-      ctaUrl: `${base}${n.ctaPath}`,
+      ctaUrl: base,
       unsubscribeUrl: `${base}/unsubscribe?t=${n.unsubscribeToken}`,
       logLabel: "morning",
     });
