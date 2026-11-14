@@ -40,7 +40,13 @@ export const DIGEST_GAP_HOURS = 20;
  */
 const QUIET_MINUTES = 60;
 
-/** Matches are a nudge, not a directory — the count is what gets sent. */
+/**
+ * How many matches the matcher is asked for.
+ *
+ * Only ever used as "did it find any" — the number never reaches the
+ * email. Capped anyway so a person on a busy map does not pay for a
+ * ranking nobody reads.
+ */
 const DIGEST_SHOWN = 3;
 
 export type Notification = {
@@ -55,8 +61,6 @@ export type Notification = {
   unsubscribeToken: string;
 };
 
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-
 /**
  * Pending requests and unanswered threads for everybody at once.
  *
@@ -66,8 +70,10 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
  * subselect and Postgres refused it as ambiguous. This is also two index
  * scans instead of one per person.
  *
- * Threads, not messages. "3 people are waiting" is a sentence somebody
- * acts on; "47 unread messages" is one they archive.
+ * Threads, not messages — a conversation somebody has not answered is
+ * one thing owed, however many lines arrived in it. The number itself
+ * never leaves this file; it only decides which of the two messages a
+ * person gets.
  */
 async function waitingFor(quietBefore: Date) {
   const pending = await db!
@@ -146,16 +152,34 @@ async function matchCount(me: typeof users.$inferSelect): Promise<number> {
 /**
  * Build the morning's mail.
  *
- * Ordered by how much each fact is about *them*. Somebody who asked to
- * connect and heard nothing outranks a stranger the matcher likes, so
- * requests lead, then unanswered conversations, then matches. Whatever
- * leads also decides where the button goes — there is no point landing
+ * The copy carries no counts and no names. "2 people want to connect"
+ * is a more persuasive sentence and a worse email: it publishes who is
+ * interested in whom into an inbox that gets forwarded, auto-scanned and
+ * breached, and it goes stale the moment either person acts. The numbers
+ * live on the screen the button opens, behind a session, where they are
+ * current and only the person they belong to can read them.
+ *
+ * Generic is not the same as vague, though, and that is the line worth
+ * holding. "You have unread messages, connection requests or new
+ * matches" tells the reader we do not know which — and an email that
+ * does not know what it is about teaches people to ignore the next one.
+ * So there are two messages, split on the only distinction that changes
+ * what the reader should do:
+ *
+ *   someone is waiting   — a request or a message is unanswered. A
+ *                          person did something and heard nothing, which
+ *                          is owed a reply.
+ *   worth meeting        — nobody is waiting; the matcher found people.
+ *                          An invitation, not an obligation.
+ *
+ * Both are true of everybody who receives them, neither reveals a count,
+ * and the split decides the button too: there is no point landing
  * somebody on recommendations when the reason they opened the mail is a
  * request sitting unanswered.
  *
  * Nobody with nothing to say gets an email. A morning digest that
- * arrives every morning whether or not anything happened is a morning
- * digest people filter, and the volume is self-limiting by design.
+ * arrives whether or not anything happened is a morning digest people
+ * filter, and the volume is self-limiting by design.
  */
 export async function buildMorningDigest(
   opts: { gapHours?: number; limit?: number } = {}
@@ -187,19 +211,21 @@ export async function buildMorningDigest(
     const m = await matchCount(me);
     if (r === 0 && t === 0 && m === 0) continue;
 
-    const lines: string[] = [];
-    if (r > 0) lines.push(`${plural(r, "person wants", "people want")} to connect with you.`);
-    if (t > 0) lines.push(`${plural(t, "conversation is", "conversations are")} waiting on a reply.`);
-    if (m > 0) lines.push(`${plural(m, "person", "people")} worth meeting near you today.`);
-
     const urgent = r > 0 || t > 0;
     out.push({
       userId: me.id,
       email: me.email,
       firstName: firstName(me.name ?? "") || "there",
-      headline: lines[0],
-      lines: lines.slice(1),
-      ctaLabel: urgent ? "See who" : "See who's worth meeting",
+      // Doubles as the subject line — see the template in docs/.
+      headline: urgent
+        ? "Someone's waiting to hear from you"
+        : "There are people worth meeting near you",
+      lines: [
+        urgent
+          ? "A connection request or a message is sitting unanswered on your map."
+          : "New people match what you're looking for, and what you can help with.",
+      ],
+      ctaLabel: urgent ? "See who's waiting" : "See who",
       /* Straight to the thing the headline is about. `?panel=forYou` is a
          real address of the recommendations (see Overlay in MapShell); a
          request or an unread thread belongs on the map, where the dock
