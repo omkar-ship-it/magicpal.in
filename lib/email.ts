@@ -72,6 +72,30 @@ async function sendMsg91TemplateEmail(opts: {
   }
 }
 
+/**
+ * Every variable under both spellings it might have been typed as.
+ *
+ * MSG91 merge tags are case-sensitive and are whatever text somebody put
+ * into the editor — the OTP template in this very file uses `OTP_CODE`,
+ * upper case, while this one was written against lower case. A mismatch
+ * does not error: MSG91 returns 200 and the email arrives with a blank
+ * where the value should be, which is how a hard-coded "View Updates"
+ * button with a dead link got all the way to three real inboxes before
+ * anybody could see the cause.
+ *
+ * An unused variable is simply ignored, so sending both costs nothing
+ * and removes the entire class of failure. The alternative is a template
+ * author having to know which case this file happened to choose.
+ */
+function bothCases(vars: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(vars)) {
+    out[k] = v;
+    out[k.toUpperCase()] = v;
+  }
+  return out;
+}
+
 export async function sendOtpEmail(to: string, code: string): Promise<SendResult> {
   return sendMsg91TemplateEmail({
     to,
@@ -137,7 +161,7 @@ export async function sendNotifyEmail(opts: {
   return sendMsg91TemplateEmail({
     to: opts.to,
     templateId: opts.templateId ?? process.env.MSG91_NOTIFY_TEMPLATE_ID,
-    variables: {
+    variables: bothCases({
       name: opts.firstName,
       first_name: opts.firstName,
       headline: opts.headline,
@@ -159,7 +183,7 @@ export async function sendNotifyEmail(opts: {
       unsubscribe_url: opts.unsubscribeUrl,
       company_name: BRAND_NAME,
       brand_name: BRAND_NAME,
-    },
+    }),
     logLabel: opts.logLabel,
     devFallbackMessage:
       `to ${opts.to} — "${opts.headline}"` +

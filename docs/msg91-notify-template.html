@@ -28,7 +28,13 @@
   200 OK with an empty space.
 
   VARIABLES THE CODE SENDS (lib/email.ts → sendNotifyEmail).
-  Unused ones are ignored, so the template can use any subset:
+  Unused ones are ignored, so the template can use any subset.
+
+  EVERY ONE IS SENT IN BOTH CASES — ##cta_url## and ##CTA_URL## both
+  work, and so does every other name below. MSG91 tags are
+  case-sensitive and the OTP template in this project uses upper case
+  while this one was written in lower; a mismatch returns 200 with a
+  blank, so both are sent rather than making the template author guess.
 
       ##name##            first name, or "there"
       ##first_name##      the same thing, alternate spelling
