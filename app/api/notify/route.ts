@@ -7,9 +7,20 @@ export const maxDuration = 60;
 /**
  * The morning email, as one job.
  *
- * Scheduled in vercel.json at 03:30 UTC — 9am IST. Morning, local, well
- * clear of anybody's quiet hours, and once a day, which is also the most
- * a Hobby-plan cron will run.
+ * NOT SCHEDULED AT PRESENT. `vercel.json` holds an empty crons array on
+ * purpose: nothing may reach real inboxes until the MSG91 template is
+ * approved and the owner says go. The 503 below already blocks a send
+ * while the template id is unset, but that lock opens the moment anybody
+ * sets the variable — including by hand, in a dashboard, the night
+ * before approval lands. An absent schedule cannot be opened by
+ * accident, which is the difference between one lock and two.
+ *
+ * To arm it, restore the entry and redeploy:
+ *
+ *     { "path": "/api/notify?send=1", "schedule": "30 3 * * *" }
+ *
+ * 03:30 UTC is 9am IST — morning, local, well clear of anybody's quiet
+ * hours, and once a day, which is also the most a Hobby-plan cron runs.
  *
  * One job rather than two by choice as well as by constraint: somebody
  * with a connection request *and* three matches wants one email with the
