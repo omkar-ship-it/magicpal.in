@@ -45,7 +45,16 @@
       ##line_3##          — may be empty
       ##cta_label##       the button text, varies by what is waiting
       ##cta_url##         where the button goes
+      ##url##             the same value — the live template calls it this
       ##unsubscribe_url## one click, no login
+
+  The live template currently hardcodes its subject and body and uses
+  only ##name##, ##url## and ##unsubscribe_url##. That is a fine choice —
+  everyone gets the same words — and the headline the code computes is
+  simply ignored. Adding ##headline## and ##body_lines## to the template
+  is what switches the email from one message to the two the code
+  already works out: an unanswered request reads differently from a
+  match, because one is owed a reply and the other is an invitation.
 
   Use ##body_lines##, not the numbered slots. MSG91 has no conditionals,
   so a layout built on three slots renders an empty row for every line a

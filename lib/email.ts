@@ -179,7 +179,18 @@ export async function sendNotifyEmail(opts: {
       line_3: opts.lines[2] ?? "",
       body_lines: opts.lines.join(" "),
       cta_label: opts.ctaLabel,
+      /**
+       * The destination under every name a template has called it.
+       *
+       * `cta_url` is what this file chose; the live MSG91 template calls
+       * it `url`. Neither is more correct — a merge tag is whatever
+       * somebody typed into the editor, and the editor is where the
+       * email actually gets built. Sending both, like the casing, costs
+       * nothing because unused variables are ignored, and spares another
+       * approval cycle the next time the two drift.
+       */
       cta_url: opts.ctaUrl,
+      url: opts.ctaUrl,
       unsubscribe_url: opts.unsubscribeUrl,
       company_name: BRAND_NAME,
       brand_name: BRAND_NAME,
