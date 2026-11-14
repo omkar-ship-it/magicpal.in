@@ -6,12 +6,12 @@ import { LEGAL } from "@/lib/legal";
 import AvatarPicker from "./AvatarPicker";
 import PlaceSearch, { type Place } from "./PlaceSearch";
 import TopicPicker from "./TopicPicker";
-import OwnWords from "./OwnWords";
+import IntentField from "./IntentField";
 import VisibilityPicker, { type Visibility } from "./VisibilityPicker";
 import Avatar from "./Avatar";
 import { IconCheck, IconGlobe, IconPin, IconSparkle, IconUser } from "./Icons";
-import { SECTORS } from "@/lib/intents";
-import { MAX_INTERESTS } from "@/lib/rules";
+import { SECTORS, TOPICS } from "@/lib/intents";
+import { MAX_INTERESTS, MAX_TOPICS } from "@/lib/rules";
 
 /**
  * Getting somebody onto the map, one answer at a time.
@@ -433,65 +433,45 @@ export default function Onboarding({
 
         {step.id === "what" && (
           <>
-            <TopicPicker side="need" selected={draft.lookingFor} onChange={(v) => set("lookingFor", v)} />
-            <OwnWords
+            <IntentField
+              label="I'm looking for"
+              hint="In your own words. This is what people search, and what the matcher reads — be specific about the thing you actually want."
               placeholder="A co-founder who has shipped hardware"
-              values={draft.customLookingFor}
-              onChange={(v) => set("customLookingFor", v)}
+              custom={draft.customLookingFor}
+              onCustom={(v) => set("customLookingFor", v)}
+              options={TOPICS.map((t) => ({ id: t.id, label: t.need }))}
+              selected={draft.lookingFor}
+              onSelected={(v) => set("lookingFor", v)}
+              max={MAX_TOPICS}
             />
-            <TopicPicker side="offer" selected={draft.canHelpWith} onChange={(v) => set("canHelpWith", v)} />
-            <OwnWords
+            <IntentField
+              label="I can help with"
+              hint="The thing you'd actually be glad to be asked about."
               placeholder="Getting a first enterprise customer"
-              values={draft.customCanHelpWith}
-              onChange={(v) => set("customCanHelpWith", v)}
+              custom={draft.customCanHelpWith}
+              onCustom={(v) => set("customCanHelpWith", v)}
+              options={TOPICS.map((t) => ({ id: t.id, label: t.offer }))}
+              selected={draft.canHelpWith}
+              onSelected={(v) => set("canHelpWith", v)}
+              max={MAX_TOPICS}
             />
             {/*
               * The third signal, and the only symmetric one.
               *
-              * It was missing from this step entirely, which left the
-              * matcher with nothing to say about the large middle of any
-              * room — two people deep in climate are worth introducing
-              * even when neither wants what the other offers, and without
-              * this the answer for them was "no match".
+              * Two people deep in climate are worth introducing even when
+              * neither wants what the other offers, and without this the
+              * answer for them is "no match".
               */}
-            <div>
-              <div className="mb-2 flex items-baseline justify-between gap-3">
-                <p className="label m-0">I&rsquo;m interested in</p>
-                <span className="text-[11.5px] text-[var(--ink-soft)]">
-                  {draft.interests.length} of {MAX_INTERESTS}
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {SECTORS.map((sec) => {
-                  const on = draft.interests.includes(sec.id);
-                  return (
-                    <button
-                      key={sec.id}
-                      type="button"
-                      className="chip-toggle tap"
-                      data-on={on ? "true" : "false"}
-                      aria-pressed={on}
-                      disabled={!on && draft.interests.length >= MAX_INTERESTS}
-                      onClick={() =>
-                        set(
-                          "interests",
-                          on
-                            ? draft.interests.filter((x) => x !== sec.id)
-                            : [...draft.interests, sec.id]
-                        )
-                      }
-                    >
-                      {on && <IconCheck size={11} />}
-                      {sec.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <OwnWords
+            <IntentField
+              label="I'm interested in"
+              hint="Subjects you'd talk about for an hour, whether or not you need anything."
               placeholder="Second-hand lab equipment"
-              values={draft.customInterests}
-              onChange={(v) => set("customInterests", v)}
+              custom={draft.customInterests}
+              onCustom={(v) => set("customInterests", v)}
+              options={SECTORS.map((sec) => ({ id: sec.id, label: sec.label }))}
+              selected={draft.interests}
+              onSelected={(v) => set("interests", v)}
+              max={MAX_INTERESTS}
             />
 
             <div>

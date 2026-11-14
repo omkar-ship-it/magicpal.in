@@ -58,13 +58,22 @@ export const MAX_INTERESTS = 5;
  * and they match each other by exact wording, which is a real overlap and
  * writes its own sentence ("you both put down climate finance").
  *
- * Capped harder than the vocabulary, and kept short, for two reasons: a
- * free-text field with room for ten entries becomes a CV, and an exact
- * match only ever happens on a phrase short enough that two people would
- * independently type it the same way.
+ * Sized for a primary field now rather than an overflow one.
+ *
+ * Three entries of thirty-two characters was right while this sat folded
+ * away under the chips. It stopped being right when it became the front
+ * door: the field's own placeholder — "A co-founder who has shipped
+ * hardware" — is thirty-seven characters, so the control was truncating
+ * the example it offered.
+ *
+ * Still capped, and for the original reason: a free-text field with room
+ * for ten entries becomes a CV. But exact wording is no longer the only
+ * thing that makes a typed phrase matchable — lib/ai embeds these into
+ * the similarity vectors alongside the headline, so a longer phrase is
+ * read for meaning even when nobody else types it identically.
  */
-export const MAX_CUSTOM = 3;
-export const MAX_CUSTOM_LENGTH = 32;
+export const MAX_CUSTOM = 5;
+export const MAX_CUSTOM_LENGTH = 56;
 
 /**
  * How long a live position stays live without a refresh.

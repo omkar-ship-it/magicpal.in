@@ -8,37 +8,32 @@ import { IconPlus, IconX } from "./Icons";
 /**
  * "Not on the list? Say it in your own words."
  *
- * Sits under each of the three chip pickers rather than replacing them,
- * because the chips are what make a match explainable — they mean the same
- * thing on everybody's profile. A typed phrase only ever matches somebody
- * who typed the same phrase, which is a narrower promise, so it's offered
- * as the overflow rather than the front door.
- *
  * Added on Enter or on the + button, never on blur: a half-typed phrase
  * becoming a permanent tag because somebody tabbed away is the standard
  * failure of this control.
  *
- * Folded away until asked for. Three of these under three chip rows meant
- * three text boxes and three lines of explanation on a form whose whole
- * problem was looking like work — and the chips are the front door anyway,
- * because a typed phrase only ever matches somebody who typed the same
- * phrase. Anyone who has already written one sees it open, since there is
- * something in it to see.
+ * `primary` decides whether this is the field or the overflow. Folded
+ * away it was the overflow, which is what it was built as; opened by
+ * default it is the question itself, and the chips move underneath. See
+ * IntentField for why that swapped round.
  */
 export default function OwnWords({
   values,
   placeholder,
   hint,
+  primary = false,
   onChange,
 }: {
   values: string[];
   placeholder: string;
   hint?: string;
+  /** Open on arrival, with no "add your own" link in front of it. */
+  primary?: boolean;
   onChange: (next: string[]) => void;
 }) {
   const [draft, setDraft] = useState("");
   const [note, setNote] = useState("");
-  const [open, setOpen] = useState(values.length > 0);
+  const [open, setOpen] = useState(primary || values.length > 0);
   const atCap = values.length >= MAX_CUSTOM;
 
   function add() {
@@ -65,7 +60,7 @@ export default function OwnWords({
     setNote("");
   }
 
-  if (!open && values.length === 0) {
+  if (!primary && !open && values.length === 0) {
     return (
       <button
         type="button"
@@ -79,7 +74,7 @@ export default function OwnWords({
   }
 
   return (
-    <div className="mt-2">
+    <div className={primary ? "" : "mt-2"}>
       {values.length > 0 && (
         <ul className="mb-1.5 flex flex-wrap gap-1.5">
           {values.map((v) => (

@@ -2,16 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { SECTORS, STAGES } from "@/lib/intents";
-import { MAX_CUSTOM_LENGTH, MAX_INTERESTS } from "@/lib/rules";
+import { SECTORS, STAGES, TOPICS } from "@/lib/intents";
+import { MAX_CUSTOM_LENGTH, MAX_INTERESTS, MAX_TOPICS } from "@/lib/rules";
 import Link from "next/link";
 import { LEGAL } from "@/lib/legal";
-import OwnWords from "./OwnWords";
 import BoardLogo from "./BoardLogo";
 import type { NetworkOption } from "@/lib/shell";
 import AvatarPicker from "./AvatarPicker";
 import PlaceSearch, { type Place } from "./PlaceSearch";
-import TopicPicker from "./TopicPicker";
+import IntentField from "./IntentField";
 import VisibilityPicker, { type Visibility } from "./VisibilityPicker";
 import CreateBoard from "./CreateBoard";
 import BoardQR from "./BoardQR";
@@ -312,12 +311,6 @@ export default function ProfilePanel({
     }
   }
 
-  function toggleInterest(id: string) {
-    const on = d!.interests.includes(id);
-    if (!on && d!.interests.length >= MAX_INTERESTS) return;
-    set("interests", on ? d!.interests.filter((x) => x !== id) : [...d!.interests, id]);
-  }
-
   const myBoards = networks.filter((n) => n.slug !== null);
   const ownRole = Boolean(d.stage) && !STAGES.some((s) => s.id === d.stage);
 
@@ -508,58 +501,39 @@ export default function ProfilePanel({
           />
 
           <div className="mt-3 flex flex-col gap-4">
-            <div>
-              <TopicPicker side="need" selected={d.lookingFor} onChange={(v) => set("lookingFor", v)} />
-              <OwnWords
-                values={d.customLookingFor}
-                placeholder="A distribution partner in the Gulf"
-                hint="Not on the list? Say it your way. It finds people who wrote the same thing."
-                onChange={(v) => set("customLookingFor", v)}
-              />
-            </div>
-            <div>
-              <TopicPicker side="offer" selected={d.canHelpWith} onChange={(v) => set("canHelpWith", v)} />
-              <OwnWords
-                values={d.customCanHelpWith}
-                placeholder="Warehouse automation"
-                hint="The specific thing you'd actually help a stranger with."
-                onChange={(v) => set("customCanHelpWith", v)}
-              />
-            </div>
-
-            <div>
-              <div className="mb-2 flex items-baseline justify-between gap-3">
-                <p className="label m-0">I&rsquo;m interested in</p>
-                <span className="text-[11.5px] text-[var(--ink-soft)]">
-                  {d.interests.length} of {MAX_INTERESTS}
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {SECTORS.map((s) => {
-                  const on = d.interests.includes(s.id);
-                  return (
-                    <button
-                      key={s.id}
-                      type="button"
-                      className="chip-toggle tap"
-                      data-on={on ? "true" : "false"}
-                      aria-pressed={on}
-                      disabled={!on && d.interests.length >= MAX_INTERESTS}
-                      onClick={() => toggleInterest(s.id)}
-                    >
-                      {on && <IconCheck size={11} />}
-                      {s.label}
-                    </button>
-                  );
-                })}
-              </div>
-              <OwnWords
-                values={d.customInterests}
-                placeholder="Carnatic music"
-                hint="Anything you'd happily lose an hour to. Matches people who wrote the same."
-                onChange={(v) => set("customInterests", v)}
-              />
-            </div>
+            <IntentField
+              label="I'm looking for"
+              hint="In your own words. This is what people search, and what the matcher reads."
+              placeholder="A distribution partner in the Gulf"
+              custom={d.customLookingFor}
+              onCustom={(v) => set("customLookingFor", v)}
+              options={TOPICS.map((t) => ({ id: t.id, label: t.need }))}
+              selected={d.lookingFor}
+              onSelected={(v) => set("lookingFor", v)}
+              max={MAX_TOPICS}
+            />
+            <IntentField
+              label="I can help with"
+              hint="The specific thing you'd actually be glad a stranger asked you about."
+              placeholder="Warehouse automation"
+              custom={d.customCanHelpWith}
+              onCustom={(v) => set("customCanHelpWith", v)}
+              options={TOPICS.map((t) => ({ id: t.id, label: t.offer }))}
+              selected={d.canHelpWith}
+              onSelected={(v) => set("canHelpWith", v)}
+              max={MAX_TOPICS}
+            />
+            <IntentField
+              label="I'm interested in"
+              hint="Anything you'd happily lose an hour to, whether or not you need anything."
+              placeholder="Carnatic music"
+              custom={d.customInterests}
+              onCustom={(v) => set("customInterests", v)}
+              options={SECTORS.map((sec) => ({ id: sec.id, label: sec.label }))}
+              selected={d.interests}
+              onSelected={(v) => set("interests", v)}
+              max={MAX_INTERESTS}
+            />
 
             <div>
               {/* "Where you are right now" in a form that also asks for your
