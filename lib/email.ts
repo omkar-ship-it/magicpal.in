@@ -120,12 +120,23 @@ export async function sendNotifyEmail(opts: {
   ctaLabel: string;
   ctaUrl: string;
   unsubscribeUrl: string;
-  /** Distinguishes the three jobs in the logs. */
+  /** Distinguishes the jobs in the logs. */
   logLabel: string;
+  /**
+   * Overrides the configured template, for verifying a new one.
+   *
+   * MSG91 templates need approving, and an unapproved one can return 200
+   * and deliver nothing. Proving a template works therefore means
+   * receiving an email from it — which would otherwise mean setting it
+   * live first and arming the morning job against something unverified.
+   * This breaks that circle: test the id, read the inbox, then configure
+   * it.
+   */
+  templateId?: string;
 }): Promise<SendResult> {
   return sendMsg91TemplateEmail({
     to: opts.to,
-    templateId: process.env.MSG91_NOTIFY_TEMPLATE_ID,
+    templateId: opts.templateId ?? process.env.MSG91_NOTIFY_TEMPLATE_ID,
     variables: {
       name: opts.firstName,
       first_name: opts.firstName,

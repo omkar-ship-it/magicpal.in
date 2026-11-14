@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { sendNotifyEmail } from "@/lib/email";
-import { DIGEST_GAP_HOURS, buildMorningDigest, claimDigest } from "@/lib/notify";
+import { DIGEST_GAP_HOURS, buildMorningDigest, claimDigest, releaseDigest } from "@/lib/notify";
 
 export const maxDuration = 60;
 
@@ -64,6 +64,64 @@ export async function GET(req: Request) {
     );
   }
 
+  /**
+   * `?test=<email>` — one email, to one address, claiming nothing.
+   *
+   * The thing this exists for: MSG91 templates need approving, and an
+   * unapproved one does not necessarily fail loudly — the API can return
+   * 200 and deliver nothing, which is the documented behaviour for a
+   * merge-tag mismatch and the reason this file never trusts a 2xx as
+   * proof. The only test that proves a template works is an email
+   * arriving in somebody's inbox.
+   *
+   * So this sends to one address with real content if that person has
+   * any, a representative sample if they do not, and does not stamp
+   * anybody either way. Run it, look in the inbox, and only then set the
+   * template id for the real job.
+   */
+  const test = url.searchParams.get("test");
+  if (test) {
+    // `?template=` lets an unconfigured id be proven before it goes live.
+    const templateId = url.searchParams.get("template") ?? process.env.MSG91_NOTIFY_TEMPLATE_ID ?? undefined;
+    if (!templateId) {
+      return NextResponse.json(
+        { error: "Pass ?template=<id>, or set MSG91_NOTIFY_TEMPLATE_ID." },
+        { status: 503 }
+      );
+    }
+    const real = (await buildMorningDigest()).find((n) => n.email === test);
+    const sample = {
+      firstName: "there",
+      headline: "Someone's waiting to hear from you",
+      lines: ["A connection request or a message is sitting unanswered on your map."],
+      ctaLabel: "See who's waiting",
+      ctaPath: "/",
+      unsubscribeToken: "preview-token-not-a-real-opt-out",
+    };
+    const n = real ?? sample;
+    const res = await sendNotifyEmail({
+      to: test,
+      firstName: n.firstName,
+      headline: n.headline,
+      lines: n.lines,
+      ctaLabel: n.ctaLabel,
+      ctaUrl: `${base}${n.ctaPath}`,
+      unsubscribeUrl: `${base}/unsubscribe?t=${n.unsubscribeToken}`,
+      logLabel: "notify-test",
+      templateId,
+    });
+    return NextResponse.json({
+      test: true,
+      to: test,
+      templateId,
+      usedRealContent: Boolean(real),
+      accepted: res.ok,
+      error: res.ok ? undefined : res.error,
+      stamped: false,
+      note: "MSG91 can accept a send and still deliver nothing. Check the inbox, not this response.",
+    });
+  }
+
   const batch = await buildMorningDigest();
 
   if (!send) {
@@ -95,8 +153,14 @@ export async function GET(req: Request) {
       unsubscribeUrl: `${base}/unsubscribe?t=${n.unsubscribeToken}`,
       logLabel: "morning",
     });
-    if (res.ok) sent++;
-    else failed.push(n.email);
+    if (res.ok) {
+      sent++;
+    } else {
+      // Told it failed, so give the morning back — tomorrow's run should
+      // retry this person rather than skip them for twenty hours.
+      await releaseDigest(n.userId);
+      failed.push(n.email);
+    }
   }
   return NextResponse.json({ dryRun: false, considered: batch.length, sent, failed, skipped });
 }

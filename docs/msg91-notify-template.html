@@ -7,6 +7,19 @@
   SUBJECT LINE (paste into the subject field, not the body):
       ##headline##
 
+  TEMPLATE ID (created 14 Nov 2026, pending MSG91 approval):
+      template_14_11_2026_21_11_2
+
+  Do not set MSG91_NOTIFY_TEMPLATE_ID until an email from it has
+  actually arrived. An unapproved template can return 200 and deliver
+  nothing, so the API's answer is not proof — the inbox is. Verify it
+  without going live:
+
+      curl -H "Authorization: Bearer $CRON_SECRET" \
+        "https://www.opennetworks.in/api/notify?test=you@example.com&template=template_14_11_2026_21_11_2"
+
+  That sends one email, to one address, and stamps nobody.
+
   Every non-OTP email the product sends uses this one template — the
   morning digest today, anything else later. That is deliberate: a
   template per message type is a template per chance to ship an email

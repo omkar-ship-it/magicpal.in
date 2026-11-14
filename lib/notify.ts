@@ -245,6 +245,24 @@ export async function buildMorningDigest(
  * re-checked inside the UPDATE rather than trusted from the SELECT,
  * which is what holds under a double-fire or a retried batch.
  */
+/**
+ * Give the claim back when the send is known to have failed.
+ *
+ * Claiming before sending is right for a *crash* — an unknown outcome
+ * should cost somebody one morning rather than risk two emails. It is
+ * wrong for a failure we were told about, which is most of them: an
+ * unapproved template, a provider outage, a bad address. Without this,
+ * one bad morning marks the whole list as mailed, delivers nothing, and
+ * locks everyone out for twenty hours.
+ *
+ * Only ever called with a definite failure in hand. Anything ambiguous
+ * keeps the stamp.
+ */
+export async function releaseDigest(userId: string): Promise<void> {
+  if (!hasDb || !db) return;
+  await db.update(users).set({ digestEmailedAt: null }).where(eq(users.id, userId));
+}
+
 export async function claimDigest(userId: string, gapHours = DIGEST_GAP_HOURS): Promise<boolean> {
   if (!hasDb || !db) return false;
   const gap = new Date(Date.now() - gapHours * 3_600_000);
