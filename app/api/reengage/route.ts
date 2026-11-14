@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { BRAND_NAME } from "@/lib/brand";
-import { sendReengagementEmail } from "@/lib/email";
+import { sendNotifyEmail } from "@/lib/email";
 import { buildReengagements, claimForSend, DEFAULT_COOLDOWN_DAYS, DEFAULT_IDLE_DAYS } from "@/lib/reengage";
 
 export const maxDuration = 60;
@@ -61,13 +61,15 @@ export async function GET(req: Request) {
       skipped.push(r.email);
       continue;
     }
-    const res = await sendReengagementEmail({
+    const res = await sendNotifyEmail({
       to: r.email,
       firstName: r.firstName,
       headline: r.headline,
       lines: r.lines,
-      appUrl: base,
+      ctaLabel: "Open the map",
+      ctaUrl: base,
       unsubscribeUrl: `${base}/unsubscribe?t=${r.unsubscribeToken}`,
+      logLabel: "reengage",
     });
     if (res.ok) sent++;
     else failed.push(r.email);

@@ -305,6 +305,19 @@ export const users = pgTable(
     emailOptOutAt: timestamp("email_optout_at", { withTimezone: true }),
     reengagedAt: timestamp("reengaged_at", { withTimezone: true }),
 
+    /**
+     * Two more clocks, deliberately separate from `reengagedAt`.
+     *
+     * `activityEmailedAt` is minutes — "somebody is waiting on you".
+     * `digestEmailedAt` is daily — "here is who is worth meeting".
+     * `reengagedAt` is monthly — "you have not been here in a while".
+     * One shared stamp would let the loudest of the three suppress the
+     * other two, which is the bug where a chatty week silently cancels
+     * somebody's digest.
+     */
+    activityEmailedAt: timestamp("activity_emailed_at", { withTimezone: true }),
+    digestEmailedAt: timestamp("digest_emailed_at", { withTimezone: true }),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

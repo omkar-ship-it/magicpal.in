@@ -93,47 +93,56 @@ export async function sendOtpEmail(to: string, code: string): Promise<SendResult
 }
 
 /**
- * The "here is what you missed" email.
+ * Every non-OTP email the product sends, through one template.
  *
- * Two things make this different from the OTP above and both are load
- * bearing. It is not transactional, so it carries an unsubscribe link
- * that works in one click with no login — and the template must actually
- * render it, which only the MSG91 dashboard can guarantee. And its
- * content is assembled per person in lib/reengage, which sends nothing
- * when there is nothing true to say.
+ * Four kinds of message — somebody is waiting on you, here is who is
+ * worth meeting, here is what you missed — would have been four MSG91
+ * templates, each needing to be built by hand in a dashboard, each with
+ * its own merge tags that fail silently when they drift. That is four
+ * chances to ship an email with a blank where the headline should be.
+ *
+ * They are all the same shape anyway: a greeting, one sentence that is
+ * the reason for the mail, a couple of supporting lines, one button, and
+ * a way out. So there is one template and the caller decides what goes
+ * in it.
  *
  * Variables are sent under several spellings for the same reason the OTP
  * sends the brand twice: a merge tag is whatever text somebody typed
  * into that template's editor, a mismatch returns 200 with a blank where
- * the value should be, and an unused variable is simply ignored. Read
- * the live template before trusting any of these names.
+ * the value should be, and an unused variable is simply ignored.
  */
-export async function sendReengagementEmail(opts: {
+export async function sendNotifyEmail(opts: {
   to: string;
   firstName: string;
+  /** The one sentence that is the reason this email exists. */
   headline: string;
   lines: string[];
-  appUrl: string;
+  ctaLabel: string;
+  ctaUrl: string;
   unsubscribeUrl: string;
+  /** Distinguishes the three jobs in the logs. */
+  logLabel: string;
 }): Promise<SendResult> {
   return sendMsg91TemplateEmail({
     to: opts.to,
-    templateId: process.env.MSG91_REENGAGE_TEMPLATE_ID,
+    templateId: process.env.MSG91_NOTIFY_TEMPLATE_ID,
     variables: {
       name: opts.firstName,
       first_name: opts.firstName,
       headline: opts.headline,
       line_1: opts.lines[0] ?? "",
       line_2: opts.lines[1] ?? "",
-      cta_url: opts.appUrl,
+      line_3: opts.lines[2] ?? "",
+      cta_label: opts.ctaLabel,
+      cta_url: opts.ctaUrl,
       unsubscribe_url: opts.unsubscribeUrl,
       company_name: BRAND_NAME,
       brand_name: BRAND_NAME,
     },
-    logLabel: "reengage",
+    logLabel: opts.logLabel,
     devFallbackMessage:
       `to ${opts.to} — "${opts.headline}"` +
       (opts.lines.length ? ` | ${opts.lines.join(" | ")}` : "") +
-      ` | unsubscribe: ${opts.unsubscribeUrl}`,
+      ` | ${opts.ctaLabel}: ${opts.ctaUrl} | unsubscribe: ${opts.unsubscribeUrl}`,
   });
 }
