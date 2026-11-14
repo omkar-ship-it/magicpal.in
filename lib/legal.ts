@@ -88,15 +88,33 @@ export function copyrightLine(): string {
  * words that carried that number. Leaving it would have been the first
  * entry in the log that was not quite true.
  *
+ * Raised again for two changes to the privacy policy, both of which
+ * describe things the product now actually does and previously did not.
+ *
+ * The notice gained a paragraph saying we may send one email a month
+ * summarising what is waiting for somebody — §2 had said the address was
+ * used for sign-in codes and nothing else, which stopped being true the
+ * moment that job could run.
+ *
+ * And Google Analytics was installed. §10 had said, in as many words,
+ * that there are no analytics cookies and therefore no consent banner to
+ * dismiss. Shipping a tag manager under that sentence would have been
+ * the plainest possible contradiction between a policy and a product,
+ * and the one most likely to be noticed by exactly the person it misled.
+ *
+ * Both are material, so everybody is asked again. That is the intended
+ * cost: a recorded consent points at wording, and these people agreed to
+ * wording that said the opposite of what the site now does.
+ *
  * The version is written into the consent row, so "when did they agree, and
  * to what" is answerable from the log alone — which is the only question an
  * audit, a complaint or a deletion request ever asks of it. Never reuse a
  * version after editing the text.
  */
-export const LEGAL_VERSION = "2026-11-09.1";
+export const LEGAL_VERSION = "2026-11-14.1";
 
 /** Shown on both documents. Human-readable twin of LEGAL_VERSION. */
-export const LEGAL_EFFECTIVE = "9 November 2026";
+export const LEGAL_EFFECTIVE = "14 November 2026";
 
 /**
  * The single consent kind covering both documents.

@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import { BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand";
 import "./globals.css";
 import PWA from "@/components/PWA";
+import Analytics, { AnalyticsNoScript } from "@/components/Analytics";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -79,10 +80,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://events.mapbox.com" crossOrigin="" />
         {/* Every face without an uploaded photo is drawn here. */}
         <link rel="preconnect" href="https://api.dicebear.com" crossOrigin="" />
+        {/* Only worth a handshake when there is a container to load. */}
+        {process.env.NEXT_PUBLIC_GTM_ID && (
+          <link rel="preconnect" href="https://www.googletagmanager.com" crossOrigin="" />
+        )}
       </head>
       <body>
+        <AnalyticsNoScript />
         {children}
         <PWA />
+        <Analytics />
       </body>
     </html>
   );
