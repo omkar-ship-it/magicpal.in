@@ -26,8 +26,10 @@ export const maxDuration = 60;
  *
  * Only that one is scheduled there. Vercel's Hobby plan allows a single
  * run per day per cron, so the activity job cannot live in that file at
- * a useful interval — `*/30` was rejected and took the whole deploy with
- * it. It is left unscheduled rather than quietly downgraded to daily,
+ * a useful interval — a half-hourly expression was rejected and took the
+ * whole deploy with it. (Writing that expression out here would close
+ * this comment block, which is its own small lesson.) It is left
+ * unscheduled rather than quietly downgraded to daily,
  * because a once-a-day "you have a message" is a worse product than no
  * email and would have looked like it was working. Any authenticated GET
  * drives it, from a GitHub Actions schedule, cron-job.org, or Vercel Pro:
