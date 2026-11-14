@@ -248,9 +248,10 @@ export default function TermsPage() {
 
       <Clause n={15} title="Changes to these terms">
         <p>
-          We may update these terms. If a change affects your rights or obligations we will raise the version,
-          show you what changed, and ask you to accept it before you continue using the service. Continuing to
-          use {LEGAL.brand} after a minor correction means you accept it.
+          We may update these terms. Every change raises the version shown at the top, so you can always tell
+          which wording is in force. Where a change affects your rights or obligations we will show you what
+          changed and ask you to accept it before you continue; for lesser changes we show you a notice and
+          continuing to use {LEGAL.brand} means you accept them.
         </p>
       </Clause>
 

@@ -19,6 +19,7 @@ import { distanceKm } from "@/lib/geo";
 import MapCanvas from "./MapCanvas";
 import MapDock, { type DockTab } from "./MapDock";
 import JobsPanel from "./JobsPanel";
+import LegalNotice from "./LegalNotice";
 import FloatWindow, { DEFAULT_WINDOW, type WindowState } from "./FloatWindow";
 import AlertSettings from "./AlertSettings";
 import LiveLocation from "./LiveLocation";
@@ -610,6 +611,8 @@ export default function MapShell({
           }}
         />
       </div>
+
+      {data.legalNotice && <LegalNotice version={data.legalNotice} />}
 
       <MapTopBar
         networks={data.networks}

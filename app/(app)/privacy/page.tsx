@@ -354,10 +354,21 @@ export default function PrivacyPage() {
 
       <Clause n={14} title="Changes">
         <p>
-          If we change this policy in a way that affects what you agreed to, we will raise the version, show
-          you the change, and ask you to accept it again before you continue. Minor corrections — a typo, a
-          clearer sentence — will be made without interrupting you, and the version and date at the top always
-          tell you which text is in force.
+          Whenever any of this text changes we raise the version at the top, so the date and number there
+          always tell you exactly which wording is in force. Nothing is ever edited silently.
+        </p>
+        <p>
+          How we tell you depends on the change. Where it alters what you agreed to — a new purpose, a new
+          recipient of your data, a weaker promise — we will ask you to accept the new text before you
+          continue, and where the law requires fresh consent we will ask for it regardless of our own view.
+          For everything else, including adding a service like analytics that we have described here, we show
+          you a notice pointing at what changed and you carry on. We would rather interrupt you once about
+          something that matters than four times about things that do not, because the second habit is how
+          people learn to dismiss the first.
+        </p>
+        <p>
+          If you disagree with a change, the way out is the same as it has always been: delete your account
+          (§11), and the data goes with it.
         </p>
         <p>
           The <Link href="/terms" className="underline">Terms &amp; Conditions</Link> govern your use of the

@@ -1,11 +1,11 @@
-import { and, eq, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { db, hasDb } from "./db";
 import { consents, memberships, users } from "./db/schema";
 import { isActiveMember } from "./membership";
 import { distanceKm, validPoint } from "./geo";
 import { ACTIVE_WINDOW_MINUTES, LIVE_STALE_MINUTES, MAX_MAP_RESULTS } from "./rules";
 import { SIMILAR_FLOOR } from "./matching";
-import { LEGAL_VERSION, TERMS_CONSENT_KIND } from "./legal";
+import { LEGAL_CONSENT_VERSION, TERMS_CONSENT_KIND } from "./legal";
 
 export type Visibility = "off" | "base" | "exact" | "live";
 
@@ -589,12 +589,40 @@ export async function getProfilesByIds(ids: string[]) {
 /**
  * Whether this person has accepted the *current* terms and privacy policy.
  *
- * Keyed on the version, not merely on the kind: a consent to wording that
- * has since been rewritten is a record of something that no longer exists,
- * and treating it as live agreement to the new text is exactly the move
- * that makes a consent log worthless. Raising LEGAL_VERSION therefore asks
- * everybody again, which is the intended cost of changing the words.
+ * Keyed on a version, not merely on the kind: a consent to wording that
+ * has since been *materially* rewritten is a record of something that no
+ * longer exists, and treating it as live agreement is the move that makes
+ * a consent log worthless.
+ *
+ * Measured against LEGAL_CONSENT_VERSION rather than LEGAL_VERSION, and
+ * as "at or after" rather than "equal to". The text version moves for
+ * every edit, including ones that add a paragraph without changing what
+ * anybody agreed to; re-prompting for those teaches people to dismiss
+ * the prompt that matters. Raising LEGAL_CONSENT_VERSION is the separate,
+ * deliberate act that asks everybody again.
+ *
+ * Versions sort lexicographically because they are YYYY-MM-DD.N, so the
+ * comparison is a plain string one and stays correct as long as that
+ * format holds.
  */
+/**
+ * The newest wording this person has on record as having seen.
+ *
+ * Null when they have no consent row at all. Used only to decide whether
+ * to show them a "this changed" notice — never to decide whether their
+ * agreement is live, which is `hasAcceptedTerms`.
+ */
+export async function acceptedCopyVersion(userId: string): Promise<string | null> {
+  if (!hasDb || !db) return null;
+  const rows = await db
+    .select({ v: consents.copyVersion })
+    .from(consents)
+    .where(and(eq(consents.userId, userId), eq(consents.kind, TERMS_CONSENT_KIND), eq(consents.granted, true)))
+    .orderBy(desc(consents.copyVersion))
+    .limit(1);
+  return rows[0]?.v ?? null;
+}
+
 export async function hasAcceptedTerms(userId: string): Promise<boolean> {
   if (!hasDb || !db) return true;
   const rows = await db
@@ -604,7 +632,7 @@ export async function hasAcceptedTerms(userId: string): Promise<boolean> {
       and(
         eq(consents.userId, userId),
         eq(consents.kind, TERMS_CONSENT_KIND),
-        eq(consents.copyVersion, LEGAL_VERSION)
+        gte(consents.copyVersion, LEGAL_CONSENT_VERSION)
       )
     )
     .limit(1);

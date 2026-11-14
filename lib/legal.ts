@@ -113,6 +113,29 @@ export function copyrightLine(): string {
  */
 export const LEGAL_VERSION = "2026-11-14.1";
 
+/**
+ * The oldest acceptance still treated as live agreement.
+ *
+ * `LEGAL_VERSION` tracks the *text* and must move whenever a word does,
+ * or a consent row stops pointing at what somebody actually read. That
+ * is an integrity rule and it is not negotiable. But it was also doing a
+ * second job — deciding who gets asked again — and tying the two
+ * together means every clarification re-prompts the whole user base,
+ * which trains people to click through the one that matters.
+ *
+ * So they are separate now. The text version always moves; this one
+ * moves only when a change genuinely alters what somebody agreed to, and
+ * anything at or after it counts as current. Raising this is the
+ * deliberate act of saying "everybody must agree again".
+ *
+ * It stays at 2026-11-09.1 through the analytics change because the
+ * owner chose notice over re-acceptance, and §14 was rewritten in the
+ * same commit to describe that rather than promise otherwise. The
+ * promise moved before the behaviour relied on it — which is the only
+ * order in which this is honest.
+ */
+export const LEGAL_CONSENT_VERSION = "2026-11-09.1";
+
 /** Shown on both documents. Human-readable twin of LEGAL_VERSION. */
 export const LEGAL_EFFECTIVE = "14 November 2026";
 

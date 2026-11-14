@@ -2,6 +2,7 @@ import { boardById, boardsForUser, childEvents, isLive, liveBoardBySlug, members
 import { isActive } from "./membership";
 import { attachVouches } from "./vouch";
 import {
+  acceptedCopyVersion,
   getBoardMembers,
   getOpenMapProfiles,
   getProfileById,
@@ -20,6 +21,7 @@ import { jobsFor, type JobOrigin, type JobRef } from "./jobs";
 import { unreadAlerts } from "./alerts";
 import { DEFAULT_RADIUS_KM, MATCHES_SHOWN, MAX_PIN_REACH_KM } from "./rules";
 import { completion } from "./completion";
+import { LEGAL_VERSION } from "./legal";
 import { cityLabel } from "./cityLabel";
 import { topicById } from "./intents";
 
@@ -320,6 +322,14 @@ export type ShellPayload = {
   connections: number;
   /** Unread proximity alerts, for the badge on the bell. */
   alerts: number;
+  /**
+   * The text version this person has not seen yet, or null.
+   *
+   * Drives the notice in LegalNotice. Computed from what they actually
+   * accepted rather than stored as a flag, so somebody who joins after a
+   * change is never told that something changed before they arrived.
+   */
+  legalNotice: string | null;
   /** Ad-hoc "here now" markers, visible in every scope. */
   pins: PinRef[];
   myPinId: string | null;
@@ -368,7 +378,7 @@ export async function shellPayload(opts: {
    * now" being quietly wrong is worse than it costing a few milliseconds
    * it no longer costs.
    */
-  const [me, , mine, waiting, accepted, alerts, mine_pin] = await Promise.all([
+  const [me, , mine, waiting, accepted, alerts, mine_pin, seenVersion] = await Promise.all([
     opts.userId ? getProfileById(opts.userId) : null,
     opts.userId ? touchActivity(opts.userId) : null,
     // The switcher only ever lists boards you belong to, plus the open
@@ -379,7 +389,12 @@ export async function shellPayload(opts: {
     opts.userId ? listAcceptedConnections(opts.userId) : [],
     opts.userId ? unreadAlerts(opts.userId) : 0,
     opts.userId ? myLivePin(opts.userId) : null,
+    opts.userId ? acceptedCopyVersion(opts.userId) : null,
   ]);
+  /* Only when they have agreed to something older than the text now on
+     the page. Somebody with no consent row yet is mid-onboarding and will
+     be shown the current wording there, so they get no notice. */
+  const legalNotice = seenVersion != null && seenVersion < LEGAL_VERSION ? LEGAL_VERSION : null;
   // Communities only. An event is something that happens *inside* a
   // community, not a network you belong to — listing both made the switcher
   // a pile of one-evening entries that never go away, and gave a host two
@@ -561,6 +576,7 @@ export async function shellPayload(opts: {
         hasSignals,
         connections,
         alerts,
+        legalNotice,
         // Pins aren't scoped to the network: somebody in a café two streets
         // away is worth knowing about whichever community you're looking at.
         pins: pinsHere,
@@ -703,6 +719,7 @@ export async function shellPayload(opts: {
     hasSignals,
     connections,
     alerts,
+    legalNotice,
     pins,
     myPinId: mine_pin?.id ?? null,
     jobs: roles.jobs,
