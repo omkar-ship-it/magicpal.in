@@ -128,13 +128,26 @@ export const LEGAL_VERSION = "2026-11-14.1";
  * anything at or after it counts as current. Raising this is the
  * deliberate act of saying "everybody must agree again".
  *
- * It stays at 2026-11-09.1 through the analytics change because the
- * owner chose notice over re-acceptance, and §14 was rewritten in the
- * same commit to describe that rather than promise otherwise. The
- * promise moved before the behaviour relied on it — which is the only
+ * Set to the oldest version anybody is actually holding, which is the
+ * deliberate choice to re-prompt nobody. Three earlier bumps had left
+ * ten people stale against wording that, read back, changed nothing they
+ * had agreed to — and asking them now would be asking about edits made
+ * weeks ago, in a prompt that says only "accept the terms". That is the
+ * interruption that teaches people the prompt is noise.
+ *
+ * §14 was rewritten in the same commit as the analytics change to
+ * describe notice-over-re-acceptance rather than promise otherwise. The
+ * promise moved before the behaviour relied on it, which is the only
  * order in which this is honest.
+ *
+ * What this does not do is skip asking somebody who has never agreed to
+ * anything. A missing consent row is not an old consent row, and the
+ * twelve people in that state are asked during onboarding exactly as
+ * they always were. Raising this value is still the one deliberate act
+ * that says "everybody must agree again" — it is just no longer
+ * something a typo fix can trigger by accident.
  */
-export const LEGAL_CONSENT_VERSION = "2026-11-09.1";
+export const LEGAL_CONSENT_VERSION = "2026-10-29.2";
 
 /** Shown on both documents. Human-readable twin of LEGAL_VERSION. */
 export const LEGAL_EFFECTIVE = "14 November 2026";
