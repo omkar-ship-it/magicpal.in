@@ -5,31 +5,42 @@ import { firstName, matchesFor } from "./matching";
 import { getOpenMapProfiles } from "./profiles";
 
 /**
- * The two emails that are about other people, rather than about you
- * having been away.
+ * One email, once a morning: what is waiting on you, and who is worth
+ * meeting.
  *
- * Both are batched jobs rather than hooks in `sendMessage` and
- * `requestConnection`, and that is the main design decision here. Per
- * event, ten messages in a conversation produce ten emails and one
- * unsubscribe — the single most common way a product loses an inbox. A
- * job that asks "who has unanswered things waiting, and when did we last
- * say so" produces one email however many messages arrived, and the
- * debounce is structural rather than something every future caller has
- * to remember. It also keeps MSG91 off the request path, so nobody waits
- * on an email provider to watch their own message appear.
+ * It was two jobs — a fast "somebody is waiting" and a daily digest —
+ * and collapsing them is the better product as well as the only shape
+ * that fits a once-a-day cron. Somebody who has a connection request
+ * *and* three matches does not want two emails about the same visit;
+ * they want one, with the urgent thing at the top.
  *
- * The cost is honest and worth stating: these are not instant. An
- * activity email lands within the cron interval, not within the second.
- * For email that is the right trade; for "right now" there is push.
+ * Batched rather than hooked into `sendMessage` and `requestConnection`,
+ * which is the decision that keeps this from becoming spam. Per event,
+ * ten messages in a conversation produce ten emails and one unsubscribe.
+ * A job that asks "who has unanswered things waiting" produces one email
+ * however many messages arrived — the debounce is structural, not
+ * something every future caller has to remember — and it keeps MSG91 off
+ * the request path, so nobody waits on an email provider to watch their
+ * own message appear.
+ *
+ * The honest cost: nothing here is instant. For "right now" there is
+ * push; this is the morning paper.
  */
 
-/** Long enough that a back-and-forth is one email, short enough to be useful. */
-export const ACTIVITY_GAP_MINUTES = 30;
-
-/** One a day, and only when the matcher has something new to say. */
+/** One a day, with slack so a cron that drifts an hour cannot skip a day. */
 export const DIGEST_GAP_HOURS = 20;
 
-/** How many people the daily email will name. More is a directory, not a nudge. */
+/**
+ * How long a message must have sat before it counts as waiting.
+ *
+ * Without it the digest can announce a message sent four minutes before
+ * the cron fired, to somebody who is mid-conversation and has already
+ * read it on their phone. An hour is long enough that anything still
+ * unread is genuinely unanswered.
+ */
+const QUIET_MINUTES = 60;
+
+/** Matches are a nudge, not a directory — the count is what gets sent. */
 const DIGEST_SHOWN = 3;
 
 export type Notification = {
@@ -46,33 +57,20 @@ export type Notification = {
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-/* ─────────────────────────────────────────────── somebody is waiting */
-
 /**
- * Pending connection requests and unread messages, per person, in one
- * query each rather than per candidate.
+ * Pending requests and unanswered threads for everybody at once.
  *
- * Counts threads rather than messages on purpose: "3 people are waiting"
- * is a sentence somebody acts on, "you have 47 unread messages" is one
- * they archive.
+ * Two grouped queries rather than correlated subqueries against each
+ * candidate: the subquery version read better and did not work, because
+ * the generated SQL left the outer `users.id` unqualified inside the
+ * subselect and Postgres refused it as ambiguous. This is also two index
+ * scans instead of one per person.
+ *
+ * Threads, not messages. "3 people are waiting" is a sentence somebody
+ * acts on; "47 unread messages" is one they archive.
  */
-export async function buildActivityEmails(
-  opts: { gapMinutes?: number; limit?: number } = {}
-): Promise<Notification[]> {
-  if (!hasDb || !db) return [];
-  const gap = new Date(Date.now() - (opts.gapMinutes ?? ACTIVITY_GAP_MINUTES) * 60_000);
-
-  /**
-   * Two grouped queries and a join in memory, rather than correlated
-   * subqueries against the outer row.
-   *
-   * The subquery version read better and did not work: the generated SQL
-   * left the outer `users.id` unqualified inside the subselect and
-   * Postgres refused it as ambiguous. This shape is also cheaper — two
-   * index scans instead of one per candidate — and each half can be read
-   * on its own.
-   */
-  const pending = await db
+async function waitingFor(quietBefore: Date) {
+  const pending = await db!
     .select({ uid: sql<string>`u.id`, n: sql<number>`count(*)::int` })
     .from(sql`${users} u`)
     .innerJoin(
@@ -81,99 +79,90 @@ export async function buildActivityEmails(
     )
     .groupBy(sql`u.id`);
 
-  /**
-   * Unread threads that went quiet *before* the cutoff. Without that
-   * condition a conversation in progress re-sends every interval while
-   * two people are typing at each other, which is the other way this
-   * becomes spam.
-   */
-  const unread = await db
+  const unread = await db!
     .select({ uid: sql<string>`u.id`, n: sql<number>`count(distinct m.connection_id)::int` })
     .from(sql`${users} u`)
-    .innerJoin(
-      sql`${connections} c`,
-      sql`(c.user_a_id = u.id or c.user_b_id = u.id)`
-    )
+    .innerJoin(sql`${connections} c`, sql`(c.user_a_id = u.id or c.user_b_id = u.id)`)
     .innerJoin(
       sql`${messages} m`,
-      sql`m.connection_id = c.id and m.sender_id <> u.id and m.read_at is null and m.created_at < ${gap}`
+      sql`m.connection_id = c.id and m.sender_id <> u.id and m.read_at is null and m.created_at < ${quietBefore}`
     )
     .groupBy(sql`u.id`);
 
-  const requestsBy = new Map(pending.map((r) => [r.uid, r.n]));
-  const threadsBy = new Map(unread.map((r) => [r.uid, r.n]));
-
-  const rows = (
-    await db
-      .select({
-        id: users.id,
-        email: users.email,
-        name: users.name,
-        unsubscribeToken: users.unsubscribeToken,
-      })
-      .from(users)
-      .where(
-        and(
-          isNotNull(users.name),
-          isNull(users.emailOptOutAt),
-          or(isNull(users.activityEmailedAt), lt(users.activityEmailedAt, gap))
-        )
-      )
-      .limit(opts.limit ?? 500)
-  ).map((r) => ({ ...r, requests: requestsBy.get(r.id) ?? 0, threads: threadsBy.get(r.id) ?? 0 }));
-
-  const out: Notification[] = [];
-  for (const r of rows) {
-    const lines: string[] = [];
-    if (r.requests > 0) {
-      lines.push(`${plural(r.requests, "person wants", "people want")} to connect with you.`);
-    }
-    if (r.threads > 0) {
-      lines.push(`${plural(r.threads, "conversation is", "conversations are")} waiting on a reply.`);
-    }
-    if (lines.length === 0) continue;
-
-    out.push({
-      userId: r.id,
-      email: r.email,
-      firstName: firstName(r.name ?? "") || "there",
-      headline: lines[0],
-      lines: lines.slice(1),
-      ctaLabel: r.requests > 0 ? "See who" : "Open the conversation",
-      ctaPath: "/",
-      unsubscribeToken: r.unsubscribeToken,
-    });
-  }
-  return out;
+  return {
+    requests: new Map(pending.map((r) => [r.uid, r.n])),
+    threads: new Map(unread.map((r) => [r.uid, r.n])),
+  };
 }
 
-/* ──────────────────────────────────────────────── who is worth meeting */
+/**
+ * How many people the matcher would put in front of them right now.
+ *
+ * Runs the same matcher the For You panel runs, over the same open-map
+ * pool, so the number in the email is the number on the screen it opens.
+ * A digest computed by its own slightly different rule is a digest that
+ * sends people to a screen which disagrees with it.
+ */
+async function matchCount(me: typeof users.$inferSelect): Promise<number> {
+  const stated =
+    (me.lookingFor?.length ?? 0) +
+    (me.canHelpWith?.length ?? 0) +
+    (me.interests?.length ?? 0) +
+    (me.customLookingFor?.length ?? 0) +
+    (me.customCanHelpWith?.length ?? 0) +
+    (me.customInterests?.length ?? 0);
+  // Stated nothing, so nothing can interlock. Telling them so every
+  // morning is not a nudge, it is nagging.
+  if (stated === 0) return 0;
+
+  const centre =
+    me.lat != null && me.lng != null
+      ? { lat: me.lat, lng: me.lng }
+      : me.baseLat != null && me.baseLng != null
+        ? { lat: me.baseLat, lng: me.baseLng }
+        : null;
+  if (!centre) return 0;
+
+  const nearby = await getOpenMapProfiles({
+    excludeUserId: me.id,
+    centerLat: centre.lat,
+    centerLng: centre.lng,
+  });
+  return matchesFor(
+    {
+      id: me.id,
+      lookingFor: me.lookingFor ?? [],
+      canHelpWith: me.canHelpWith ?? [],
+      interests: me.interests ?? [],
+      customLookingFor: me.customLookingFor ?? [],
+      customCanHelpWith: me.customCanHelpWith ?? [],
+      customInterests: me.customInterests ?? [],
+    },
+    nearby,
+    { surface: "open", limit: DIGEST_SHOWN }
+  ).length;
+}
 
 /**
- * The daily one: a count, and a link to For You.
+ * Build the morning's mail.
  *
- * It names nobody, deliberately. An email that lists "Ananya Rao — she
- * does go-to-market, which is what you're after" is a more persuasive
- * email and a worse idea: it publishes a third party's name and stated
- * intent into an inbox that gets forwarded, auto-scanned and breached,
- * and none of those three people agreed to that. The count is the part
- * that is about *you*, and it is enough to earn a click.
+ * Ordered by how much each fact is about *them*. Somebody who asked to
+ * connect and heard nothing outranks a stranger the matcher likes, so
+ * requests lead, then unanswered conversations, then matches. Whatever
+ * leads also decides where the button goes — there is no point landing
+ * somebody on recommendations when the reason they opened the mail is a
+ * request sitting unanswered.
  *
- * It also means the email cannot go stale against the app. A list in an
- * inbox is a snapshot of a matcher that has since re-run; a link is
- * always whatever For You currently says.
- *
- * Still runs the real matcher to decide *whether* to send, against the
- * same open-map pool the panel uses, so the number in the email is the
- * number on the screen it opens. And it sends nothing when the matcher
- * finds nothing — a daily email that arrives whether or not there is
- * anything in it is a daily email people filter.
+ * Nobody with nothing to say gets an email. A morning digest that
+ * arrives every morning whether or not anything happened is a morning
+ * digest people filter, and the volume is self-limiting by design.
  */
-export async function buildDailyMatches(
+export async function buildMorningDigest(
   opts: { gapHours?: number; limit?: number } = {}
 ): Promise<Notification[]> {
   if (!hasDb || !db) return [];
   const gap = new Date(Date.now() - (opts.gapHours ?? DIGEST_GAP_HOURS) * 3_600_000);
+  const quietBefore = new Date(Date.now() - QUIET_MINUTES * 60_000);
 
   const pool = await db
     .select()
@@ -186,92 +175,50 @@ export async function buildDailyMatches(
       )
     )
     .limit(opts.limit ?? 300);
+  if (pool.length === 0) return [];
+
+  const { requests, threads } = await waitingFor(quietBefore);
 
   const out: Notification[] = [];
   for (const me of pool) {
-    // Somebody who has stated nothing cannot be matched on anything, and
-    // telling them so daily is not a nudge, it is nagging.
-    const stated =
-      (me.lookingFor?.length ?? 0) +
-      (me.canHelpWith?.length ?? 0) +
-      (me.interests?.length ?? 0) +
-      (me.customLookingFor?.length ?? 0) +
-      (me.customCanHelpWith?.length ?? 0) +
-      (me.customInterests?.length ?? 0);
-    if (stated === 0) continue;
+    const r = requests.get(me.id) ?? 0;
+    const t = threads.get(me.id) ?? 0;
+    // The one part of this loop that costs a query per person.
+    const m = await matchCount(me);
+    if (r === 0 && t === 0 && m === 0) continue;
 
-    const centre =
-      me.lat != null && me.lng != null
-        ? { lat: me.lat, lng: me.lng }
-        : me.baseLat != null && me.baseLng != null
-          ? { lat: me.baseLat, lng: me.baseLng }
-          : null;
-    if (!centre) continue;
+    const lines: string[] = [];
+    if (r > 0) lines.push(`${plural(r, "person wants", "people want")} to connect with you.`);
+    if (t > 0) lines.push(`${plural(t, "conversation is", "conversations are")} waiting on a reply.`);
+    if (m > 0) lines.push(`${plural(m, "person", "people")} worth meeting near you today.`);
 
-    const nearby = await getOpenMapProfiles({
-      excludeUserId: me.id,
-      centerLat: centre.lat,
-      centerLng: centre.lng,
-    });
-    const matches = matchesFor(
-      {
-        id: me.id,
-        lookingFor: me.lookingFor ?? [],
-        canHelpWith: me.canHelpWith ?? [],
-        interests: me.interests ?? [],
-        customLookingFor: me.customLookingFor ?? [],
-        customCanHelpWith: me.customCanHelpWith ?? [],
-        customInterests: me.customInterests ?? [],
-      },
-      nearby,
-      { surface: "open", limit: DIGEST_SHOWN }
-    );
-    if (matches.length === 0) continue;
-
+    const urgent = r > 0 || t > 0;
     out.push({
       userId: me.id,
       email: me.email,
       firstName: firstName(me.name ?? "") || "there",
-      headline: `${plural(matches.length, "person", "people")} worth meeting near you today.`,
-      lines: ["Based on what you said you're looking for, and what you can help with."],
-      ctaLabel: "See who",
-      // Straight into the recommendations rather than the bare map —
-      // `?panel=forYou` is a real address of that panel (see Overlay in
-      // MapShell), so the click lands on the thing the email is about.
-      ctaPath: "/?panel=forYou",
+      headline: lines[0],
+      lines: lines.slice(1),
+      ctaLabel: urgent ? "See who" : "See who's worth meeting",
+      /* Straight to the thing the headline is about. `?panel=forYou` is a
+         real address of the recommendations (see Overlay in MapShell); a
+         request or an unread thread belongs on the map, where the dock
+         carries both counts. */
+      ctaPath: urgent ? "/" : "/?panel=forYou",
       unsubscribeToken: me.unsubscribeToken,
     });
   }
   return out;
 }
 
-/* ───────────────────────────────────────────────────────────── claiming */
-
 /**
- * Stamp the clock before sending, and only if nobody else already did.
+ * Claim somebody for this run, atomically.
  *
- * Same reasoning as the re-engagement job: claimed before the send, not
- * after, so a crash between the two costs one person one email rather
- * than sending them two. The gap is re-checked inside the UPDATE rather
- * than trusted from the SELECT, which is what holds under a double-fire.
+ * Stamped before the send, not after: a crash between the two costs this
+ * person one morning's email rather than sending them two. The gap is
+ * re-checked inside the UPDATE rather than trusted from the SELECT,
+ * which is what holds under a double-fire or a retried batch.
  */
-export async function claimActivity(userId: string, gapMinutes = ACTIVITY_GAP_MINUTES): Promise<boolean> {
-  if (!hasDb || !db) return false;
-  const gap = new Date(Date.now() - gapMinutes * 60_000);
-  const rows = await db
-    .update(users)
-    .set({ activityEmailedAt: new Date() })
-    .where(
-      and(
-        eq(users.id, userId),
-        isNull(users.emailOptOutAt),
-        or(isNull(users.activityEmailedAt), lt(users.activityEmailedAt, gap))
-      )
-    )
-    .returning();
-  return rows.length > 0;
-}
-
 export async function claimDigest(userId: string, gapHours = DIGEST_GAP_HOURS): Promise<boolean> {
   if (!hasDb || !db) return false;
   const gap = new Date(Date.now() - gapHours * 3_600_000);
