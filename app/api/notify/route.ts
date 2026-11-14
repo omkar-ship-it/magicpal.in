@@ -39,6 +39,31 @@ export async function GET(req: Request) {
   const send = url.searchParams.get("send") === "1";
   const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.opennetworks.in";
 
+  /**
+   * Refuse to run a real send with no template configured.
+   *
+   * Without this the order of operations is a trap. Each person is
+   * claimed — stamped with `digestEmailedAt` — *before* their email is
+   * attempted, which is right, because a crash between the two should
+   * cost somebody one morning rather than send them two. But with no
+   * template every send fails after the claim, so a cron armed before
+   * the template exists would mark all of them as mailed, deliver
+   * nothing, and lock the whole list out for the next twenty hours.
+   *
+   * Dry runs stay allowed: reading the copy is exactly what somebody
+   * should be doing while the template is still being built.
+   */
+  if (send && !process.env.MSG91_NOTIFY_TEMPLATE_ID) {
+    return NextResponse.json(
+      {
+        error:
+          "No MSG91_NOTIFY_TEMPLATE_ID configured — refusing to send. " +
+          "Nobody was marked as emailed. Drop send=1 to preview the copy.",
+      },
+      { status: 503 }
+    );
+  }
+
   const batch = await buildMorningDigest();
 
   if (!send) {
