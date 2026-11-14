@@ -130,9 +130,19 @@ export async function sendNotifyEmail(opts: {
       name: opts.firstName,
       first_name: opts.firstName,
       headline: opts.headline,
+      /**
+       * The supporting lines twice: as slots, and pre-joined.
+       *
+       * MSG91 templates have no conditionals, so a template built around
+       * three slots renders an empty row for every line a given person
+       * does not have — and most people have one. `body_lines` is the
+       * same content as one paragraph, which collapses to nothing when
+       * there is nothing. The slots stay for a template that wants them.
+       */
       line_1: opts.lines[0] ?? "",
       line_2: opts.lines[1] ?? "",
       line_3: opts.lines[2] ?? "",
+      body_lines: opts.lines.join(" "),
       cta_label: opts.ctaLabel,
       cta_url: opts.ctaUrl,
       unsubscribe_url: opts.unsubscribeUrl,

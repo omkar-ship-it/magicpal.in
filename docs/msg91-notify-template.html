@@ -1,0 +1,97 @@
+<!--
+  OpenNetworks — the one transactional template.
+
+  Paste the block below into MSG91 → Email → Templates → New Template,
+  then put the template id into Vercel as MSG91_NOTIFY_TEMPLATE_ID.
+
+  SUBJECT LINE (paste into the subject field, not the body):
+      ##headline##
+
+  Every non-OTP email the product sends uses this one template — the
+  morning digest today, anything else later. That is deliberate: a
+  template per message type is a template per chance to ship an email
+  with a blank where the headline should be, because MSG91 merge tags
+  are whatever text was typed into the editor and a mismatch returns
+  200 OK with an empty space.
+
+  VARIABLES THE CODE SENDS (lib/email.ts → sendNotifyEmail).
+  Unused ones are ignored, so the template can use any subset:
+
+      ##name##            first name, or "there"
+      ##first_name##      the same thing, alternate spelling
+      ##headline##        the one sentence that is the reason for the email
+      ##body_lines##      the supporting sentences, already joined
+      ##line_1##          the same lines as separate slots, if ever wanted
+      ##line_2##          — may be empty
+      ##line_3##          — may be empty
+      ##cta_label##       the button text, varies by what is waiting
+      ##cta_url##         where the button goes
+      ##unsubscribe_url## one click, no login
+
+  Use ##body_lines##, not the numbered slots. MSG91 has no conditionals,
+  so a layout built on three slots renders an empty row for every line a
+  given person does not have — and most people have one.
+
+  ##unsubscribe_url## IS NOT OPTIONAL. The privacy policy promises every
+  one of these carries a working one-click opt-out, and the route that
+  honours it is already live. A template that drops this link makes that
+  promise false.
+-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+       style="background:#faf7f4;margin:0;padding:24px 12px;">
+  <tr>
+    <td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+             style="max-width:520px;background:#ffffff;border:1px solid #ece5df;border-radius:16px;">
+
+        <tr>
+          <td style="padding:28px 28px 0 28px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+            <div style="font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#ff6b4a;">
+              ##company_name##
+            </div>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:18px 28px 0 28px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+            <p style="margin:0 0 14px 0;font-size:15px;line-height:1.5;color:#2b2724;">
+              Hi ##name##,
+            </p>
+            <p style="margin:0;font-size:20px;line-height:1.35;font-weight:700;color:#191614;">
+              ##headline##
+            </p>
+            <p style="margin:10px 0 0 0;font-size:15px;line-height:1.55;color:#6b625b;">
+              ##body_lines##
+            </p>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:24px 28px 4px 28px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="border-radius:999px;background:#ff6b4a;">
+                  <a href="##cta_url##"
+                     style="display:inline-block;padding:13px 26px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:999px;">
+                    ##cta_label##
+                  </a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:20px 28px 26px 28px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+            <p style="margin:0;border-top:1px solid #f0eae5;padding-top:16px;font-size:12.5px;line-height:1.5;color:#9a918a;">
+              You're getting this because you're on ##company_name##.
+              <a href="##unsubscribe_url##" style="color:#9a918a;text-decoration:underline;">Stop these emails</a>
+              — one click, no sign-in. Your sign-in codes keep working either way.
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>
