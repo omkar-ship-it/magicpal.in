@@ -1,6 +1,26 @@
 {
+  "$comment": [
+    "Only the daily digest is scheduled here. Vercel's Hobby plan allows",
+    "one run per day per cron, so the activity job — 'somebody is waiting",
+    "on you' — cannot live in this file at a useful interval: it was",
+    "*/30 and the deploy was rejected outright.",
+    "",
+    "It is not wired to a schedule at all rather than being quietly",
+    "downgraded to daily, because a once-a-day 'you have a message' is a",
+    "worse product than no email and would have looked like it worked.",
+    "Run it from anywhere that can make an authenticated GET every few",
+    "minutes - a GitHub Actions schedule, cron-job.org, or Vercel Pro:",
+    "",
+    "  curl -H \"Authorization: Bearer $CRON_SECRET\" \\",
+    "    'https://www.opennetworks.in/api/notify?job=activity&send=1'",
+    "",
+    "The interval is not what decides who gets mail - ACTIVITY_GAP_MINUTES",
+    "in lib/notify does - so running it every 10 minutes and every hour",
+    "send the same emails at different latencies.",
+    "",
+    "03:30 UTC is 9am IST: morning, local, and well clear of quiet hours."
+  ],
   "crons": [
-    { "path": "/api/notify?job=activity&send=1", "schedule": "*/30 * * * *" },
     { "path": "/api/notify?job=daily&send=1", "schedule": "30 3 * * *" }
   ]
 }
