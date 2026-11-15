@@ -7,15 +7,28 @@ export const maxDuration = 60;
 /**
  * The morning email, as one job.
  *
- * Scheduled in vercel.json at 03:30 UTC — 9am IST. Morning, local, well
- * clear of anybody's quiet hours, and once a day, which is also the most
- * a Hobby-plan cron will run.
+ * Triggered by hand, not on a schedule. `vercel.json` holds an empty
+ * crons array deliberately.
  *
- * Armed on 15 Nov 2026, after the MSG91 template was approved and
- * verified by an email actually arriving. It ran unscheduled for a day
- * before that on purpose: the 503 below blocks a send while the template
- * id is unset, but that lock opens the moment anybody sets the variable,
- * and an absent schedule cannot be opened by accident.
+ * It was scheduled for 03:30 UTC and unscheduled again the same day,
+ * because a daily send is not yet a thing anybody should be able to
+ * start while asleep. Two reasons, both open at the time of writing: the
+ * mail goes out from another product's domain, and the copy repeats
+ * verbatim for anybody whose situation has not changed — neither is
+ * something to discover the morning after it has happened twice.
+ *
+ * The intended rhythm until those are fixed is: look at who would get
+ * one, read the copy, then send.
+ *
+ *     curl -H "Authorization: Bearer $CRON_SECRET" \
+ *       "https://www.opennetworks.in/api/notify"
+ *
+ *     curl -H "Authorization: Bearer $CRON_SECRET" \
+ *       "https://www.opennetworks.in/api/notify?send=1"
+ *
+ * Nothing about the job assumes a schedule. The twenty-hour gap in
+ * lib/notify is what prevents a double send, so running this twice in a
+ * morning is safe and the second run is a no-op.
  *
  * One job rather than two by choice as well as by constraint: somebody
  * with a connection request *and* three matches wants one email with the
