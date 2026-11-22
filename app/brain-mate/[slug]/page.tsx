@@ -8,6 +8,7 @@ import { siteOrigin } from "@/lib/brainMate/origin";
 import AuthGate from "@/components/brainMate/AuthGate";
 import CompareView from "@/components/brainMate/CompareView";
 import WavelengthReveal from "@/components/brainMate/WavelengthReveal";
+import ViewForm from "@/components/brainMate/ViewForm";
 import { ClaimButton, Countdown, NudgeButton, ShareButtons } from "@/components/brainMate/Share";
 
 /**
@@ -46,7 +47,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const s = first(sender?.displayName ?? "Someone");
   return {
     title: `${s} wants to find your Wavelength — Brain-Mate`,
-    description: `${s}'s type stays hidden until you play. About 2½ minutes, then see how you click.`,
+    description: `${s}'s type stays hidden until you play. About 3 minutes, then see how you click.`,
   };
 }
 
@@ -99,7 +100,7 @@ export default async function LinkPage({ params, searchParams }: Params) {
             </p>
             {meNeeds ? (
               <Link href="/brain-mate/play" className="bm-btn bm-btn-brand">
-                Retake · 2½ min
+                Retake · 3 min
               </Link>
             ) : (
               <Link href="/brain-mate" className="bm-btn bm-btn-brand">
@@ -114,6 +115,11 @@ export default async function LinkPage({ params, searchParams }: Params) {
     const view = (
       <div className="flex flex-col gap-3 pt-3">
         <CompareView c={c} full={player} relation={link.relation as "friend" | "colleague"} viewerIsA={isSender} />
+        {player && !(isSender ? link.viewOfRecipient : link.viewOfSender) && (
+          <section className="bm-card p-5">
+            <ViewForm slug={slug} other={isSender ? c.b.name : c.a.name} />
+          </section>
+        )}
         <section className="bm-card p-5">
           <p className="mb-3 text-[12px] font-extrabold tracking-[0.18em] text-[var(--bm-brand)]">
             {player ? "SHARE YOUR WAVELENGTH" : "FIND YOURS"}
@@ -200,7 +206,7 @@ export default async function LinkPage({ params, searchParams }: Params) {
             </p>
           </div>
           <section className="bm-card p-5">
-            <ShareButtons url={url} text={`${senderName} wants to find your Wavelength on Brain-Mate. About 2½ minutes, then we see how we click:`} />
+            <ShareButtons url={url} text={`${senderName} wants to find your Wavelength on Brain-Mate. About 3 minutes, then we see how we click:`} />
           </section>
           {!link.nudgedAt && (
             <NudgeButton slug={slug} url={url} text={`${recipient}! Still waiting on our Brain-Mate Wavelength 👀`} />
@@ -237,7 +243,7 @@ export default async function LinkPage({ params, searchParams }: Params) {
           <ClaimButton slug={slug} label={`I'm ${recipient} — reveal our Wavelength`} />
         ) : (
           <Link href={`/brain-mate/play?link=${slug}`} className="bm-btn bm-btn-brand">
-            Accept the challenge · 2½ min
+            Accept the challenge · 3 min
           </Link>
         )}
         <p className="text-center text-[12px] text-[var(--bm-soft)]">

@@ -102,7 +102,9 @@ export function IdentityCard({
   rarity,
   site,
   colleague = false,
+  mix,
 }: {
+  mix?: { id: ArchetypeId; pct: number }[];
   name: string;
   archetype: ArchetypeId;
   streak: ArchetypeId;
@@ -138,6 +140,11 @@ export function IdentityCard({
         </div>
         <div style={{ display: "flex", fontSize: 104, fontWeight: 800, letterSpacing: -3, marginTop: 6 }}>{a.name.toUpperCase()}</div>
         <div style={{ display: "flex", fontSize: 44, marginTop: 6, color: soft }}>{a.tagline}</div>
+        {mix ? (
+          <div style={{ display: "flex", fontSize: 30, marginTop: 10, color: soft, fontWeight: 800 }}>
+            {mix.map((m) => `${m.pct}% ${short(m.id)}`).join("  ·  ")}
+          </div>
+        ) : null}
         <div style={{ display: "flex", fontSize: 34, marginTop: 18, alignItems: "center" }}>
           {streakLine(streak)}
           {rarity !== null ? (
@@ -282,7 +289,7 @@ export function InvitePreview({ sender, recipient }: { sender: string; recipient
             {`${sender} wants to find your Wavelength, ${recipient}.`}
           </div>
           <div style={{ display: "flex", fontSize: 32, marginTop: 20, color: "rgba(255,255,255,0.7)" }}>
-            {`${sender}'s type stays hidden until you play. About 2½ minutes.`}
+            {`${sender}'s type stays hidden until you play. About 3 minutes.`}
           </div>
         </div>
       </div>
@@ -338,7 +345,7 @@ export function LandingWide() {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", borderRadius: 40, border: `5px solid ${BRAND}`, padding: 56 }}>
         <div style={{ display: "flex", fontSize: 30, fontWeight: 800, letterSpacing: 3, color: BRAND }}>BRAIN-MATE</div>
         <div style={{ display: "flex", fontSize: 92, fontWeight: 800, letterSpacing: -3, marginTop: 10 }}>Find your Brain-Mates</div>
-        <div style={{ display: "flex", fontSize: 36, marginTop: 10, color: "#7A6B63" }}>12 kinds of minds. Which one is yours? About 2½ minutes.</div>
+        <div style={{ display: "flex", fontSize: 36, marginTop: 10, color: "#7A6B63" }}>12 kinds of minds. Which one is yours? About 3 minutes.</div>
         <div style={{ display: "flex", gap: 22, marginTop: 50 }}>
           {ids.map((id) => (
             <div

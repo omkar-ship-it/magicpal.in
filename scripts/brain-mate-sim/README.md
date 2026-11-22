@@ -33,3 +33,22 @@ The simulation assumes people answer the way they actually behave. Once there
 are a few hundred real players, refit the norms, offsets and display scales
 from **real answers**, and tune the compatibility weights against the
 "did this ring true?" feedback.
+
+## v3 — "A Day in Your Mind" (2026-11-23)
+
+- `final.cjs`: the v3 instrument exactly as shipped (story, this-or-that,
+  prioritise, agree/don't, sliders).
+- `export3.cjs`: norms (all / choice-style / strength-style), offsets, the
+  double-check threshold table and display quantiles pasted into `score.ts`
+  and `compare.ts`.
+- `v4.cjs` + `eval4.cjs`: design comparisons, including careless-answer
+  scenarios (`CARELESS=0.12`) and the double-check variants.
+- `ceiling.cjs`, `reach95.cjs`, `beyond.cjs`: the accuracy ceiling. A perfect
+  test still repeats the exact archetype only ~66% of the time two weeks
+  later. Clearly high/low traits read right 99%; the true archetype is in
+  the top-3 mix ~91–93%; a friend's view plus a second session get that to
+  ~95%.
+
+v3 at launch, run through the app's own code: clear types 83% (73% on a
+retake), true archetype in top-3 mix 91%, 24% of players get double-checks,
+archetypes 7–12% each, outcomes PD 34% / FF 31% / MT 26% / BC 9%.

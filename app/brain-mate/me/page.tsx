@@ -7,7 +7,7 @@ import { ARCHETYPES, TRAITS, TRAIT_INFO, relationsOf, streakLine, type Archetype
 import { OUTCOMES } from "@/lib/brainMate/compare";
 import { MIN_CROWD, howDidItKnow, resultFor, strandsFor } from "@/lib/brainMate/score";
 import { ArchetypeMark } from "@/lib/brainMate/symbols";
-import { crowdStats, getBrainMate, myLinks } from "@/lib/brainMate/server";
+import { crowdStats, getBrainMate, myLinks, viewsOf } from "@/lib/brainMate/server";
 import { siteOrigin } from "@/lib/brainMate/origin";
 import { DailyLink, IdentityShare } from "@/components/brainMate/Share";
 
@@ -25,7 +25,13 @@ export default async function MyBrainMate() {
   if (!me.current) return <RetakeScreen name={me.displayName} archetype={me.archetype} />;
 
   const tz = (await cookies()).get("bm_tz")?.value ?? "Asia/Kolkata";
-  const [stats, links, profile, origin] = await Promise.all([crowdStats(), myLinks(user.id, tz), getProfileById(user.id), siteOrigin()]);
+  const [stats, links, profile, origin, views] = await Promise.all([
+    crowdStats(),
+    myLinks(user.id, tz),
+    getProfileById(user.id),
+    siteOrigin(),
+    viewsOf(user.id),
+  ]);
   const a = ARCHETYPES[me.archetype];
   const res = resultFor(me.answers);
   const soft = a.ink === "#ffffff" ? "rgba(255,255,255,0.78)" : "rgba(42,30,0,0.72)";
@@ -41,7 +47,22 @@ export default async function MyBrainMate() {
 
   // Eight traits, as positions between their two ends. ±2.5 standard units
   // spans the whole bar; the middle is a typical player.
-  const sliders = TRAITS.map((k) => ({ label: TRAIT_INFO[k].name, lo: TRAIT_INFO[k].lo, hi: TRAIT_INFO[k].hi, v: res.traits[k] / 2.5 }));
+  // Others' view (when anyone has rated you) is shown beside your own dot.
+  const seen = views.length
+    ? Object.fromEntries(TRAITS.map((k) => [k, views.reduce((sum, v) => sum + v.traits[k], 0) / views.length]))
+    : null;
+  const sliders = TRAITS.map((k) => ({
+    k,
+    label: TRAIT_INFO[k].name,
+    lo: TRAIT_INFO[k].lo,
+    hi: TRAIT_INFO[k].hi,
+    v: res.traits[k] / 2.5,
+    o: seen ? Math.max(-1, Math.min(1, seen[k] / 2.5)) : null,
+  }));
+  const biggestGap = seen
+    ? TRAITS.map((k) => ({ k, gap: seen[k] - res.traits[k] })).sort((x, y) => Math.abs(y.gap) - Math.abs(x.gap))[0]
+    : null;
+  const raters = [...new Set(views.map((v) => v.by))];
 
   return (
     <main className="pb-10">
@@ -70,6 +91,9 @@ export default async function MyBrainMate() {
             <h1 className="bm-display mt-3 text-[2.5rem]">{a.name.toUpperCase()}</h1>
             <p className="text-[1.1rem] font-semibold" style={{ color: soft }}>
               {a.tagline}
+            </p>
+            <p className="mt-2 text-[13px] font-bold" style={{ color: soft }}>
+              {res.mix.map((m) => `${m.pct}% ${ARCHETYPES[m.id].name.replace("The ", "")}`).join(" · ")}
             </p>
             <div className="mt-3 flex flex-wrap items-center justify-center gap-2 text-[13px] font-extrabold">
               <span className="rounded-full px-3 py-1" style={{ background: chip }}>
@@ -139,7 +163,17 @@ export default async function MyBrainMate() {
 
         {/* ---------------------------------------------------- layers */}
         <section className="bm-card p-5">
-          <p className="mb-4 text-[12px] font-extrabold tracking-[0.18em] text-[var(--bm-brand)]">YOUR EIGHT TRAITS</p>
+          <p className="mb-1 text-[12px] font-extrabold tracking-[0.18em] text-[var(--bm-brand)]">YOUR EIGHT TRAITS</p>
+          <p className="mb-4 flex flex-wrap gap-x-4 text-[12px] text-[var(--bm-soft)]">
+            <span className="flex items-center gap-1.5">
+              <span className="h-3 w-3 rounded-full" style={{ background: a.color }} /> you
+            </span>
+            {seen && (
+              <span className="flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded-full border-2 border-[var(--bm-ink)] bg-white" /> how {raters.join(" & ")} {raters.length > 1 ? "see" : "sees"} you
+              </span>
+            )}
+          </p>
           <div className="flex flex-col gap-3.5">
             {sliders.map((s) => (
               <div key={s.label}>
@@ -149,6 +183,12 @@ export default async function MyBrainMate() {
                   <span>{s.hi}</span>
                 </div>
                 <div className="relative mt-1.5 h-2 rounded-full bg-[var(--bm-line)]">
+                  {s.o !== null && (
+                    <span
+                      className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-[var(--bm-ink)] bg-white"
+                      style={{ left: `${((s.o + 1) / 2) * 100}%` }}
+                    />
+                  )}
                   <span
                     className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full"
                     style={{ left: `${((s.v + 1) / 2) * 100}%`, background: a.color }}
@@ -157,6 +197,25 @@ export default async function MyBrainMate() {
               </div>
             ))}
           </div>
+        </section>
+
+        <section className="bm-card p-5">
+          <p className="mb-2 text-[12px] font-extrabold tracking-[0.18em] text-[var(--bm-brand)]">HOW OTHERS SEE YOU</p>
+          {biggestGap && Math.abs(biggestGap.gap) >= 0.6 ? (
+            <p className="text-[1.05rem] font-bold leading-snug">
+              {raters.join(" & ")} {raters.length > 1 ? "see" : "sees"} you as more “
+              {(biggestGap.gap > 0 ? TRAIT_INFO[biggestGap.k].hi : TRAIT_INFO[biggestGap.k].lo).toLowerCase()}” than you see yourself.
+            </p>
+          ) : biggestGap ? (
+            <p className="text-[1.05rem] font-bold leading-snug">
+              {raters.join(" & ")} {raters.length > 1 ? "see" : "sees"} you almost exactly as you see yourself. Rare.
+            </p>
+          ) : (
+            <p className="text-[14px] text-[var(--bm-soft)]">
+              When a friend finishes a Wavelength with you, they can share how you come across. It sharpens your profile — and the gap is
+              often the most interesting thing on the card.
+            </p>
+          )}
         </section>
 
         <section className="bm-card p-5">
@@ -309,11 +368,11 @@ function RetakeScreen({ name, archetype }: { name: string; archetype: ArchetypeI
         </span>
         <h1 className="bm-display text-[2.2rem]">Brain-Mate got sharper, {name.split(" ")[0]}.</h1>
         <p className="text-[15px] text-[var(--bm-soft)]">
-          New questions built on personality research: eight traits, a lightning round with strength, and a final duel that adapts to you.
+          A whole new game, built on personality research: a day in your mind, This or That, Prioritise, Agree or Don&apos;t — and a final duel that adapts to you.
           Retake it for a more accurate card and sharper Wavelengths — your links update by themselves.
         </p>
         <Link href="/brain-mate/play" className="bm-btn bm-btn-brand">
-          Retake · 2½ min
+          Retake · 3 min
         </Link>
         <p className="text-[12px] text-[var(--bm-soft)]">Last time you were {a.name}. Let&apos;s see if it holds.</p>
       </div>

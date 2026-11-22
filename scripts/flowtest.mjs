@@ -196,18 +196,24 @@ async function main() {
     const bmE = await signUp(bmEmailE);
     // Real games, built with the app's own scoring so the duel cards are
     // exactly the ones the server expects.
-    const { nextDuel } = await loadBrainMate();
+    const { nextDuel, checksNeeded } = await loadBrainMate();
     const game = (tilt) => {
       const a = {
-        v: 2,
-        s: tilt
-          ? { s1: "o", s2: "o", s3: "a", s4: "o", s5: "e", s6: "o", s7: "a", s8: "o" }
-          : { s1: "d", s2: "c", s3: "h", s4: "s", s5: "c", s6: "c", s7: "h", s8: "h" },
-        t: Object.fromEntries([...Array(16)].map((_, i) => [`t${i + 1}`, tilt ? (i < 8 ? 3 : 0) : i < 8 ? 1 : 2])),
+        v: 3,
+        story: tilt
+          ? { b1: "o", b2: "o", b3: "e", b4: "a", b5: "o", b6: "o", b7: "i" }
+          : { b1: "s", b2: "c", b3: "c", b4: "h", b5: "d", b6: "h", b7: "c" },
+        pairs: Object.fromEntries([...Array(8)].map((_, i) => [`p${i + 1}`, tilt ? 1 : 0])),
+        ranks: tilt
+          ? { r1: ["o", "e", "d", "c", "s"], r2: ["o", "i", "a", "d", "h"], r3: ["e", "a", "s", "c", "h"] }
+          : { r1: ["c", "s", "d", "o", "e"], r2: ["h", "d", "i", "o", "a"], r3: ["c", "h", "s", "a", "e"] },
+        agree: Object.fromEntries([...Array(12)].map((_, i) => [`g${i + 1}`, tilt ? (i < 8 ? 1 : 0) : i % 2])),
+        sliders: Object.fromEntries([...Array(6)].map((_, i) => [`l${i + 1}`, tilt ? 0.8 : -0.4])),
         values: tilt ? ["freedom", "adventure"] : ["helping", "stability"],
-        tiles: ["places", "startups", "art"],
+        checks: {},
         duels: [],
       };
+      for (const id of checksNeeded(a)) a.checks[id] = 1;
       for (let k = 0; k < 3; k++) {
         const c = nextDuel(a);
         a.duels.push({ a: c.a, b: c.b, pick: c.a });
@@ -223,8 +229,8 @@ async function main() {
     const forgedRes = await api("/api/brain-mate/result", { method: "POST", jar: bmD.jar, body: { name: "Dee", answers: forged } });
     assert(forgedRes.status === 400, "a duel card the answers don't lead to is refused");
     const mine = await pool.query("select archetype, answers->>'v' as v from brain_mates where user_id = (select id from users where email = $1)", [bmEmailD]);
-    assert(mine.rows[0]?.archetype === saved.data.archetype && mine.rows[0]?.v === "2", "the stored archetype is the server's, on the current version");
-    const bad = await api("/api/brain-mate/result", { method: "POST", jar: bmD.jar, body: { name: "Dee", answers: { ...game(true), t: { ...game(true).t, t3: 7 } } } });
+    assert(mine.rows[0]?.archetype === saved.data.archetype && mine.rows[0]?.v === "3", "the stored archetype is the server's, on the current version");
+    const bad = await api("/api/brain-mate/result", { method: "POST", jar: bmD.jar, body: { name: "Dee", answers: { ...game(true), sliders: { ...game(true).sliders, l2: 7 } } } });
     assert(bad.status === 400, "an answer the game can't produce is refused");
 
     const noGame = await api("/api/brain-mate/links", { method: "POST", jar: bmE.jar, body: { name: "Dee" } });
@@ -251,6 +257,18 @@ async function main() {
     const asStranger = await fetch(`${BASE}/brain-mate/${bmSlug}`).then((r) => r.text());
     assert(asPlayer.includes("ANSWER REPLAY"), "a player sees the full comparison");
     assert(!asStranger.includes("ANSWER REPLAY") && asStranger.includes("Find your Brain-Mates"), "anyone else sees only the compact card");
+    const view = Object.fromEntries(["O", "I", "D", "S", "E", "A", "C", "H"].map((k) => [k, 0.5]));
+    const bmEmailF = `flowtest.bm-f.${stamp}@example.com`;
+    emails.push(bmEmailF);
+    const bmF = await signUp(bmEmailF);
+    const outsider = await api(`/api/brain-mate/links/${bmSlug}/view`, { method: "POST", jar: bmF.jar, body: { view } });
+    assert(outsider.status === 401 || outsider.status === 409, "someone outside the pair can't rate either of them");
+    const rated = await api(`/api/brain-mate/links/${bmSlug}/view`, { method: "POST", jar: bmE.jar, body: { view } });
+    assert(rated.status === 200, "the friend can share how the sender comes across");
+    const twice = await api(`/api/brain-mate/links/${bmSlug}/view`, { method: "POST", jar: bmE.jar, body: { view } });
+    assert(twice.status === 409, "…once");
+    const badView = await api(`/api/brain-mate/links/${bmSlug}/view`, { method: "POST", jar: bmD.jar, body: { view: { O: 3 } } });
+    assert(badView.status === 400, "a view needs all eight sliders, in range");
     const privateCard = await fetch(`${BASE}/api/brain-mate/card`);
     assert(privateCard.status === 401, "your identity image is only ever yours");
     }

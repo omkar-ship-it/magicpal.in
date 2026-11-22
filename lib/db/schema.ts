@@ -1143,6 +1143,14 @@ export const brainMateLinks = pgTable(
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     nudgedAt: timestamp("nudged_at", { withTimezone: true }),
+    /**
+     * The friend's view: once a link is finished, each player rates how the
+     * other comes across on eight sliders (-1…1 per trait). Stored on the
+     * link because that's the relationship it came from; a person's traits
+     * in comparisons blend in every view they've received.
+     */
+    viewOfSender: jsonb("view_of_sender"),
+    viewOfRecipient: jsonb("view_of_recipient"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

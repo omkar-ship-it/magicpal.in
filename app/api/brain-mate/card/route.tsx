@@ -2,7 +2,7 @@ import { ImageResponse } from "next/og";
 import { getSessionUser } from "@/lib/session";
 import { crowdStats, getBrainMate } from "@/lib/brainMate/server";
 import { IdentityCard, cardFonts, siteFrom } from "@/lib/brainMate/cards";
-import { MIN_CROWD } from "@/lib/brainMate/score";
+import { MIN_CROWD, resultFor } from "@/lib/brainMate/score";
 
 /**
  * Your own Brain-Mate card as a story-sized PNG, for download and for the
@@ -26,6 +26,7 @@ export async function GET(req: Request) {
         rarity={stats.n >= MIN_CROWD ? (stats.archetypes[me.archetype] ?? null) : null}
         site={siteFrom(req)}
         colleague={colleague}
+        mix={resultFor(me.answers).mix}
       />
     ),
     {

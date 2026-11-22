@@ -208,6 +208,19 @@
   color: #fff;
 }
 
+/* The This-or-That timer ring: purely a nudge, nothing happens at zero. */
+.bm-timer {
+  animation: bm-timer 3s linear forwards;
+}
+@keyframes bm-timer {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: 100.5;
+  }
+}
+
 /* --------------------------------------------------------------- duel */
 .bm-duel-left {
   animation: bm-from-left 0.6s var(--bm-spring) both;

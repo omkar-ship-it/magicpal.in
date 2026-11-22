@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ARCHETYPES, streakLine, type ArchetypeId } from "@/lib/brainMate/archetypes";
-import { MIN_CROWD, montageWords, strandsFor, type Answers } from "@/lib/brainMate/score";
+import { TRAITS } from "@/lib/brainMate/archetypes";
+import { MIN_CROWD, STAR_POS, TRAIT_COLOR, montageWords, starLight, strandsFor, type Answers } from "@/lib/brainMate/score";
 import { ArchetypeMark } from "@/lib/brainMate/symbols";
 import { buzz, tone } from "./feel";
 
@@ -14,6 +15,8 @@ export type RevealData = {
   streak: ArchetypeId;
   /** The top two were nearly tied. */
   cusp: boolean;
+  /** The top three, the honest headline: "58% Connector · 27% Spark · 15% Mentor". */
+  mix: { id: ArchetypeId; pct: number }[];
   rarity: number;
   players: number;
   know: string;
@@ -52,6 +55,7 @@ export default function Reveal({ data }: { data: RevealData }) {
   );
 
   const words = montageWords(data.answers);
+  const stars = starLight(data.answers);
 
   useEffect(() => {
     const timers: number[] = [];
@@ -110,14 +114,37 @@ export default function Reveal({ data }: { data: RevealData }) {
               </div>
             ) : (
               <div className={`relative grid h-[220px] w-[220px] place-items-center ${t >= T.inhale ? "bm-inhale" : ""}`}>
-                <svg viewBox="0 0 400 400" className="absolute inset-0 h-full w-full">
-                  {strandsFor(data.answers, data.name).map((s, i) => (
-                    <path key={i} d={s.d} stroke={s.color} strokeWidth={s.width * 1.4} strokeOpacity={0.9} fill="none" strokeLinecap="round" />
-                  ))}
+                {/* Your constellation: the eight stars, joined up, about to become your mark. */}
+                <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full overflow-visible">
+                  {TRAITS.map((k, i) => {
+                    const [x1, y1] = STAR_POS[k];
+                    const [x2, y2] = STAR_POS[TRAITS[(i + 1) % TRAITS.length]];
+                    return (
+                      <line
+                        key={`l${k}`}
+                        x1={x1}
+                        y1={y1}
+                        x2={x2}
+                        y2={y2}
+                        stroke="#fff"
+                        strokeOpacity={0.35}
+                        strokeWidth={0.6}
+                        className="bm-orb-strand"
+                        style={{ animationDelay: `${i * 70}ms` }}
+                      />
+                    );
+                  })}
+                  {TRAITS.map((k) => {
+                    const [x, y] = STAR_POS[k];
+                    const l = stars[k];
+                    return (
+                      <g key={k}>
+                        <circle cx={x} cy={y} r={3 + l * 9} fill={TRAIT_COLOR[k]} opacity={0.3} />
+                        <circle cx={x} cy={y} r={1.6 + l * 3.4} fill={TRAIT_COLOR[k]} />
+                      </g>
+                    );
+                  })}
                 </svg>
-                <span className="bm-fade-up opacity-60" style={{ animation: "bm-inhale 0.5s ease-in forwards" }}>
-                  <ArchetypeMark id={data.streak} size={70} color="#ffffff" />
-                </span>
               </div>
             )}
           </div>
@@ -186,6 +213,22 @@ export default function Reveal({ data }: { data: RevealData }) {
               <span className="bm-stamp mt-3 rounded-full px-4 py-1.5 text-[13px] font-extrabold" style={{ background: chip }}>
                 ◆ {rarityLine}
               </span>
+            )}
+            {t >= T.rarity && data.mix?.length > 0 && (
+              <div className="bm-fade-up mt-4 w-full max-w-[20rem]" style={{ animationDelay: "0.25s" }}>
+                {/* The blend is the honest claim — right far more often than any single label. */}
+                <div className="flex h-3 overflow-hidden rounded-full" style={{ background: chip }}>
+                  {data.mix.map((m, i) => (
+                    <span
+                      key={m.id}
+                      style={{ width: `${m.pct}%`, background: i === 0 ? a.ink : ARCHETYPES[m.id].color, opacity: i === 0 ? 0.95 : 0.9 }}
+                    />
+                  ))}
+                </div>
+                <p className="mt-1.5 text-[13px] font-bold" style={{ color: soft }}>
+                  {data.mix.map((m) => `${m.pct}% ${ARCHETYPES[m.id].name.replace("The ", "")}`).join(" · ")}
+                </p>
+              </div>
             )}
 
             {t >= T.hand && (

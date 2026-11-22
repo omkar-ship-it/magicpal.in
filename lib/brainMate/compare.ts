@@ -1,6 +1,6 @@
 import { ARCHETYPES, TRAITS, matrixCode, type ArchetypeId, type MatrixCode, type Trait } from "./archetypes";
-import { SCENARIOS, STATEMENTS, TILE_ACTIVITY, TILE_BY_ID, VALUE_BY_ID } from "./rounds";
-import { MIN_CROWD, agreeWord, resultFor, scenarioLabel, type Answers, type CrowdStats, type Traits } from "./score";
+import { AGREES, RANKS, SATURDAY_ACTIVITY, STORY, VALUE_BY_ID } from "./rounds";
+import { MIN_CROWD, resultFor, selfVector, storyLabel, toTraits, type Answers, type CrowdStats, type Traits } from "./score";
 
 /**
  * Two people's Wavelength, built on their eight trait scores.
@@ -8,7 +8,12 @@ import { MIN_CROWD, agreeWord, resultFor, scenarioLabel, type Answers, type Crow
  * SAME WAVELENGTH (similarity) — 50% trait similarity (imagination, inquiry,
  *   social energy, warmth and harmony weighted most: similarity there is
  *   what predicts friendship), 30% shared values (similarity-attraction,
- *   Byrne), 20% shared interests.
+ *   Byrne), 20% how alike your perfect Saturdays are.
+ *
+ * When friends have rated someone ("how do they come across?"), their trait
+ * scores blend 70% self, 30% others — a second informant is the one thing
+ * that raises accuracy beyond what one person's answers can reach. The
+ * archetype itself stays self-reported: it's an identity, not a verdict.
  *
  * COMPATIBILITY — how the differences fit, from interpersonal theory
  *   (Kiesler: dominance works best complementary, warmth works best
@@ -28,6 +33,8 @@ import { MIN_CROWD, agreeWord, resultFor, scenarioLabel, type Answers, type Crow
 export type Person = {
   name: string;
   answers: Answers;
+  /** Other people's ratings of this person, in standard units. */
+  views?: Traits[];
   lookingFor?: string[];
   canHelpWith?: string[];
 };
@@ -96,9 +103,30 @@ export function fitParts(a: Traits, b: Traits) {
   };
 }
 
-// Where a raw score sits among simulated pairs — 21 quantiles each.
-const SIM_Q = [0.037, 0.1872, 0.2202, 0.2447, 0.2646, 0.2831, 0.2998, 0.3165, 0.3327, 0.3475, 0.3629, 0.3788, 0.3943, 0.4106, 0.4293, 0.4487, 0.4708, 0.4981, 0.5369, 0.6064, 0.9709];
-const COMP_Q = [0.2069, 0.4567, 0.4979, 0.527, 0.5512, 0.5708, 0.5889, 0.6064, 0.6225, 0.6384, 0.6541, 0.6696, 0.6861, 0.703, 0.7205, 0.7402, 0.7613, 0.7858, 0.8138, 0.8518, 1];
+// Where a raw score sits among simulated pairs — 21 quantiles each (v3 fit).
+const SIM_Q = [0.0568, 0.2216, 0.2589, 0.2866, 0.3094, 0.3306, 0.3491, 0.3681, 0.385, 0.4015, 0.4188, 0.4365, 0.4543, 0.4724, 0.4914, 0.5128, 0.5353, 0.5623, 0.5968, 0.6564, 0.9078];
+const COMP_Q = [0.1963, 0.4565, 0.4992, 0.5297, 0.5535, 0.5735, 0.5921, 0.609, 0.6254, 0.6416, 0.6572, 0.6731, 0.6897, 0.7065, 0.7234, 0.7425, 0.764, 0.7888, 0.8168, 0.855, 0.9901];
+/** Blend a person's self-scores with what others say, when anyone has rated them. */
+export function blendedTraits(p: Person): Traits {
+  const self = selfVector(p.answers);
+  const views = p.views ?? [];
+  if (!views.length) return toTraits(self);
+  return toTraits(self.map((x, i) => {
+    const k = TRAITS[i];
+    const others = views.reduce((s, v) => s + v[k], 0) / views.length;
+    return 0.7 * x + 0.3 * others;
+  }));
+}
+
+/** 0–1: how alike two perfect-Saturday rankings are (Spearman, rescaled). */
+function saturdaySimilarity(a: Answers, b: Answers): number {
+  const oa = a.ranks.r1 ?? [];
+  const ob = b.ranks.r1 ?? [];
+  if (oa.length !== ob.length || !oa.length) return 0.5;
+  const m = oa.length;
+  const d2 = oa.reduce((s, id, i) => s + (i - ob.indexOf(id)) ** 2, 0);
+  return (1 - (6 * d2) / (m * (m * m - 1)) + 1) / 2;
+}
 
 function percentile(x: number, q: number[]): number {
   if (x <= q[0]) return 0;
@@ -126,8 +154,8 @@ const OPPOSITE: Record<Trait, (lo: string, hi: string) => string> = {
 export function compare(pa: Person, pb: Person, stats: CrowdStats | null = null): Comparison {
   const ra = resultFor(pa.answers);
   const rb = resultFor(pb.answers);
-  const za = ra.traits;
-  const zb = rb.traits;
+  const za = blendedTraits(pa);
+  const zb = blendedTraits(pb);
   const A = ARCHETYPES[ra.archetype];
   const B = ARCHETYPES[rb.archetype];
   const an = first(pa.name);
@@ -136,7 +164,7 @@ export function compare(pa: Person, pb: Person, stats: CrowdStats | null = null)
   // ------------------------------------------------------- similarity
   const tSim = traitSimilarity(za, zb);
   const vSim = jaccard(pa.answers.values, pb.answers.values);
-  const iSim = jaccard(pa.answers.tiles, pb.answers.tiles);
+  const iSim = saturdaySimilarity(pa.answers, pb.answers);
   const similarity = display(0.5 * tSim + 0.3 * vSim + 0.2 * iSim, SIM_Q);
 
   const near = (keys: Trait[]) => clip(1 - keys.reduce((s, k) => s + Math.abs(za[k] - zb[k]), 0) / keys.length / 2.5);
@@ -208,9 +236,10 @@ export function compare(pa: Person, pb: Person, stats: CrowdStats | null = null)
 
   const twins = sharedThing(pa.answers, pb.answers, stats) ?? "Not one answer the same. That's rarer than a perfect match.";
 
-  const sharedTile = pa.answers.tiles.find((t) => pb.answers.tiles.includes(t));
-  const activity = sharedTile
-    ? TILE_ACTIVITY[sharedTile]
+  const satA = pa.answers.ranks.r1?.slice(0, 2) ?? [];
+  const sharedTop = satA.find((id) => pb.answers.ranks.r1?.slice(0, 2).includes(id));
+  const activity = sharedTop
+    ? SATURDAY_ACTIVITY[sharedTop]
     : (za.E + zb.E) / 2 < 0
       ? "A long one-to-one coffee. Phones away."
       : "A meetup together — then compare notes on who you met.";
@@ -268,44 +297,47 @@ function fromCode(code: MatrixCode): Outcome {
   return "beautiful_chaos";
 }
 
-/** The most telling thing two people share: a rare scenario answer, a value, a strong opinion, a passion. */
+/** The most telling thing two people share: a rare story pick, a value, a strong opinion, a Saturday. */
 function sharedThing(a: Answers, b: Answers, stats: CrowdStats | null): string | null {
   const crowd = stats && stats.n >= MIN_CROWD ? stats : null;
   let rarest: { key: string; share: number } | null = null;
-  for (const sc of SCENARIOS) {
-    if (a.s[sc.id] && a.s[sc.id] === b.s[sc.id]) {
-      const key = `${sc.id}:${a.s[sc.id]}`;
-      const share = crowd?.share[key] ?? 1 / sc.options.length;
+  for (const beat of STORY) {
+    if (a.story[beat.id] && a.story[beat.id] === b.story[beat.id]) {
+      const key = `${beat.id}:${a.story[beat.id]}`;
+      const share = crowd?.share[key] ?? 1 / beat.options.length;
       if (!rarest || share < rarest.share) rarest = { key, share };
     }
   }
   if (rarest && crowd && rarest.share < 0.2)
-    return `Both of you: “${scenarioLabel(rarest.key)}”. Only ${Math.max(1, Math.round(rarest.share * 100))}% of people pick that.`;
+    return `Both of you: “${storyLabel(rarest.key)}”. Only ${Math.max(1, Math.round(rarest.share * 100))}% of people pick that.`;
   const value = a.values.find((v) => b.values.includes(v));
   if (value) return `You both packed ${VALUE_BY_ID.get(value)?.label.toLowerCase()}.`;
-  const strong = STATEMENTS.find((s) => (a.t[s.id] === 3 && b.t[s.id] === 3) || (a.t[s.id] === 0 && b.t[s.id] === 0));
-  if (strong) return `You both said “${a.t[strong.id] === 3 ? "Totally" : "Nope"}” to “${strong.text}”`;
-  if (rarest) return `Both of you: “${scenarioLabel(rarest.key)}”.`;
-  const tile = a.tiles.find((t) => b.tiles.includes(t));
-  if (tile) return `You'd both lose a weekend to ${TILE_BY_ID.get(tile)?.label.toLowerCase()}.`;
+  if (rarest) return `Both of you, at ${STORY.find((x) => x.id === rarest!.key.split(":")[0])?.time}: “${storyLabel(rarest.key)}”.`;
+  const topA = a.ranks.r1?.[0];
+  if (topA && topA === b.ranks.r1?.[0]) {
+    const card = RANKS[0].cards.find((c) => c.id === topA);
+    if (card) return `Your perfect Saturday starts the same way: ${card.label.toLowerCase()}.`;
+  }
+  const g = AGREES.find((x) => a.agree[x.id] === 1 && b.agree[x.id] === 1);
+  if (g) return `You both agreed: “${g.text}”`;
   return null;
 }
 
 function replay(a: Answers, b: Answers): Comparison["replay"] {
-  const rows: Comparison["replay"] = SCENARIOS.map((sc) => ({
-    title: sc.title,
-    a: sc.options.find((o) => o.id === a.s[sc.id])?.label ?? "—",
-    b: sc.options.find((o) => o.id === b.s[sc.id])?.label ?? "—",
-    same: a.s[sc.id] === b.s[sc.id],
+  const rows: Comparison["replay"] = STORY.map((beat) => ({
+    title: `${beat.time} · ${beat.prompt}`,
+    a: beat.options.find((o) => o.id === a.story[beat.id])?.label ?? "—",
+    b: beat.options.find((o) => o.id === b.story[beat.id])?.label ?? "—",
+    same: a.story[beat.id] === b.story[beat.id],
   }));
-  // The statements you disagreed on most — the "you said WHAT?" ones.
-  const split = STATEMENTS.map((s) => ({ s, gap: Math.abs((a.t[s.id] ?? 0) - (b.t[s.id] ?? 0)) }))
-    .filter((x) => x.gap >= 2)
-    .sort((x, y) => y.gap - x.gap)
-    .slice(0, 3);
-  for (const { s } of split) rows.push({ title: `“${s.text}”`, a: agreeWord(a.t[s.id]), b: agreeWord(b.t[s.id]), same: false });
-  const lab = (ids: string[], m: Map<string, { label: string }>) => ids.map((id) => m.get(id)?.label ?? id).join(", ");
-  rows.push({ title: "Pack your bag", a: lab(a.values, VALUE_BY_ID), b: lab(b.values, VALUE_BY_ID), same: jaccard(a.values, b.values) === 1 });
-  rows.push({ title: "Your weekend", a: lab(a.tiles, TILE_BY_ID), b: lab(b.tiles, TILE_BY_ID), same: jaccard(a.tiles, b.tiles) === 1 });
+  for (const r of RANKS) {
+    const top = (o?: string[]) => (o ? r.cards.find((c) => c.id === o[0])?.label ?? "—" : "—");
+    rows.push({ title: `${r.prompt} — number one`, a: top(a.ranks[r.id]), b: top(b.ranks[r.id]), same: a.ranks[r.id]?.[0] === b.ranks[r.id]?.[0] });
+  }
+  // Agree cards you split on — the "you said WHAT?" ones.
+  for (const g of AGREES.filter((x) => a.agree[x.id] !== b.agree[x.id]).slice(0, 3))
+    rows.push({ title: `“${g.text}”`, a: a.agree[g.id] ? "Agree" : "Nope", b: b.agree[g.id] ? "Agree" : "Nope", same: false });
+  const lab = (ids: string[]) => ids.map((id) => VALUE_BY_ID.get(id)?.label ?? id).join(", ");
+  rows.push({ title: "Pack your bag", a: lab(a.values), b: lab(b.values), same: jaccard(a.values, b.values) === 1 });
   return rows;
 }

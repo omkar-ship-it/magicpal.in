@@ -5,9 +5,9 @@ import { db } from "@/lib/db";
 import { brainMateLinks, brainMates, users } from "@/lib/db/schema";
 import { ARCHETYPE_IDS, type ArchetypeId } from "./archetypes";
 import { compare, type Comparison } from "./compare";
-import { ARCHETYPES } from "./archetypes";
-import { SCENARIOS, STATEMENTS } from "./rounds";
-import { isV2, resultFor, type Answers, type CrowdStats } from "./score";
+import { ARCHETYPES, TRAITS } from "./archetypes";
+import { AGREES, PAIRS, STORY } from "./rounds";
+import { isCurrent, resultFor, type Answers, type CrowdStats, type Traits } from "./score";
 
 /**
  * Brain-Mate's database layer. Everything that reads or writes the two
@@ -42,7 +42,7 @@ export async function getBrainMate(userId: string): Promise<BrainMateRow | null>
     answers: row.answers as Answers,
     archetype: (row.archetype in ARCHETYPES ? row.archetype : "dreamer") as ArchetypeId,
     streak: (row.streak in ARCHETYPES ? row.streak : "explorer") as ArchetypeId,
-    current: isV2(row.answers),
+    current: isCurrent(row.answers),
   };
 }
 
@@ -73,15 +73,16 @@ export async function crowdStats(): Promise<CrowdStats> {
   if (statsCache && Date.now() - statsCache.at < STATS_TTL_MS) return statsCache.stats;
   const all = await need().select({ answers: brainMates.answers, archetype: brainMates.archetype }).from(brainMates);
   // Only current-version results: an old answer has no meaning in the new questions.
-  const rows = all.filter((r) => isV2(r.answers));
+  const rows = all.filter((r) => isCurrent(r.answers));
   const n = rows.length;
   const counts: Record<string, number> = {};
   const arche: Record<string, number> = {};
   const bump = (k: string) => (counts[k] = (counts[k] ?? 0) + 1);
   for (const row of rows) {
     const a = row.answers as Answers;
-    for (const sc of SCENARIOS) if (a.s[sc.id]) bump(`${sc.id}:${a.s[sc.id]}`);
-    for (const st of STATEMENTS) if (a.t[st.id] !== undefined) bump(`${st.id}:${a.t[st.id]}`);
+    for (const b of STORY) if (a.story[b.id]) bump(`${b.id}:${a.story[b.id]}`);
+    for (const p of PAIRS) if (a.pairs[p.id] !== undefined) bump(`${p.id}:${a.pairs[p.id]}`);
+    for (const g of AGREES) if (a.agree[g.id] !== undefined) bump(`${g.id}:${a.agree[g.id]}`);
     arche[row.archetype] = (arche[row.archetype] ?? 0) + 1;
   }
   const share: Record<string, number> = {};
@@ -254,15 +255,65 @@ export async function needsRetake(link: LinkRow): Promise<{ sender: boolean; rec
   return { sender: !a?.current, recipient: !b?.current };
 }
 
+// ---------------------------------------------------------- friend's view
+/** A rating as stored: -1…1 per trait. Validated, rounded. */
+export function cleanView(input: unknown): Record<string, number> | null {
+  if (!input || typeof input !== "object") return null;
+  const out: Record<string, number> = {};
+  for (const k of TRAITS) {
+    const v = Number((input as Record<string, unknown>)[k]);
+    if (!Number.isFinite(v) || v < -1 || v > 1) return null;
+    out[k] = Math.round(v * 100) / 100;
+  }
+  return out;
+}
+
+/** Slider (-1…1) to standard units: the ends mean "clearly", about two spreads out. */
+const viewToTraits = (v: Record<string, number>): Traits =>
+  Object.fromEntries(TRAITS.map((k) => [k, (v[k] ?? 0) * 2])) as Traits;
+
+/** Every view anyone has given of this person, across all their finished links. */
+export async function viewsOf(userId: string): Promise<{ by: string; traits: Traits; raw: Record<string, number> }[]> {
+  const rows = await need()
+    .select()
+    .from(brainMateLinks)
+    .where(or(eq(brainMateLinks.senderId, userId), eq(brainMateLinks.recipientId, userId)));
+  const out: { by: string; traits: Traits; raw: Record<string, number> }[] = [];
+  for (const l of rows) {
+    const isSender = l.senderId === userId;
+    const v = (isSender ? l.viewOfSender : l.viewOfRecipient) as Record<string, number> | null;
+    const raterId = isSender ? l.recipientId : l.senderId;
+    if (!v || !raterId) continue;
+    const rater = await getBrainMate(raterId);
+    out.push({ by: (rater?.displayName ?? "A friend").split(" ")[0], traits: viewToTraits(v), raw: v });
+  }
+  return out;
+}
+
+/** A player of a finished link rates the other one. Once each. */
+export async function saveView(slug: string, raterId: string, view: Record<string, number>): Promise<{ ok: boolean; error?: string }> {
+  const link = await getLink(slug);
+  if (!link || !link.completedAt) return { ok: false, error: "This Wavelength isn't finished yet." };
+  const ratingSender = link.recipientId === raterId;
+  if (!ratingSender && link.senderId !== raterId) return { ok: false, error: "Only the two of you can rate each other." };
+  const already = ratingSender ? link.viewOfSender : link.viewOfRecipient;
+  if (already) return { ok: false, error: "You've already shared your view." };
+  await need()
+    .update(brainMateLinks)
+    .set(ratingSender ? { viewOfSender: view } : { viewOfRecipient: view })
+    .where(eq(brainMateLinks.id, link.id));
+  return { ok: true };
+}
+
 /** A finished link's comparison, sender as "a". Null until both are on the current questionnaire. */
 export async function comparisonFor(link: LinkRow): Promise<Comparison | null> {
   if (!link.completedAt || !link.recipientId) return null;
   const [a, b] = await Promise.all([getBrainMate(link.senderId), getBrainMate(link.recipientId)]);
   if (!a || !b || !a.current || !b.current) return null;
-  const [ia, ib, stats] = await Promise.all([intentOf(a.userId), intentOf(b.userId), crowdStats()]);
+  const [ia, ib, stats, va, vb] = await Promise.all([intentOf(a.userId), intentOf(b.userId), crowdStats(), viewsOf(a.userId), viewsOf(b.userId)]);
   return compare(
-    { name: a.displayName, answers: a.answers, lookingFor: ia.lookingFor, canHelpWith: ia.canHelpWith },
-    { name: b.displayName, answers: b.answers, lookingFor: ib.lookingFor, canHelpWith: ib.canHelpWith },
+    { name: a.displayName, answers: a.answers, lookingFor: ia.lookingFor, canHelpWith: ia.canHelpWith, views: va.map((v) => v.traits) },
+    { name: b.displayName, answers: b.answers, lookingFor: ib.lookingFor, canHelpWith: ib.canHelpWith, views: vb.map((v) => v.traits) },
     stats
   );
 }

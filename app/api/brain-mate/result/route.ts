@@ -48,6 +48,7 @@ export async function POST(req: Request) {
     archetype: result.archetype,
     streak: result.streak,
     cusp: result.cusp,
+    mix: result.mix,
     players: stats.n,
     rarity: stats.archetypes[result.archetype] ?? 0,
     know: howDidItKnow(answers, stats),
