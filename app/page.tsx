@@ -3,6 +3,7 @@ import { parseScope, shellPayload } from "@/lib/shell";
 import { DEFAULT_RADIUS_KM } from "@/lib/rules";
 import MapShell from "@/components/MapShellLoader";
 import { linkedinEnabled } from "@/lib/linkedin";
+import { getBrainMate } from "@/lib/brainMate/server";
 
 /**
  * The app opens on the map — no landing page.
@@ -20,6 +21,18 @@ export default async function Home({
 }) {
   const { net, panel, join, event, li } = await searchParams;
   const user = await getSessionUser();
+
+  // Brain-Mate is offered to every signed-in member: the full invitation
+  // until they've played the current version, then a chip wearing their
+  // archetype. Read here so it's in the first paint, not a second request.
+  const bm = user ? await getBrainMate(user.id).catch(() => null) : null;
+  const brainMate = !user
+    ? null
+    : !bm
+      ? ({ state: "new" } as const)
+      : bm.current
+        ? ({ state: "played", archetype: bm.archetype } as const)
+        : ({ state: "retake", archetype: bm.archetype } as const);
 
   // Fetched here rather than in the client: the first thing a visitor has
   // to believe is that real people are already on this map, and that is a
@@ -61,6 +74,7 @@ export default async function Home({
       onboarded={Boolean(user?.onboarded)}
       myVisibility={user?.visibility ?? "off"}
       me={user ? { name: user.name ?? user.email, photoUrl: user.photoUrl } : null}
+      brainMate={brainMate}
     />
   );
 }

@@ -59,6 +59,22 @@ export const TRAIT_INFO: Record<Trait, { name: string; lo: string; hi: string; l
   H: { name: "Harmony", lo: "Say the hard thing", hi: "Keep it together", loLine: "Say the uncomfortable thing", hiLine: "Keep the group together" },
 };
 
+/**
+ * Every trait praised at both ends — a low score is a different strength,
+ * never a deficit. Used for "your top strengths", which come from the
+ * person's own scores rather than the archetype's.
+ */
+export const TRAIT_PRAISE: Record<Trait, { hi: [string, string]; lo: [string, string] }> = {
+  O: { hi: ["Imagination", "You see what could be."], lo: ["Groundedness", "You know what actually works."] },
+  I: { hi: ["Curiosity", "You get to the bottom of things."], lo: ["Practicality", "You get things working."] },
+  D: { hi: ["Follow-through", "You finish what you start."], lo: ["Agility", "You move on the moment it's done."] },
+  S: { hi: ["Organisation", "You make order out of chaos."], lo: ["Flexibility", "You adapt on the fly."] },
+  E: { hi: ["Energy", "You light up a room."], lo: ["Depth", "Your conversations really matter."] },
+  A: { hi: ["Leadership", "You make the call when it counts."], lo: ["Support", "You make every leader better."] },
+  C: { hi: ["Warmth", "People feel looked after around you."], lo: ["Clarity", "You solve the real problem."] },
+  H: { hi: ["Harmony", "You bring people together."], lo: ["Candour", "You say what needs saying."] },
+};
+
 export type Archetype = {
   id: ArchetypeId;
   name: string;
@@ -85,6 +101,16 @@ export type Archetype = {
   role: string;
   /** A question someone could open with. */
   askMe: string;
+  /** What makes this archetype brilliant — the card's heart. */
+  strengths: [string, string, string];
+  /** One line people would say about them. */
+  lovedFor: string;
+  /** The rooms and roles where this archetype comes alive. */
+  shineIn: [string, string, string];
+  /** The blind spot, reframed as the next level — never a criticism. */
+  growthEdge: string;
+  /** One small, concrete thing to do this week. */
+  thisWeek: string;
   /** Best complements first, from the derived matrix. */
   powerDuo: ArchetypeId[];
   /**
@@ -119,6 +145,11 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     does: "imagines it",
     role: "the direction",
     askMe: "What would you build if it couldn't fail?",
+    strengths: ["You see possibilities before anyone else", "You make people excited about what's next", "You aim high — and pull others up with you"],
+    lovedFor: "Making the future feel close enough to touch.",
+    shineIn: ["Brainstorms", "New ventures", "Big-picture strategy"],
+    growthEdge: "Pick one idea and give it a finish line — your vision deserves to be real.",
+    thisWeek: "Write down the idea you keep coming back to, and tell one person who could help build it.",
     powerDuo: ["maker", "doer", "strategist"],
     edge: { kind: "clash", id: "detective" },
     profile: { O: 2, I: 0, D: 0, S: -1, E: 1, A: 1, C: 0, H: 0 },
@@ -142,6 +173,11 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     does: "finds where to go",
     role: "the scout",
     askMe: "What's the most interesting thing you've learned this month?",
+    strengths: ["Endlessly curious — you learn faster than anyone", "You connect ideas from different worlds", "You're open to people and views others miss"],
+    lovedFor: "Always arriving with something fascinating to share.",
+    shineIn: ["Research & discovery", "New markets", "Learning anything fast"],
+    growthEdge: "Go deep on one thing you love — breadth plus depth is rare.",
+    thisWeek: "Spend an hour on the rabbit hole you've been saving, then share what you found.",
     powerDuo: ["maker", "doer", "spark"],
     edge: { kind: "opposite", id: "peacemaker" },
     profile: { O: 1.5, I: 1, D: -0.5, S: -1.5, E: 0.5, A: 0, C: 0, H: 0 },
@@ -165,6 +201,11 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     does: "makes it beautiful",
     role: "the craft",
     askMe: "What's something you made that still feels like you?",
+    strengths: ["You make things that move people", "You notice details others overlook", "You turn the ordinary into the memorable"],
+    lovedFor: "Making everything you touch a little more beautiful.",
+    shineIn: ["Design & brand", "Storytelling", "Product craft"],
+    growthEdge: "Ship it at 90% — the world needs to see your work.",
+    thisWeek: "Share one thing you've made, unfinished, with someone you trust.",
     powerDuo: ["doer", "explorer"],
     edge: { kind: "opposite", id: "maverick" },
     profile: { O: 2, I: 0, D: 1, S: 0, E: -0.5, A: 0, C: 0, H: 0.5 },
@@ -188,6 +229,11 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     does: "questions it",
     role: "the stress test",
     askMe: "What does everyone in your field believe that's wrong?",
+    strengths: ["You think for yourself, even when it's lonely", "You spot what everyone agreed on too fast", "You make the bold bets others won't"],
+    lovedFor: "Saying what everyone was thinking — and being right.",
+    shineIn: ["Strategy & positioning", "Turnarounds", "Rethinking how things are done"],
+    growthEdge: "Pick your battles — your challenge lands hardest when it's rare.",
+    thisWeek: "Write down the contrarian bet you believe in, and test it cheaply.",
     powerDuo: ["doer", "maker"],
     edge: { kind: "clash", id: "peacemaker" },
     profile: { O: 0.5, I: 1, D: 0, S: -1, E: 0, A: 1, C: -0.5, H: -2 },
@@ -211,6 +257,11 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     does: "finds what's really wrong",
     role: "the truth",
     askMe: "What's a problem you couldn't stop thinking about?",
+    strengths: ["You find the truth under the noise", "Your questions make everyone think sharper", "People trust you with the facts"],
+    lovedFor: "Being the person who actually knows.",
+    shineIn: ["Analysis & research", "Diagnosing problems", "Due diligence"],
+    growthEdge: "Decide at 80% sure — your instincts are better than you think.",
+    thisWeek: "Give the question you can't stop thinking about one focused hour.",
     powerDuo: ["doer", "explorer"],
     edge: { kind: "clash", id: "spark" },
     profile: { O: 0, I: 2, D: 0.5, S: 0.5, E: -1, A: 0, C: 0, H: 0 },
@@ -234,6 +285,11 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     does: "plans the path",
     role: "the plan",
     askMe: "What are you planning three moves from now?",
+    strengths: ["You see the path before anyone starts walking", "You turn chaos into clarity", "You make big goals feel achievable"],
+    lovedFor: "Making everyone feel there's a plan — because there is.",
+    shineIn: ["Planning & operations", "Leading complex projects", "Long-term thinking"],
+    growthEdge: "Leave room for surprises — the best plans bend.",
+    thisWeek: "Map one goal three moves ahead, then make the first move today.",
     powerDuo: ["explorer", "dreamer"],
     edge: { kind: "clash", id: "maker" },
     profile: { O: 0, I: 1, D: 1, S: 2, E: 0, A: 0.5, C: 0, H: 0 },
@@ -257,6 +313,11 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     does: "gets it moving",
     role: "the momentum",
     askMe: "What would you start this weekend if someone joined you?",
+    strengths: ["You turn ideas into action, fast", "Your energy is contagious", "You rally people around things that matter"],
+    lovedFor: "Making things happen — and making them fun.",
+    shineIn: ["Launches & events", "Sales & partnerships", "Getting teams moving"],
+    growthEdge: "Pair your spark with a finisher — together you're unstoppable.",
+    thisWeek: "Start the thing you've been talking about, and invite one person to do it with you.",
     powerDuo: ["explorer", "doer"],
     edge: { kind: "clash", id: "detective" },
     profile: { O: 0.5, I: -0.5, D: 0, S: -1, E: 2, A: 1, C: 0, H: 0 },
@@ -280,6 +341,11 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     does: "builds it",
     role: "the prototype",
     askMe: "What are you building right now?",
+    strengths: ["You learn by building — and you build fast", "You make the abstract real", "You solve problems with your hands and your head"],
+    lovedFor: "Showing up with a working version while others are still talking.",
+    shineIn: ["Prototyping", "Engineering & craft", "Hands-on problem solving"],
+    growthEdge: "Ask “who is this for?” before the first build — it makes your work land.",
+    thisWeek: "Build a tiny version of an idea in a single sitting.",
     powerDuo: ["explorer", "dreamer", "maverick"],
     edge: { kind: "clash", id: "strategist" },
     profile: { O: 0.5, I: -0.5, D: 2, S: -1, E: 0, A: 0, C: 0, H: 0 },
@@ -303,6 +369,11 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     does: "delivers it",
     role: "the finish line",
     askMe: "What's the last thing you shipped that you're proud of?",
+    strengths: ["You deliver — every single time", "People trust you with what matters", "You make momentum feel calm"],
+    lovedFor: "Being the reason things actually get done.",
+    shineIn: ["Execution & delivery", "Operations", "Turning plans into results"],
+    growthEdge: "Pause to ask “is this still the right thing?” — then finish it brilliantly.",
+    thisWeek: "Finish one lingering thing, and celebrate it out loud.",
     powerDuo: ["dreamer", "explorer", "detective"],
     edge: { kind: "opposite", id: "maverick" },
     profile: { O: -0.5, I: 0, D: 2, S: 1, E: 0, A: 0.5, C: 0, H: 0 },
@@ -326,6 +397,11 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     does: "brings in the right people",
     role: "the network",
     askMe: "Who's the most interesting person you met this year?",
+    strengths: ["You make strangers feel like friends", "You know exactly who should meet whom", "You build communities without trying"],
+    lovedFor: "Making every room warmer and every network bigger.",
+    shineIn: ["Community & partnerships", "Hiring", "Events & business development"],
+    growthEdge: "Go deep with a few — your best connections deserve your time.",
+    thisWeek: "Introduce two people who should know each other.",
     powerDuo: ["explorer", "doer"],
     edge: { kind: "clash", id: "detective" },
     profile: { O: 0, I: 0, D: 0, S: 0, E: 2, A: 0, C: 1, H: 0.5 },
@@ -349,6 +425,11 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     does: "helps everyone grow",
     role: "the guide",
     askMe: "What's the best advice you've ever ignored?",
+    strengths: ["You help people see their next step", "You listen in a way people remember", "You help others grow without making it about you"],
+    lovedFor: "Leaving people better than you found them.",
+    shineIn: ["Coaching & leadership", "Teaching", "Growing people"],
+    growthEdge: "Take your own advice — you deserve the care you give.",
+    thisWeek: "Ask someone you're helping what they'd love to learn next.",
     powerDuo: ["doer"],
     edge: { kind: "opposite", id: "dreamer" },
     profile: { O: 0, I: 1, D: 0, S: 0, E: -0.5, A: 0, C: 2, H: 0.5 },
@@ -372,6 +453,11 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     does: "keeps everyone together",
     role: "the glue",
     askMe: "What's a disagreement you're glad you had?",
+    strengths: ["You find common ground where others see walls", "You make people feel heard", "You hold teams together through hard moments"],
+    lovedFor: "Making everyone feel safe enough to be honest.",
+    shineIn: ["Leading teams", "Negotiation", "Culture & community"],
+    growthEdge: "Say what you think — your view is part of the harmony.",
+    thisWeek: "Share one honest opinion you've been holding back.",
     powerDuo: ["explorer", "dreamer", "doer"],
     edge: { kind: "clash", id: "maverick" },
     profile: { O: 0, I: 0, D: 0, S: 0.5, E: 0, A: -1, C: 1, H: 2 },

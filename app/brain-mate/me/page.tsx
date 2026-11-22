@@ -3,9 +3,9 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
 import { getProfileById } from "@/lib/profiles";
-import { ARCHETYPES, TRAITS, TRAIT_INFO, relationsOf, streakLine, type ArchetypeId } from "@/lib/brainMate/archetypes";
+import { ARCHETYPES, TRAITS, TRAIT_INFO, TRAIT_PRAISE, relationsOf, streakLine, type ArchetypeId } from "@/lib/brainMate/archetypes";
 import { OUTCOMES } from "@/lib/brainMate/compare";
-import { MIN_CROWD, howDidItKnow, resultFor, strandsFor } from "@/lib/brainMate/score";
+import { MIN_CROWD, TRAIT_COLOR, howDidItKnow, resultFor, strandsFor } from "@/lib/brainMate/score";
 import { ArchetypeMark } from "@/lib/brainMate/symbols";
 import { crowdStats, getBrainMate, myLinks, viewsOf } from "@/lib/brainMate/server";
 import { siteOrigin } from "@/lib/brainMate/origin";
@@ -63,6 +63,12 @@ export default async function MyBrainMate() {
     ? TRAITS.map((k) => ({ k, gap: seen[k] - res.traits[k] })).sort((x, y) => Math.abs(y.gap) - Math.abs(x.gap))[0]
     : null;
   const raters = [...new Set(views.map((v) => v.by))];
+  // Your three most pronounced traits, each praised at whichever end you sit:
+  // a low score is a different strength, never a gap.
+  const topStrengths = TRAITS.map((k) => ({ k, z: res.traits[k] }))
+    .sort((x, y) => Math.abs(y.z) - Math.abs(x.z))
+    .slice(0, 3)
+    .map(({ k, z }) => ({ k, high: z >= 0, label: TRAIT_PRAISE[k][z >= 0 ? "hi" : "lo"][0], line: TRAIT_PRAISE[k][z >= 0 ? "hi" : "lo"][1] }));
 
   return (
     <main className="pb-10">
@@ -113,22 +119,85 @@ export default async function MyBrainMate() {
               ))}
             </div>
           </div>
-          <div className="mt-6 grid gap-3 text-left">
-            <div className="rounded-[1.2rem] p-4" style={{ background: chip }}>
-              <p className="text-[11px] font-extrabold tracking-[0.18em]" style={{ color: soft }}>
-                SUPERPOWER
-              </p>
-              <p className="mt-1 text-[1.1rem] font-extrabold">{a.superpower}</p>
-            </div>
-            <div className="rounded-[1.2rem] p-4" style={{ background: chip }}>
-              <p className="text-[11px] font-extrabold tracking-[0.18em]" style={{ color: soft }}>
-                BLIND SPOT
-              </p>
-              <p className="mt-1 text-[1.1rem] font-extrabold">{a.roast}</p>
-            </div>
+          {/* The superpower, as the card's headline promise. */}
+          <div className="mt-6 rounded-[1.4rem] p-5 text-center" style={{ background: chip }}>
+            <p className="text-[11px] font-extrabold tracking-[0.2em]" style={{ color: soft }}>
+              ✦ YOUR SUPERPOWER ✦
+            </p>
+            <p className="mt-1.5 text-[1.3rem] font-extrabold leading-snug">{a.superpower}</p>
           </div>
         </div>
       </section>
+
+      {/* ---------------------------------------------------- the gifts */}
+      <div className="bm-shell !min-h-0 gap-3 !pb-0 !pt-4">
+        <section className="bm-card overflow-hidden">
+          <div className="p-5">
+            <p className="text-[12px] font-extrabold tracking-[0.18em] text-[var(--bm-brand)]">YOUR TOP STRENGTHS</p>
+            <p className="mt-0.5 text-[13px] text-[var(--bm-soft)]">From your own answers — the three things that stood out most.</p>
+            <div className="mt-4 flex flex-col gap-3">
+              {topStrengths.map((t, i) => (
+                <div key={t.k} className="bm-fade-up flex items-center gap-3" style={{ animationDelay: `${i * 90}ms` }}>
+                  <span
+                    className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-[1.05rem] font-extrabold text-white"
+                    style={{ background: TRAIT_COLOR[t.k] }}
+                  >
+                    {i + 1}
+                  </span>
+                  <span>
+                    <span className="block text-[1.05rem] font-extrabold">{t.label}</span>
+                    <span className="block text-[14px] text-[var(--bm-soft)]">{t.line}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="border-t border-[var(--bm-line)] p-5" style={{ background: a.tint }}>
+            <p className="text-[12px] font-extrabold tracking-[0.18em]" style={{ color: a.color }}>
+              WHAT MAKES {a.name.toUpperCase()} BRILLIANT
+            </p>
+            <ul className="mt-3 flex flex-col gap-2.5">
+              {a.strengths.map((x) => (
+                <li key={x} className="flex gap-2.5 text-[15px] font-semibold leading-snug">
+                  <span style={{ color: a.color }}>✦</span>
+                  {x}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        <section className="bm-card p-5 text-center">
+          <p className="text-[12px] font-extrabold tracking-[0.18em] text-[var(--bm-brand)]">PEOPLE LOVE YOU FOR</p>
+          <p className="bm-display mt-2 text-[1.5rem] leading-tight">“{a.lovedFor}”</p>
+        </section>
+
+        <section className="bm-card p-5">
+          <p className="text-[12px] font-extrabold tracking-[0.18em] text-[var(--bm-brand)]">WHERE YOU SHINE</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {a.shineIn.map((x) => (
+              <span key={x} className="rounded-full px-3.5 py-2 text-[14px] font-bold" style={{ background: a.tint, color: a.color }}>
+                {x}
+              </span>
+            ))}
+          </div>
+          <p className="mt-3 text-[14px] text-[var(--bm-soft)]">
+            You&apos;re at your best when {a.bestWhen}.
+          </p>
+        </section>
+
+        <section className="bm-card p-5">
+          <p className="text-[12px] font-extrabold tracking-[0.18em] text-[var(--bm-brand)]">YOUR GROWTH EDGE</p>
+          <p className="mt-2 text-[1.05rem] font-bold leading-snug">{a.growthEdge}</p>
+          <div className="mt-4 rounded-[1rem] bg-[#FFF1EC] p-4">
+            <p className="text-[11px] font-extrabold tracking-[0.18em] text-[var(--bm-brand)]">TRY THIS WEEK</p>
+            <p className="mt-1 text-[15px] font-semibold">{a.thisWeek}</p>
+          </div>
+          <p className="mt-4 text-[13px] text-[var(--bm-soft)]">
+            Your guilty habit 😅 <b className="text-[var(--bm-ink)]">{a.roast}</b>
+          </p>
+        </section>
+      </div>
 
       <div className="bm-shell !min-h-0 gap-3 !pt-4">
         {/* ----------------------------------------------------- share */}
@@ -226,9 +295,6 @@ export default async function MyBrainMate() {
         <section className="bm-card p-5">
           <p className="mb-3 text-[12px] font-extrabold tracking-[0.18em] text-[var(--bm-brand)]">WORK WITH ME</p>
           <div className="grid gap-2 text-[15px]">
-            <p>
-              <b>I&apos;m at my best when</b> {a.bestWhen}.
-            </p>
             <p>
               <b>{a.give}</b>
             </p>
