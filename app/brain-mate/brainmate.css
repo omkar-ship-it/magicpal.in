@@ -1,0 +1,520 @@
+/*
+ * Brain-Mate's own look: a cream app, with each archetype's colour flooding
+ * the screen at its reveal. Every class is prefixed bm- — globals.css is
+ * unlayered and would otherwise win over these (see AGENT_HANDOFF §6.4).
+ *
+ * Motion language follows the archetype's column once it's known:
+ * Ignite springs, Seek drifts, Steady eases. Everything degrades to plain
+ * fades under prefers-reduced-motion — the order of the reveal survives,
+ * the movement doesn't.
+ */
+
+.bm-root {
+  --bm-cream: #faf7f5;
+  --bm-ink: #241a16;
+  --bm-soft: #7a6b63;
+  --bm-line: #ece2dc;
+  --bm-brand: #ff6b4a;
+  --bm-card: #ffffff;
+  --bm-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --bm-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  min-height: 100dvh;
+  background: var(--bm-cream);
+  color: var(--bm-ink);
+  -webkit-tap-highlight-color: transparent;
+  color-scheme: light;
+}
+
+.bm-shell {
+  max-width: 30rem;
+  margin: 0 auto;
+  padding: max(env(safe-area-inset-top, 0px), 14px) 18px max(env(safe-area-inset-bottom, 0px), 22px);
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.bm-wide {
+  max-width: 40rem;
+}
+
+.bm-display {
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.02;
+}
+
+.bm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  padding: 0.95rem 1.5rem;
+  font-weight: 700;
+  font-size: 1rem;
+  background: var(--bm-ink);
+  color: #fff;
+  transition: transform 0.15s var(--bm-spring), opacity 0.2s;
+  border: 0;
+  cursor: pointer;
+}
+.bm-btn:active {
+  transform: scale(0.96);
+}
+.bm-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.bm-btn-brand {
+  background: var(--bm-brand);
+  box-shadow: 0 14px 30px -14px rgba(255, 107, 74, 0.9);
+}
+.bm-btn-ghost {
+  background: transparent;
+  color: var(--bm-ink);
+  border: 1.5px solid var(--bm-line);
+}
+.bm-btn-light {
+  background: rgba(255, 255, 255, 0.2);
+  color: inherit;
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+}
+
+.bm-input {
+  width: 100%;
+  border-radius: 1rem;
+  border: 1.5px solid var(--bm-line);
+  background: #fff;
+  padding: 0.9rem 1rem;
+  font-size: 1.05rem;
+  outline: none;
+  color: var(--bm-ink);
+}
+.bm-input:focus {
+  border-color: var(--bm-brand);
+}
+
+.bm-card {
+  background: var(--bm-card);
+  border-radius: 1.5rem;
+  border: 1.5px solid var(--bm-line);
+}
+
+/* ------------------------------------------------------- answer cards */
+.bm-option {
+  width: 100%;
+  text-align: left;
+  border-radius: 1.35rem;
+  border: 2px solid var(--bm-line);
+  background: #fff;
+  padding: 1.1rem 1.15rem;
+  font-size: 1.05rem;
+  font-weight: 650;
+  line-height: 1.3;
+  cursor: pointer;
+  transition:
+    transform 0.35s var(--bm-spring),
+    opacity 0.35s var(--bm-ease),
+    border-color 0.2s,
+    box-shadow 0.35s;
+  animation: bm-rise 0.45s var(--bm-ease) both;
+}
+.bm-option:hover {
+  border-color: #d9c9c0;
+}
+.bm-option:active {
+  transform: scale(0.98);
+}
+.bm-option[data-state="chosen"] {
+  transform: scale(1.03) translateY(-3px);
+  border-color: var(--bm-brand);
+  box-shadow: 0 18px 36px -18px rgba(255, 107, 74, 0.8);
+}
+.bm-option[data-state="gone"] {
+  opacity: 0;
+  transform: translateY(14px) scale(0.96);
+  pointer-events: none;
+}
+
+.bm-headline {
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 700;
+  font-size: 1.25rem;
+  border-style: double;
+  border-width: 4px;
+  letter-spacing: -0.01em;
+}
+.bm-headline small {
+  display: block;
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-size: 0.65rem;
+  letter-spacing: 0.18em;
+  color: var(--bm-soft);
+  font-weight: 700;
+  margin-bottom: 0.3rem;
+}
+
+/* --------------------------------------------------------- crowd split */
+.bm-split {
+  animation: bm-rise 0.3s var(--bm-ease) both;
+}
+.bm-rare {
+  background: linear-gradient(110deg, #ff6b4a 20%, #ffd36e 45%, #ff6b4a 70%);
+  background-size: 220% 100%;
+  animation:
+    bm-rise 0.3s var(--bm-ease) both,
+    bm-shimmer 1.4s linear infinite;
+  color: #fff;
+}
+
+/* ------------------------------------------------------ narrowing ring */
+.bm-ring-dot {
+  transition:
+    opacity 0.6s var(--bm-ease),
+    transform 0.6s var(--bm-spring),
+    filter 0.6s;
+}
+.bm-ring-dot[data-alive="false"] {
+  opacity: 0.12;
+  transform: scale(0.7);
+  filter: grayscale(1);
+}
+
+/* ------------------------------------------------------------ the orb */
+.bm-orb-strand {
+  stroke-dasharray: 600;
+  stroke-dashoffset: 600;
+  animation: bm-draw 0.9s var(--bm-ease) forwards;
+}
+.bm-spark {
+  position: fixed;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  pointer-events: none;
+  z-index: 60;
+  animation: bm-fly 0.6s var(--bm-ease) forwards;
+}
+
+/* --------------------------------------------------------- lightning */
+.bm-swipe-card {
+  touch-action: none;
+  user-select: none;
+  transition: transform 0.28s var(--bm-spring), opacity 0.25s;
+}
+.bm-dark {
+  background: #17110e;
+  color: #fff;
+}
+
+/* --------------------------------------------------------------- duel */
+.bm-duel-left {
+  animation: bm-from-left 0.6s var(--bm-spring) both;
+}
+.bm-duel-right {
+  animation: bm-from-right 0.6s var(--bm-spring) 0.12s both;
+}
+.bm-heartbeat {
+  animation: bm-heartbeat 1.1s ease-in-out infinite;
+}
+
+/* ------------------------------------------------------------- reveal */
+.bm-flood {
+  transition: background-color 0.7s var(--bm-ease), color 0.7s;
+}
+.bm-montage-word {
+  animation: bm-flash 0.32s var(--bm-ease) both;
+}
+.bm-inhale {
+  animation: bm-inhale 0.55s var(--bm-ease) forwards;
+}
+.bm-bloom {
+  animation: bm-bloom 0.9s var(--bm-spring) both;
+}
+.bm-letter {
+  display: inline-block;
+  animation: bm-letter 0.5s var(--bm-spring) both;
+}
+.bm-fade-up {
+  animation: bm-rise 0.5s var(--bm-ease) both;
+}
+.bm-stamp {
+  animation: bm-stamp 0.55s var(--bm-spring) both;
+}
+.bm-confetti {
+  position: absolute;
+  pointer-events: none;
+  animation: bm-confetti 1.6s var(--bm-ease) forwards;
+}
+
+.bm-flip {
+  perspective: 900px;
+}
+.bm-flip-inner {
+  position: relative;
+  transition: transform 0.6s var(--bm-spring);
+  transform-style: preserve-3d;
+  min-height: 5.25rem;
+}
+.bm-flip[data-open="true"] .bm-flip-inner {
+  transform: rotateY(180deg);
+}
+.bm-flip-face,
+.bm-flip-back {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border-radius: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0.85rem 1rem;
+}
+.bm-flip-back {
+  transform: rotateY(180deg);
+}
+
+/* Idle motion per column, on the mark after the reveal. */
+.bm-idle-ignite {
+  animation: bm-pulse 2.2s ease-in-out infinite;
+}
+.bm-idle-seek {
+  animation: bm-drift 5s ease-in-out infinite;
+}
+.bm-idle-steady {
+  animation: bm-breathe 4s ease-in-out infinite;
+}
+
+/* ---------------------------------------------------------- wavelength */
+.bm-wave {
+  animation: bm-wave-move 1.6s linear infinite;
+}
+.bm-piece-left {
+  animation: bm-piece-left 0.8s var(--bm-spring) both;
+}
+.bm-piece-right {
+  animation: bm-piece-right 0.8s var(--bm-spring) both;
+}
+
+.bm-bar {
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--bm-line);
+  overflow: hidden;
+}
+.bm-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  animation: bm-grow 1s var(--bm-ease) both;
+  transform-origin: left;
+}
+
+/* ------------------------------------------------------------ keyframes */
+@keyframes bm-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes bm-shimmer {
+  to {
+    background-position: -220% 0;
+  }
+}
+@keyframes bm-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes bm-fly {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--dx), var(--dy)) scale(0.3);
+    opacity: 0;
+  }
+}
+@keyframes bm-from-left {
+  from {
+    opacity: 0;
+    transform: translateX(-60px) rotate(-4deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes bm-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(60px) rotate(4deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes bm-heartbeat {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  15% {
+    transform: scale(1.08);
+  }
+  30% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.05);
+  }
+}
+@keyframes bm-flash {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+    filter: blur(6px);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+    filter: none;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.15);
+  }
+}
+@keyframes bm-inhale {
+  to {
+    transform: scale(0.04);
+    opacity: 0.9;
+  }
+}
+@keyframes bm-bloom {
+  0% {
+    transform: scale(0.05) rotate(-40deg);
+    opacity: 0;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes bm-letter {
+  0% {
+    opacity: 0;
+    transform: translateY(0.5em) scale(1.4);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes bm-stamp {
+  0% {
+    opacity: 0;
+    transform: scale(2.2) rotate(-8deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(-2deg);
+  }
+}
+@keyframes bm-confetti {
+  0% {
+    transform: translate(0, 0) rotate(0) scale(0.6);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(1);
+    opacity: 0;
+  }
+}
+@keyframes bm-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.07);
+  }
+}
+@keyframes bm-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0);
+  }
+  33% {
+    transform: translate(4px, -5px) rotate(3deg);
+  }
+  66% {
+    transform: translate(-4px, 3px) rotate(-2deg);
+  }
+}
+@keyframes bm-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(0.97);
+    opacity: 0.88;
+  }
+}
+@keyframes bm-wave-move {
+  to {
+    transform: translateX(-200px);
+  }
+}
+@keyframes bm-piece-left {
+  from {
+    transform: translateX(-40px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(6px);
+    opacity: 1;
+  }
+}
+@keyframes bm-piece-right {
+  from {
+    transform: translateX(40px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(-6px);
+    opacity: 1;
+  }
+}
+@keyframes bm-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bm-root *,
+  .bm-root *::before,
+  .bm-root *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.12s !important;
+  }
+}

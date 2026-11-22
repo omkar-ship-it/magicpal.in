@@ -1086,3 +1086,68 @@ export const jobs = pgTable(
   },
   (t) => [index("jobs_user_idx").on(t.userId)]
 );
+
+// ---------------------------------------------------------------- brain-mate
+/**
+ * Brain-Mate: the personality game. One row per person who has played.
+ *
+ * `answers` is the raw record and the only input that matters — archetype,
+ * streak and the rest are recomputed from it on the server whenever a row is
+ * written, so a client can never post a flattering archetype directly. They
+ * are stored anyway because the crowd-split statistics and the rarity line
+ * read them across every row.
+ *
+ * `displayName` is deliberately not `users.name`. Setting the account name
+ * is what marks somebody as onboarded (lib/session), and the game must not
+ * let anyone skip the real onboarding form by typing a first name here.
+ */
+export const brainMates = pgTable(
+  "brain_mates",
+  {
+    userId: uuid("user_id")
+      .primaryKey()
+      .references(() => users.id, { onDelete: "cascade" }),
+    displayName: text("display_name").notNull(),
+    answers: jsonb("answers").notNull(),
+    archetype: text("archetype").notNull(),
+    streak: text("streak").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("brain_mates_archetype_idx").on(t.archetype)]
+);
+
+/**
+ * One Wavelength link: one sender, one named friend, one pair, kept for good.
+ *
+ * `senderDay` is the sender's local calendar date when they sent it, and the
+ * unique index on (sender, day) *is* the one-a-day rule — enforced by the
+ * database, so two quick taps or two tabs can't both get through.
+ *
+ * The slug carries a random suffix (omkar-sunil-k7x): two first names alone
+ * collide constantly and can be guessed, and a finished link shows the
+ * pair's card to anyone who has it.
+ */
+export const brainMateLinks = pgTable(
+  "brain_mate_links",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    slug: text("slug").notNull().unique(),
+    senderId: uuid("sender_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    recipientName: text("recipient_name").notNull(),
+    relation: text("relation").notNull().default("friend"),
+    senderDay: text("sender_day").notNull(),
+    recipientId: uuid("recipient_id").references(() => users.id, { onDelete: "set null" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    nudgedAt: timestamp("nudged_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("brain_mate_links_daily").on(t.senderId, t.senderDay),
+    index("brain_mate_links_recipient_idx").on(t.recipientId),
+    check("brain_mate_links_relation", sql`${t.relation} in ('friend','colleague')`),
+  ]
+);

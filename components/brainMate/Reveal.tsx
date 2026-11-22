@@ -1,0 +1,264 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { ARCHETYPES, streakLine, type ArchetypeId } from "@/lib/brainMate/archetypes";
+import { MONTAGE, SWIPE_ROUND } from "@/lib/brainMate/rounds";
+import { MIN_CROWD, strandsFor, type Answers } from "@/lib/brainMate/score";
+import { ArchetypeMark } from "@/lib/brainMate/symbols";
+import { buzz, tone } from "./feel";
+
+export type RevealData = {
+  name: string;
+  answers: Answers;
+  archetype: ArchetypeId;
+  streak: ArchetypeId;
+  loser: ArchetypeId;
+  rarity: number;
+  players: number;
+  know: string;
+  next: { href: string; label: string };
+  note: string | null;
+};
+
+/**
+ * The peak. About five seconds play out on their own — your answers flash
+ * past, the losing silhouette shatters into your art, the art inhales to a
+ * point, then blooms into your mark while your colour floods the screen and
+ * the name lands letter by letter. After that the pace is yours: you deal
+ * your own hand, one card per tap, and the blind spot is the last card for
+ * a reason — it's the laugh.
+ */
+
+const T = { shatter: 1500, inhale: 2050, bloom: 2600, name: 3000, tagline: 3900, rarity: 4500, hand: 5100 };
+
+function seeded(i: number) {
+  const x = Math.sin(i * 9301 + 49297) * 233280;
+  return x - Math.floor(x);
+}
+
+export default function Reveal({ data }: { data: RevealData }) {
+  const a = ARCHETYPES[data.archetype];
+  const [t, setT] = useState(0);
+  const [flipped, setFlipped] = useState<number[]>([]);
+  const [confetti] = useState(() =>
+    Array.from({ length: 16 }, (_, i) => ({
+      dx: (seeded(i) - 0.5) * 520,
+      dy: -120 - seeded(i + 40) * 380,
+      rot: (seeded(i + 80) - 0.5) * 720,
+      size: 14 + seeded(i + 120) * 18,
+      delay: seeded(i + 160) * 0.25,
+    }))
+  );
+
+  const words = montageWords(data.answers);
+
+  useEffect(() => {
+    const timers: number[] = [];
+    const at = (ms: number, fn: () => void) => timers.push(window.setTimeout(fn, ms));
+    words.forEach((_, i) => at(i * 190, () => tone(i % 2 ? 4 : 7, 0.06)));
+    for (const ms of Object.values(T)) at(ms, () => setT(ms));
+    at(T.bloom, () => {
+      buzz([30, 60, 90]);
+      tone(0, 0.5);
+      tone(7, 0.6);
+      tone(12, 0.8);
+    });
+    return () => timers.forEach((x) => window.clearTimeout(x));
+    // Runs once: the sequence is the same however long the page stays open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const bloomed = t >= T.bloom;
+  const cards = [
+    { k: "Trait", v: a.traits[0] },
+    { k: "Trait", v: a.traits[1] },
+    { k: "Trait", v: a.traits[2] },
+    { k: "Superpower", v: a.superpower },
+    { k: "Blind spot", v: a.roast },
+  ];
+  const allFlipped = flipped.length === cards.length;
+  const rarityLine =
+    data.players >= MIN_CROWD
+      ? `1 in ${Math.max(2, Math.round(1 / Math.max(data.rarity, 0.01)))} people are ${a.name.replace("The ", "")}s`
+      : `One of the first ${Math.max(1, data.players)} Brain-Mates`;
+  const soft = a.ink === "#ffffff" ? "rgba(255,255,255,0.75)" : "rgba(42,30,0,0.7)";
+  const chip = a.ink === "#ffffff" ? "rgba(255,255,255,0.16)" : "rgba(42,30,0,0.1)";
+
+  return (
+    <main
+      className="bm-flood relative min-h-[100dvh] overflow-hidden"
+      style={{ background: bloomed ? a.color : "#120c0a", color: bloomed ? a.ink : "#fff" }}
+    >
+      <div className="bm-shell">
+        {/* --------------------------------------------- before the bloom */}
+        {!bloomed && (
+          <div className="flex flex-1 flex-col items-center justify-center">
+            {t < T.shatter ? (
+              <div className="relative h-[120px] w-full text-center">
+                {words.map((w, i) => (
+                  <span
+                    key={i}
+                    className="bm-montage-word absolute inset-x-0 top-1/2 -translate-y-1/2 text-[2.2rem] font-extrabold"
+                    style={{ animationDelay: `${i * 190}ms`, opacity: 0 }}
+                  >
+                    {w}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <div className={`relative grid h-[220px] w-[220px] place-items-center ${t >= T.inhale ? "bm-inhale" : ""}`}>
+                <svg viewBox="0 0 400 400" className="absolute inset-0 h-full w-full">
+                  {strandsFor(data.answers, data.name).map((s, i) => (
+                    <path key={i} d={s.d} stroke={s.color} strokeWidth={s.width * 1.4} strokeOpacity={0.9} fill="none" strokeLinecap="round" />
+                  ))}
+                </svg>
+                <span className="bm-fade-up opacity-60" style={{ animation: "bm-inhale 0.5s ease-in forwards" }}>
+                  <ArchetypeMark id={data.loser} size={70} color="#ffffff" />
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ---------------------------------------------- after the bloom */}
+        {bloomed && (
+          <div className="flex flex-1 flex-col items-center pt-6 text-center">
+            <p className="bm-fade-up text-[12px] font-extrabold tracking-[0.22em]" style={{ color: soft }}>
+              {data.name.split(" ")[0].toUpperCase()}, YOU ARE
+            </p>
+            <div className="relative mt-4 grid h-[190px] w-[190px] place-items-center">
+              <svg viewBox="0 0 400 400" className="absolute inset-0 h-full w-full">
+                {strandsFor(data.answers, data.name).map((s, i) => (
+                  <path key={i} d={s.d} stroke={a.ink} strokeWidth={s.width} strokeOpacity={0.3} fill="none" strokeLinecap="round" />
+                ))}
+              </svg>
+              <div className="bm-bloom grid h-[132px] w-[132px] place-items-center rounded-full" style={{ background: chip }}>
+                <span className={`bm-idle-${a.mode}`}>
+                  <ArchetypeMark id={a.id} size={96} color={a.ink} />
+                </span>
+              </div>
+              {confetti.map((c, i) => (
+                <span
+                  key={i}
+                  className="bm-confetti left-1/2 top-1/2"
+                  style={{
+                    ["--dx" as string]: `${c.dx}px`,
+                    ["--dy" as string]: `${c.dy}px`,
+                    ["--rot" as string]: `${c.rot}deg`,
+                    animationDelay: `${c.delay}s`,
+                  }}
+                >
+                  <ArchetypeMark id={a.id} size={c.size} color={a.ink} stroke={8} />
+                </span>
+              ))}
+            </div>
+
+            {t >= T.name && (
+              <h1 className="bm-display mt-4 text-[2.7rem]" aria-label={a.name}>
+                {a.name.toUpperCase().split("").map((ch, i) => (
+                  <span key={i} className="bm-letter" style={{ animationDelay: `${i * 45}ms` }} aria-hidden="true">
+                    {ch === " " ? " " : ch}
+                  </span>
+                ))}
+              </h1>
+            )}
+            {t >= T.tagline && (
+              <p className="bm-fade-up mt-1 text-[1.15rem] font-semibold" style={{ color: soft }}>
+                {a.tagline}
+              </p>
+            )}
+            {t >= T.rarity && (
+              <span className="bm-stamp mt-3 rounded-full px-4 py-1.5 text-[13px] font-extrabold" style={{ background: chip }}>
+                ◆ {rarityLine}
+              </span>
+            )}
+
+            {t >= T.hand && (
+              <div className="mt-6 w-full">
+                {!allFlipped && (
+                  <p className="bm-fade-up mb-2 text-[13px] font-bold" style={{ color: soft }}>
+                    Tap to deal your hand ({flipped.length}/{cards.length})
+                  </p>
+                )}
+                <div className="grid grid-cols-2 gap-2.5">
+                  {cards.map((c, i) => {
+                    const open = flipped.includes(i);
+                    const wide = i >= 3;
+                    return (
+                      <button
+                        key={i}
+                        className={`bm-flip bm-fade-up text-left ${wide ? "col-span-2" : i === 2 ? "col-span-2" : ""}`}
+                        style={{ animationDelay: `${i * 70}ms` }}
+                        data-open={open}
+                        onClick={() => {
+                          if (open) return;
+                          buzz(10);
+                          tone(i * 2, 0.1);
+                          setFlipped((f) => [...f, i]);
+                        }}
+                        aria-label={open ? `${c.k}: ${c.v}` : `Flip card ${i + 1}`}
+                      >
+                        <div className="bm-flip-inner">
+                          <div className="bm-flip-face items-center" style={{ background: chip, border: `1.5px solid ${soft}` }}>
+                            <span className="opacity-60">
+                              <ArchetypeMark id={a.id} size={30} color={a.ink} />
+                            </span>
+                          </div>
+                          <div className="bm-flip-back" style={{ background: a.ink === "#ffffff" ? "#fff" : "#2A1E00", color: a.color }}>
+                            <span className="text-[11px] font-extrabold tracking-[0.18em] opacity-70">{c.k.toUpperCase()}</span>
+                            <span className="text-[1.05rem] font-extrabold leading-snug">{c.v}</span>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                {!allFlipped && (
+                  <button
+                    className="mt-3 text-[12px] font-semibold underline opacity-70"
+                    onClick={() => setFlipped(cards.map((_, i) => i))}
+                  >
+                    Flip them all
+                  </button>
+                )}
+              </div>
+            )}
+
+            {allFlipped && (
+              <div className="mt-6 flex w-full flex-col items-center gap-4">
+                <p className="bm-fade-up max-w-[22rem] text-[1.1rem] font-bold leading-snug">&ldquo;{data.know}&rdquo;</p>
+                <span
+                  className="bm-stamp flex items-center gap-2 rounded-full px-4 py-2 text-[14px] font-extrabold"
+                  style={{ background: ARCHETYPES[data.streak].color, color: ARCHETYPES[data.streak].ink, animationDelay: "0.3s" }}
+                >
+                  <ArchetypeMark id={data.streak} size={20} color={ARCHETYPES[data.streak].ink} stroke={8} />
+                  {streakLine(data.streak)}
+                </span>
+                {data.note && <p className="text-[13px] font-semibold opacity-80">{data.note}</p>}
+                <Link
+                  href={data.next.href}
+                  className="bm-btn bm-fade-up mt-2 w-full"
+                  style={{ background: a.ink, color: a.color, animationDelay: "0.5s" }}
+                >
+                  {data.next.label} →
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}
+
+/** Your own answers as single words, in the order you gave them. */
+function montageWords(a: Answers): string[] {
+  const out: string[] = [];
+  for (const id of ["r1", "r2", "r3", "r4"] as const) if (a[id]) out.push(MONTAGE[`${id}:${a[id]}`]);
+  const sw = SWIPE_ROUND.cards[1];
+  const v = a.r5?.[sw.id];
+  if (v) out.push(v === sw.left.id ? sw.left.label : sw.right.label);
+  for (const id of ["r6", "r7"] as const) if (a[id]) out.push(MONTAGE[`${id}:${a[id]}`]);
+  return out.filter(Boolean);
+}

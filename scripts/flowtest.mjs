@@ -155,7 +155,9 @@ async function main() {
   const emailA = `flowtest.a.${stamp}@example.com`;
   const emailB = `flowtest.b.${stamp}@example.com`;
   const emailC = `flowtest.c.${stamp}@example.com`;
-  const emails = [emailA, emailB, emailC];
+  const bmEmailD = `flowtest.bm-d.${stamp}@example.com`;
+  const bmEmailE = `flowtest.bm-e.${stamp}@example.com`;
+  const emails = [emailA, emailB, emailC, bmEmailD, bmEmailE];
   const slugs = [];
 
   // Far enough from the seed data that its people can't accidentally satisfy
@@ -164,6 +166,74 @@ async function main() {
   const CITY = { lat: 28.7041, lng: 77.1025, label: "Delhi" };
 
   try {
+    // ------------------------------------------------------- Brain-Mate
+    // The game's promises: the archetype is computed on the server, the
+    // duel only accepts the two archetypes the answers lead to, one link a
+    // day, a link completes once, and a finished link shows the full
+    // comparison only to its two players.
+    {
+    console.log("\nBrain-Mate");
+    const bmD = await signUp(bmEmailD);
+    const bmE = await signUp(bmEmailE);
+    const base = (tilt) => ({
+      r1: tilt ? "imagine" : "act",
+      r2: tilt ? "ignite" : "steady",
+      r3: tilt ? "imagine" : "act",
+      r4: tilt ? "ignite" : "steady",
+      r5: { s1: "start", s2: "whatif", s3: "make", s4: "wander", s5: "try", s6: "idea" },
+      r6: tilt ? "imagine" : "act",
+      r7: tilt ? "ignite" : "steady",
+      r8: ["freedom", "adventure"],
+      r9: ["places", "startups", "art"],
+    });
+    const ARCH = ["dreamer", "explorer", "creator", "maverick", "detective", "strategist", "spark", "maker", "doer", "connector", "mentor", "peacemaker"];
+    const noTerms = await api("/api/brain-mate/result", { method: "POST", jar: bmD.jar, body: { name: "Dee", answers: { ...base(true), duel: "dreamer" } } });
+    assert(noTerms.status === 400, "saving a game needs the terms accepted");
+    const accepted = [];
+    for (const duel of ARCH) {
+      const r = await api("/api/brain-mate/result", { method: "POST", jar: bmD.jar, body: { name: "Dee", answers: { ...base(true), duel }, acceptTerms: true } });
+      if (r.status === 200) accepted.push(duel);
+    }
+    assert(accepted.length === 2, "the final duel accepts exactly the two archetypes the answers lead to");
+    const mine = await pool.query("select archetype from brain_mates where user_id = (select id from users where email = $1)", [bmEmailD]);
+    assert(accepted.includes(mine.rows[0]?.archetype), "the stored archetype is computed from the answers");
+    const bad = await api("/api/brain-mate/result", { method: "POST", jar: bmD.jar, body: { name: "Dee", answers: { ...base(true), r1: "everything", duel: "dreamer" } } });
+    assert(bad.status === 400, "an answer the game can't produce is refused");
+
+    const noGame = await api("/api/brain-mate/links", { method: "POST", jar: bmE.jar, body: { name: "Dee" } });
+    assert(noGame.status === 409, "you can't send a Wavelength link before playing");
+    const made = await api("/api/brain-mate/links", { method: "POST", jar: bmD.jar, body: { name: "Eve", relation: "friend", tz: "Asia/Kolkata" } });
+    assert(made.status === 200 && /^dee-eve-[a-z2-9]{3}$/.test(made.data.slug ?? ""), "a link reads as both first names plus a short suffix");
+    const bmSlug = made.data.slug;
+    const second = await api("/api/brain-mate/links", { method: "POST", jar: bmD.jar, body: { name: "Fay", tz: "Asia/Kolkata" } });
+    assert(second.status === 429, "one Wavelength link per day");
+    const own = await api(`/api/brain-mate/links/${bmSlug}/claim`, { method: "POST", jar: bmD.jar, body: {} });
+    assert(own.status === 409, "the sender can't answer their own link");
+
+    let eAccepted = false;
+    for (const duel of ARCH) {
+      const r = await api("/api/brain-mate/result", {
+        method: "POST",
+        jar: bmE.jar,
+        body: { name: "Eve", answers: { ...base(false), duel }, acceptTerms: true, link: bmSlug },
+      });
+      if (r.status === 200) {
+        eAccepted = !r.data.linkError;
+        break;
+      }
+    }
+    assert(eAccepted, "the friend's game completes the link in the same request");
+    const linkRow = await pool.query("select completed_at, recipient_id from brain_mate_links where slug = $1", [bmSlug]);
+    assert(linkRow.rows[0]?.completed_at && linkRow.rows[0]?.recipient_id, "…and the link is marked done with its recipient");
+
+    const asPlayer = await fetch(`${BASE}/brain-mate/${bmSlug}`, { headers: bmD.jar.headers() }).then((r) => r.text());
+    const asStranger = await fetch(`${BASE}/brain-mate/${bmSlug}`).then((r) => r.text());
+    assert(asPlayer.includes("ANSWER REPLAY"), "a player sees the full comparison");
+    assert(!asStranger.includes("ANSWER REPLAY") && asStranger.includes("Find your Brain-Mates"), "anyone else sees only the compact card");
+    const privateCard = await fetch(`${BASE}/api/brain-mate/card`);
+    assert(privateCard.status === 401, "your identity image is only ever yours");
+    }
+
     console.log("\nAuth + onboarding");
     const a = await signUp(emailA);
     assert(a.onboarded === false, "new account starts un-onboarded");
@@ -2140,6 +2210,7 @@ async function main() {
       [slug, emailC]
     );
     assert(joinedRow.rowCount === 1, "…and the scan actually joined them");
+
 
     console.log(`\n${pass} passed, ${fail} failed`);
   } finally {
