@@ -46,7 +46,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const s = first(sender?.displayName ?? "Someone");
   return {
     title: `${s} wants to find your Wavelength — Brain-Mate`,
-    description: `${s}'s type stays hidden until you play. Two minutes, then see how you click.`,
+    description: `${s}'s type stays hidden until you play. About 2½ minutes, then see how you click.`,
   };
 }
 
@@ -200,7 +200,7 @@ export default async function LinkPage({ params, searchParams }: Params) {
             </p>
           </div>
           <section className="bm-card p-5">
-            <ShareButtons url={url} text={`${senderName} wants to find your Wavelength on Brain-Mate. 2 minutes, then we see how we click:`} />
+            <ShareButtons url={url} text={`${senderName} wants to find your Wavelength on Brain-Mate. About 2½ minutes, then we see how we click:`} />
           </section>
           {!link.nudgedAt && (
             <NudgeButton slug={slug} url={url} text={`${recipient}! Still waiting on our Brain-Mate Wavelength 👀`} />
@@ -237,7 +237,7 @@ export default async function LinkPage({ params, searchParams }: Params) {
           <ClaimButton slug={slug} label={`I'm ${recipient} — reveal our Wavelength`} />
         ) : (
           <Link href={`/brain-mate/play?link=${slug}`} className="bm-btn bm-btn-brand">
-            Accept the challenge · 2 min
+            Accept the challenge · 2½ min
           </Link>
         )}
         <p className="text-center text-[12px] text-[var(--bm-soft)]">

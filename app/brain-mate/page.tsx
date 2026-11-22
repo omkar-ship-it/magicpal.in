@@ -54,7 +54,7 @@ export default async function BrainMateLanding() {
 
       <div className="bm-fade-up text-center">
         <h1 className="bm-display text-[2.6rem]">Find your Brain-Mates</h1>
-        <p className="mt-2 text-[16px] text-[var(--bm-soft)]">12 kinds of minds. Which one is yours? Two minutes, nine rounds, one final duel.</p>
+        <p className="mt-2 text-[16px] text-[var(--bm-soft)]">12 kinds of minds. Which one is yours? Eight scenarios, a lightning round and a final duel — about 2½ minutes.</p>
         {stats.n > 0 && (
           <p className="mt-3 text-[13px] font-semibold text-[var(--bm-soft)]">
             {stats.n.toLocaleString("en-IN")} {stats.n === 1 ? "mind" : "minds"} read

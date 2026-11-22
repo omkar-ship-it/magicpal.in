@@ -179,7 +179,7 @@ export function DailyLink({
         {(made || today?.state === "waiting") && (
           <ShareButtons
             url={url}
-            text={`${myName.split(" ")[0]} wants to find your Wavelength on Brain-Mate. 2 minutes, then we see how we click:`}
+            text={`${myName.split(" ")[0]} wants to find your Wavelength on Brain-Mate. About 2½ minutes, then we see how we click:`}
           />
         )}
         <p className="text-center text-[13px] font-semibold text-[var(--bm-soft)]">
