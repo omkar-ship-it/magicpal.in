@@ -1,28 +1,33 @@
-import { ARCHETYPES, matrixCode, type ArchetypeId, type MatrixCode } from "./archetypes";
-import { PICK_ROUNDS, SINGLE_ROUNDS, SWIPE_ROUND, TILE_ACTIVITY } from "./rounds";
-import { optionLabel, resultFor, type Answers, type CrowdStats, MIN_CROWD, type Sliders } from "./score";
+import { ARCHETYPES, TRAITS, matrixCode, type ArchetypeId, type MatrixCode, type Trait } from "./archetypes";
+import { SCENARIOS, STATEMENTS, TILE_ACTIVITY, TILE_BY_ID, VALUE_BY_ID } from "./rounds";
+import { MIN_CROWD, agreeWord, resultFor, scenarioLabel, type Answers, type CrowdStats, type Traits } from "./score";
 
 /**
- * Two people's Wavelength: how alike they are, how well they complement
- * each other, and which of five relationships that adds up to.
+ * Two people's Wavelength, built on their eight trait scores.
  *
- * The two scores measure different things and must never be confused:
+ * SAME WAVELENGTH (similarity) — 50% trait similarity (imagination, inquiry,
+ *   social energy, warmth and harmony weighted most: similarity there is
+ *   what predicts friendship), 30% shared values (similarity-attraction,
+ *   Byrne), 20% shared interests.
  *
- *   Same wavelength (similarity) — overlap of answers, weighted so that a
- *     shared *rare* answer counts for more than a shared common one.
- *   Compatibility — how the differences fit: ideas meeting execution, a
- *     starter meeting a finisher, compatible social styles, and (when both
- *     have an OpenNetworks profile) one person's needs meeting the other's
- *     offers.
+ * COMPATIBILITY — how the differences fit, from interpersonal theory
+ *   (Kiesler: dominance works best complementary, warmth works best
+ *   similar) and team-conflict research:
+ *     30% complementary roles (ideas ↔ execution)
+ *     20% one leads, one supports
+ *     20% similar warmth
+ *     15% similar structure (big conscientiousness gaps breed conflict)
+ *     15% not two strong challengers together
+ *   plus, when both have an OpenNetworks profile, 25% needs ↔ offers.
  *
- * The scores decide the outcome; the archetype matrix only breaks ties in
- * the middle band, so the story and the numbers rarely contradict.
+ * Both are shown as where the pair ranks among all pairs (32–98), so a
+ * number means the same thing whoever you compare with. Scales fitted by
+ * simulation — refit from real pairs once there are enough.
  */
 
 export type Person = {
   name: string;
   answers: Answers;
-  /** From the OpenNetworks profile, when filled in — never asked by the game. */
   lookingFor?: string[];
   canHelpWith?: string[];
 };
@@ -38,13 +43,13 @@ export const OUTCOMES: Record<Outcome, { label: string; stamp: string; color: st
 };
 
 export type Comparison = {
-  a: { name: string; archetype: ArchetypeId; streak: ArchetypeId; sliders: Sliders };
-  b: { name: string; archetype: ArchetypeId; streak: ArchetypeId; sliders: Sliders };
+  a: { name: string; archetype: ArchetypeId; streak: ArchetypeId; traits: Traits };
+  b: { name: string; archetype: ArchetypeId; streak: ArchetypeId; traits: Traits };
   similarity: number;
   compatibility: number;
-  /** Per-layer similarity, 0–100, for the breakdown bars. */
   layers: { label: string; value: number }[];
-  /** Null when either person hasn't said what they need and offer. */
+  /** The five compatibility parts, 0–100, for the breakdown. */
+  fit: { label: string; value: number }[];
   intentKnown: boolean;
   outcome: Outcome;
   dynamic: string;
@@ -55,13 +60,11 @@ export type Comparison = {
   tryThis: string;
   activity: string;
   opener: string;
-  /** Colleague view: how to work with each other. */
   workWith: { aToB: string; bToA: string };
-  /** Every round side by side, for the replay. */
   replay: { title: string; a: string; b: string; same: boolean }[];
 };
 
-const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
+const clip = (x: number) => Math.max(0, Math.min(1, x));
 const jaccard = (x: string[] = [], y: string[] = []) => {
   const a = new Set(x);
   const b = new Set(y);
@@ -70,169 +73,180 @@ const jaccard = (x: string[] = [], y: string[] = []) => {
   return union ? inter / union : 0;
 };
 
-/**
- * Display scale. Raw scores bunch in the middle (everyone shares *some*
- * answers), so each is stretched across 32–98 from its observed range.
- * Nobody sees below 32: a low number is a different story, never a
- * rejection.
- */
-const display = (raw: number, lo: number, span: number) => Math.round(32 + 66 * clamp01((raw - lo) / span));
+const SIM_W: Record<Trait, number> = { O: 1.5, I: 1, D: 0.5, S: 0.5, E: 1, A: 0.5, C: 1, H: 1 };
 
-const MATRIX_FIT: Record<MatrixCode, number> = { PD: 1, GC: 0.6, BM: 0.55, BC: 0.5, FF: 0.45 };
-
-function rarity(key: string, k: number, stats: CrowdStats | null): number {
-  // How much a shared answer is worth relative to an evenly-split one.
-  if (!stats || stats.n < MIN_CROWD) return 1;
-  const p = (stats.share[key] ?? 1 / k) * 0.9 + 0.1 / k;
-  return Math.max(0.6, Math.min(1.6, -Math.log(p) / Math.log(k)));
+export function traitSimilarity(a: Traits, b: Traits): number {
+  let s = 0;
+  let w = 0;
+  for (const k of TRAITS) {
+    s += SIM_W[k] * Math.abs(a[k] - b[k]);
+    w += SIM_W[k];
+  }
+  return clip(1 - s / w / 2.5);
 }
 
-function first(name: string) {
-  return name.trim().split(/\s+/)[0] || name;
+export function fitParts(a: Traits, b: Traits) {
+  const orient = (z: Traits) => (z.O + z.I) / 2 - (z.D + z.S) / 2;
+  return {
+    role: clip(Math.abs(orient(a) - orient(b)) / 2.5),
+    lead: clip(0.55 + 0.22 * Math.abs(a.A - b.A) - 0.3 * Math.max(0, a.A + b.A - 1)),
+    warmth: clip(1 - Math.abs(a.C - b.C) / 3 + 0.1 * Math.max(0, Math.min(a.C, b.C))),
+    structure: clip(1 - Math.abs(a.S - b.S) / 3),
+    challenge: clip(1 - 0.6 * Math.max(0, -a.H - 0.3) * Math.max(0, -b.H - 0.3)),
+  };
 }
+
+// Where a raw score sits among simulated pairs — 21 quantiles each.
+const SIM_Q = [0.037, 0.1872, 0.2202, 0.2447, 0.2646, 0.2831, 0.2998, 0.3165, 0.3327, 0.3475, 0.3629, 0.3788, 0.3943, 0.4106, 0.4293, 0.4487, 0.4708, 0.4981, 0.5369, 0.6064, 0.9709];
+const COMP_Q = [0.2069, 0.4567, 0.4979, 0.527, 0.5512, 0.5708, 0.5889, 0.6064, 0.6225, 0.6384, 0.6541, 0.6696, 0.6861, 0.703, 0.7205, 0.7402, 0.7613, 0.7858, 0.8138, 0.8518, 1];
+
+function percentile(x: number, q: number[]): number {
+  if (x <= q[0]) return 0;
+  for (let i = 1; i < q.length; i++) {
+    if (x <= q[i]) return (i - 1 + (x - q[i - 1]) / (q[i] - q[i - 1] || 1)) / (q.length - 1);
+  }
+  return 1;
+}
+const display = (x: number, q: number[]) => Math.round(32 + 66 * percentile(x, q));
+
+const first = (name: string) => name.trim().split(/\s+/)[0] || name;
+const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+
+const OPPOSITE: Record<Trait, (lo: string, hi: string) => string> = {
+  O: (lo, hi) => `${hi} chases new possibilities; ${lo} perfects what works.`,
+  I: (lo, hi) => `${hi} needs the why; ${lo} just wants it working.`,
+  D: (lo, hi) => `${hi} sees it through; ${lo} moves on once it's figured out.`,
+  S: (lo, hi) => `${hi} wants a plan; ${lo} wants it open.`,
+  E: (lo, hi) => `${hi} wants the whole room; ${lo} wants one good conversation.`,
+  A: (lo, hi) => `${hi} takes the lead; ${lo} backs it.`,
+  C: (lo, hi) => `${hi} looks after the people; ${lo} looks after the problem.`,
+  H: (lo, hi) => `${hi} keeps it together; ${lo} says the hard thing.`,
+};
 
 export function compare(pa: Person, pb: Person, stats: CrowdStats | null = null): Comparison {
   const ra = resultFor(pa.answers);
   const rb = resultFor(pb.answers);
+  const za = ra.traits;
+  const zb = rb.traits;
   const A = ARCHETYPES[ra.archetype];
   const B = ARCHETYPES[rb.archetype];
   const an = first(pa.name);
   const bn = first(pb.name);
 
-  // ------------------------------------------------------ similarity
-  let agree = 0;
-  let rarest: { key: string; w: number } | null = null;
-  for (const r of SINGLE_ROUNDS) {
-    const x = pa.answers[r.id];
-    if (x && x === pb.answers[r.id]) {
-      const key = `${r.id}:${x}`;
-      const w = rarity(key, r.options.length, stats);
-      agree += w;
-      if (!rarest || w > rarest.w) rarest = { key, w };
-    }
-  }
-  const agreePart = clamp01(agree / SINGLE_ROUNDS.length);
-  const swipesSame = SWIPE_ROUND.cards.filter((c) => pa.answers.r5?.[c.id] === pb.answers.r5?.[c.id]).length;
-  const swipePart = swipesSame / SWIPE_ROUND.cards.length;
-  const valuesPart = jaccard(pa.answers.r8, pb.answers.r8);
-  const tilesPart = jaccard(pa.answers.r9, pb.answers.r9);
-  const s1 = ra.sliders;
-  const s2 = rb.sliders;
-  const sliderPart =
-    1 - (Math.abs(s1.think - s2.think) + Math.abs(s1.connect - s2.connect) + Math.abs(s1.work - s2.work) + Math.abs(s1.pace - s2.pace)) / 8;
-  const simRaw = 0.35 * agreePart + 0.15 * swipePart + 0.1 * valuesPart + 0.15 * tilesPart + 0.25 * sliderPart;
-  const similarity = display(simRaw, 0.18, 0.52);
+  // ------------------------------------------------------- similarity
+  const tSim = traitSimilarity(za, zb);
+  const vSim = jaccard(pa.answers.values, pb.answers.values);
+  const iSim = jaccard(pa.answers.tiles, pb.answers.tiles);
+  const similarity = display(0.5 * tSim + 0.3 * vSim + 0.2 * iSim, SIM_Q);
 
-  const pct = (x: number) => Math.round(clamp01(x) * 100);
+  const near = (keys: Trait[]) => clip(1 - keys.reduce((s, k) => s + Math.abs(za[k] - zb[k]), 0) / keys.length / 2.5);
+  const pct = (x: number) => Math.round(clip(x) * 100);
   const layers = [
-    { label: "Think", value: pct(1 - Math.abs(s1.think - s2.think) / 2) },
-    { label: "Drive", value: pct(valuesPart * 0.7 + (pa.answers.r6 === pb.answers.r6 ? 0.3 : 0)) },
-    { label: "Connect", value: pct(1 - Math.abs(s1.connect - s2.connect) / 2) },
-    { label: "Work", value: pct(1 - (Math.abs(s1.work - s2.work) + Math.abs(s1.pace - s2.pace)) / 4) },
-    { label: "Play", value: pct(tilesPart) },
+    { label: "Think", value: pct(near(["O", "I"])) },
+    { label: "Drive", value: pct(0.5 * near(["D"]) + 0.5 * vSim) },
+    { label: "Connect", value: pct(near(["E", "C"])) },
+    { label: "Work", value: pct(near(["S", "A", "H"])) },
+    { label: "Play", value: pct(iSim) },
   ];
 
-  // --------------------------------------------------- compatibility
-  const workComp = Math.abs(s1.work - s2.work) / 2;
-  const paceComp = Math.abs(s1.pace - s2.pace) / 2;
-  const social = 1 - Math.abs(s1.connect - s2.connect) / 2;
-  const code = matrixCode(A.id, B.id);
-  let compRaw = 0.3 * workComp + 0.2 * paceComp + 0.15 * social + 0.25 * MATRIX_FIT[code] + 0.1 * valuesPart;
-
-  const intentKnown = Boolean(
-    pa.lookingFor?.length && pa.canHelpWith?.length && pb.lookingFor?.length && pb.canHelpWith?.length
-  );
+  // ---------------------------------------------------- compatibility
+  const p = fitParts(za, zb);
+  let compRaw = 0.3 * p.role + 0.2 * p.lead + 0.2 * p.warmth + 0.15 * p.structure + 0.15 * p.challenge;
+  const intentKnown = Boolean(pa.lookingFor?.length && pa.canHelpWith?.length && pb.lookingFor?.length && pb.canHelpWith?.length);
   let missing: { needer: string; giver: string } | null = null;
   if (intentKnown) {
     const aGets = pa.lookingFor!.filter((t) => pb.canHelpWith!.includes(t)).length;
     const bGets = pb.lookingFor!.filter((t) => pa.canHelpWith!.includes(t)).length;
-    const intent = clamp01((aGets + bGets) / 2);
-    compRaw = 0.75 * compRaw + 0.25 * intent;
+    compRaw = 0.75 * compRaw + 0.25 * clip((aGets + bGets) / 2);
     if (pb.canHelpWith!.includes(pa.lookingFor![0])) missing = { needer: an, giver: bn };
     else if (pa.canHelpWith!.includes(pb.lookingFor![0])) missing = { needer: bn, giver: an };
   }
-  const compatibility = display(compRaw, 0.17, 0.5);
+  const compatibility = display(compRaw, COMP_Q);
+  const fit = [
+    { label: "Roles fit (ideas ↔ execution)", value: pct(p.role) },
+    { label: "Lead ↔ support", value: pct(p.lead) },
+    { label: "Warmth in sync", value: pct(p.warmth) },
+    { label: "Structure in sync", value: pct(p.structure) },
+    { label: "Challenge balance", value: pct(p.challenge) },
+  ];
 
-  // --------------------------------------------------------- outcome
-  const near = (x: number, edges: number[]) => edges.some((e) => Math.abs(x - e) < 5);
+  // ---------------------------------------------------------- outcome
+  const peopleClash = p.lead < 0.45 || p.challenge < 0.6;
+  const code: MatrixCode = matrixCode(A.id, B.id);
   let outcome: Outcome;
   if (missing && compatibility >= 65) outcome = "missing_piece";
-  else if (similarity >= 70 && compatibility <= similarity) outcome = "mind_twins";
-  else if (compatibility >= 75 && compatibility > similarity) outcome = "power_duo";
-  else if (similarity < 50 && compatibility >= 50) outcome = "friendly_friction";
-  else if (similarity < 50 && compatibility < 50) outcome = "beautiful_chaos";
-  else outcome = fromMatrix(code, similarity, compatibility);
-  // Close to a boundary, a specific matrix story wins over a coin-flip.
-  if (outcome !== "missing_piece" && code !== "GC" && near(similarity, [50, 70]) && near(compatibility, [50, 75]))
-    outcome = fromMatrix(code, similarity, compatibility);
+  else if (similarity >= 84 && !peopleClash) outcome = "mind_twins";
+  else if (peopleClash && compatibility < 72) outcome = "friendly_friction";
+  else if (compatibility >= 80 && compatibility > similarity) outcome = "power_duo";
+  else if (similarity < 45 && compatibility < 50) outcome = "beautiful_chaos";
+  else if (similarity < 52 && compatibility >= 50 && compatibility < 80) outcome = "friendly_friction";
+  else if (code !== "GC") outcome = fromCode(code);
+  else outcome = compatibility >= similarity ? "power_duo" : similarity >= 70 ? "mind_twins" : "friendly_friction";
 
-  // -------------------------------------------------------- insights
-  const sliderGaps: { k: keyof Sliders; gap: number }[] = (["think", "connect", "work", "pace"] as const)
-    .map((k) => ({ k, gap: Math.abs(s1[k] - s2[k]) }))
-    .sort((x, y) => y.gap - x.gap);
-  const widest = sliderGaps[0];
-  const side = (k: keyof Sliders) => (s1[k] < s2[k] ? [an, bn] : [bn, an]);
+  // --------------------------------------------------------- insights
+  const gaps = TRAITS.map((k) => ({ k, gap: Math.abs(za[k] - zb[k]) })).sort((x, y) => y.gap - x.gap);
+  const widest = gaps[0];
+  const opposites =
+    widest.gap < 0.6
+      ? "Hardly anywhere — your profiles line up almost trait for trait."
+      : za[widest.k] < zb[widest.k]
+        ? OPPOSITE[widest.k](an, bn)
+        : OPPOSITE[widest.k](bn, an);
 
-  const OPP: Record<keyof Sliders, (lo: string, hi: string) => string> = {
-    think: (lo, hi) => `${lo} goes with the gut; ${hi} wants the evidence.`,
-    connect: (lo, hi) => `${lo} wants one proper conversation; ${hi} wants the whole room.`,
-    work: (lo, hi) => `${lo} lives in ideas; ${hi} lives in execution.`,
-    pace: (lo, hi) => `${lo} starts things; ${hi} finishes them.`,
+  const weakest = (Object.entries(p) as [keyof typeof p, number][]).sort((x, y) => x[1] - y[1])[0][0];
+  const bothLead = za.A + zb.A > 0;
+  const WATCH: Record<keyof typeof p, [string, string]> = {
+    role: ["You see things the same way, so your blind spots stack up.", "Bring in a third opinion before big calls."],
+    lead: bothLead
+      ? ["You'll both want the wheel.", "Split the turf: one owns the what, the other owns the how."]
+      : ["Neither of you wants to call it.", "Decide up front who makes the final call."],
+    warmth: ["One of you reads the room, the other reads the brief.", "Start with how you're both doing, then get to the task."],
+    structure: ["One plans, one improvises — deadlines will get tense.", "Agree the deadline; leave the route open."],
+    challenge: ["Two challengers: every idea turns into a debate.", "Set a time limit on the argument, then commit."],
   };
-  const WATCH: Record<keyof Sliders, [string, string]> = {
-    think: ["You'll argue about how sure is sure enough.", "Agree a deadline for deciding, then decide together."],
-    connect: ["One of you wants a crowd, the other wants a corner.", "Take turns choosing where you meet."],
-    work: ["Ideas can outrun delivery — or delivery can kill an idea too early.", "One picks the idea, the other sets the deadline."],
-    pace: ["One of you wants the next thing while the other is finishing this one.", "Finish one thing together before starting the next."],
-  };
+  const [watchOut, tryThis] = WATCH[weakest];
 
-  let opposites: string;
-  let watchOut: string;
-  let tryThis: string;
-  if (widest.gap < 0.35) {
-    opposites = `Hardly anywhere — your answers line up almost all the way down.`;
-    watchOut = "You'll agree too quickly.";
-    tryThis = "Bring in a third person to tell you when you're both wrong.";
-  } else {
-    const [lo, hi] = side(widest.k);
-    opposites = OPP[widest.k](lo, hi);
-    [watchOut, tryThis] = WATCH[widest.k];
-  }
+  const twins = sharedThing(pa.answers, pb.answers, stats) ?? "Not one answer the same. That's rarer than a perfect match.";
 
-  const twins = rarest
-    ? `Both of you: “${optionLabel(rarest.key)}”.` +
-      (stats && stats.n >= MIN_CROWD && stats.share[rarest.key] !== undefined
-        ? ` Only ${Math.max(1, Math.round(stats.share[rarest.key] * 100))}% of people pick that.`
-        : "")
-    : (sharedPick(pa.answers, pb.answers) ??
-      (swipesSame >= 4
-        ? `Your gut: you swiped the same way ${swipesSame} times out of ${SWIPE_ROUND.cards.length} in the lightning round.`
-        : "Not one answer the same. That's rarer than a perfect match."));
-
-  const sharedTile = (pa.answers.r9 ?? []).find((t) => pb.answers.r9?.includes(t));
+  const sharedTile = pa.answers.tiles.find((t) => pb.answers.tiles.includes(t));
   const activity = sharedTile
     ? TILE_ACTIVITY[sharedTile]
-    : (s1.connect + s2.connect) / 2 < 0
+    : (za.E + zb.E) / 2 < 0
       ? "A long one-to-one coffee. Phones away."
       : "A meetup together — then compare notes on who you met.";
 
+  const leadGap = za.A - zb.A;
+  const orientA = (za.O + za.I) / 2 - (za.D + za.S) / 2;
+  const orientB = (zb.O + zb.I) / 2 - (zb.D + zb.S) / 2;
+  const roleWord = (o: number) => (o > 0.3 ? "the ideas" : o < -0.3 ? "the execution" : "a bit of both");
+  const roles =
+    Math.abs(orientA - orientB) > 0.6
+      ? `In a team: ${an} = ${roleWord(orientA)} · ${bn} = ${roleWord(orientB)}` +
+        (Math.abs(leadGap) > 0.8 ? `. ${leadGap > 0 ? an : bn} leads.` : "")
+      : Math.abs(leadGap) > 0.8
+        ? `In a team: ${leadGap > 0 ? an : bn} leads, ${leadGap > 0 ? bn : an} sharpens.`
+        : `In a team: ${an} = ${A.role} · ${bn} = ${B.role}`;
+
   const dynamic =
     outcome === "mind_twins"
-      ? `${an} and ${bn} ${A.id === B.id ? `are both ${A.name.replace("The ", "")}s` : "think alike"}. You finish each other's sentences.`
+      ? `${an} and ${bn} think alike. You finish each other's sentences.`
       : outcome === "missing_piece" && missing
         ? `${missing.needer} is looking for exactly what ${missing.giver} has done.`
-        : `${an} ${A.does}. ${bn} ${B.does}.`;
+        : A.id === B.id
+          ? `Two ${A.name.replace("The ", "")}s: you both ${lower(A.does)}.`
+          : `${an} ${A.does}. ${bn} ${B.does}.`;
 
   return {
-    a: { name: an, archetype: A.id, streak: ra.streak, sliders: s1 },
-    b: { name: bn, archetype: B.id, streak: rb.streak, sliders: s2 },
+    a: { name: an, archetype: A.id, streak: ra.streak, traits: za },
+    b: { name: bn, archetype: B.id, streak: rb.streak, traits: zb },
     similarity,
     compatibility,
     layers,
+    fit,
     intentKnown,
     outcome,
     dynamic,
-    roles: A.id === B.id ? `In a team: you're both ${A.role}. Decide who leads.` : `In a team: ${an} = ${A.role} · ${bn} = ${B.role}`,
+    roles,
     twins,
     opposites,
     watchOut,
@@ -247,45 +261,51 @@ export function compare(pa: Person, pb: Person, stats: CrowdStats | null = null)
   };
 }
 
-function fromMatrix(code: MatrixCode, sim: number, comp: number): Outcome {
+function fromCode(code: MatrixCode): Outcome {
   if (code === "PD") return "power_duo";
   if (code === "BM") return "mind_twins";
   if (code === "FF") return "friendly_friction";
-  if (code === "BC") return "beautiful_chaos";
-  return comp >= sim ? "power_duo" : "mind_twins";
+  return "beautiful_chaos";
 }
 
-const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
-
-function sharedPick(a: Answers, b: Answers): string | null {
-  for (const r of PICK_ROUNDS) {
-    const shared = (a[r.id] ?? []).find((x) => b[r.id]?.includes(x));
-    if (shared) {
-      const o = r.options.find((x) => x.id === shared)!;
-      return r.id === "r8" ? `You both packed “${o.label}”.` : `You'd both lose a weekend to ${o.label.toLowerCase()}.`;
+/** The most telling thing two people share: a rare scenario answer, a value, a strong opinion, a passion. */
+function sharedThing(a: Answers, b: Answers, stats: CrowdStats | null): string | null {
+  const crowd = stats && stats.n >= MIN_CROWD ? stats : null;
+  let rarest: { key: string; share: number } | null = null;
+  for (const sc of SCENARIOS) {
+    if (a.s[sc.id] && a.s[sc.id] === b.s[sc.id]) {
+      const key = `${sc.id}:${a.s[sc.id]}`;
+      const share = crowd?.share[key] ?? 1 / sc.options.length;
+      if (!rarest || share < rarest.share) rarest = { key, share };
     }
   }
+  if (rarest && crowd && rarest.share < 0.2)
+    return `Both of you: “${scenarioLabel(rarest.key)}”. Only ${Math.max(1, Math.round(rarest.share * 100))}% of people pick that.`;
+  const value = a.values.find((v) => b.values.includes(v));
+  if (value) return `You both packed ${VALUE_BY_ID.get(value)?.label.toLowerCase()}.`;
+  const strong = STATEMENTS.find((s) => (a.t[s.id] === 3 && b.t[s.id] === 3) || (a.t[s.id] === 0 && b.t[s.id] === 0));
+  if (strong) return `You both said “${a.t[strong.id] === 3 ? "Totally" : "Nope"}” to “${strong.text}”`;
+  if (rarest) return `Both of you: “${scenarioLabel(rarest.key)}”.`;
+  const tile = a.tiles.find((t) => b.tiles.includes(t));
+  if (tile) return `You'd both lose a weekend to ${TILE_BY_ID.get(tile)?.label.toLowerCase()}.`;
   return null;
 }
 
 function replay(a: Answers, b: Answers): Comparison["replay"] {
-  const rows: Comparison["replay"] = [];
-  for (const r of SINGLE_ROUNDS) {
-    const la = r.options.find((o) => o.id === a[r.id])?.label ?? "—";
-    const lb = r.options.find((o) => o.id === b[r.id])?.label ?? "—";
-    rows.push({ title: r.title, a: la, b: lb, same: a[r.id] === b[r.id] });
-  }
-  const swA = SWIPE_ROUND.cards.map((c) => (a.r5?.[c.id] === c.left.id ? c.left.label : c.right.label));
-  const swB = SWIPE_ROUND.cards.map((c) => (b.r5?.[c.id] === c.left.id ? c.left.label : c.right.label));
-  rows.splice(4, 0, {
-    title: SWIPE_ROUND.title,
-    a: swA.join(" · "),
-    b: swB.join(" · "),
-    same: swA.every((x, i) => x === swB[i]),
-  });
-  for (const r of PICK_ROUNDS) {
-    const lab = (ids: string[] = []) => ids.map((id) => r.options.find((o) => o.id === id)?.label ?? id).join(", ");
-    rows.push({ title: r.title, a: lab(a[r.id]), b: lab(b[r.id]), same: jaccard(a[r.id], b[r.id]) === 1 });
-  }
+  const rows: Comparison["replay"] = SCENARIOS.map((sc) => ({
+    title: sc.title,
+    a: sc.options.find((o) => o.id === a.s[sc.id])?.label ?? "—",
+    b: sc.options.find((o) => o.id === b.s[sc.id])?.label ?? "—",
+    same: a.s[sc.id] === b.s[sc.id],
+  }));
+  // The statements you disagreed on most — the "you said WHAT?" ones.
+  const split = STATEMENTS.map((s) => ({ s, gap: Math.abs((a.t[s.id] ?? 0) - (b.t[s.id] ?? 0)) }))
+    .filter((x) => x.gap >= 2)
+    .sort((x, y) => y.gap - x.gap)
+    .slice(0, 3);
+  for (const { s } of split) rows.push({ title: `“${s.text}”`, a: agreeWord(a.t[s.id]), b: agreeWord(b.t[s.id]), same: false });
+  const lab = (ids: string[], m: Map<string, { label: string }>) => ids.map((id) => m.get(id)?.label ?? id).join(", ");
+  rows.push({ title: "Pack your bag", a: lab(a.values, VALUE_BY_ID), b: lab(b.values, VALUE_BY_ID), same: jaccard(a.values, b.values) === 1 });
+  rows.push({ title: "Your weekend", a: lab(a.tiles, TILE_BY_ID), b: lab(b.tiles, TILE_BY_ID), same: jaccard(a.tiles, b.tiles) === 1 });
   return rows;
 }

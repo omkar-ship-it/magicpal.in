@@ -5,8 +5,9 @@ import { db } from "@/lib/db";
 import { brainMateLinks, brainMates, users } from "@/lib/db/schema";
 import { ARCHETYPE_IDS, type ArchetypeId } from "./archetypes";
 import { compare, type Comparison } from "./compare";
-import { SINGLE_ROUNDS, SWIPE_ROUND } from "./rounds";
-import { resultFor, type Answers, type CrowdStats } from "./score";
+import { ARCHETYPES } from "./archetypes";
+import { SCENARIOS, STATEMENTS } from "./rounds";
+import { isV2, resultFor, type Answers, type CrowdStats } from "./score";
 
 /**
  * Brain-Mate's database layer. Everything that reads or writes the two
@@ -24,6 +25,12 @@ export type BrainMateRow = {
   answers: Answers;
   archetype: ArchetypeId;
   streak: ArchetypeId;
+  /**
+   * False for a result from the first version of the questionnaire. Its
+   * answers can't be scored by the current one, so the person is asked to
+   * retake — and every comparison waits until both people are current.
+   */
+  current: boolean;
 };
 
 export async function getBrainMate(userId: string): Promise<BrainMateRow | null> {
@@ -33,8 +40,9 @@ export async function getBrainMate(userId: string): Promise<BrainMateRow | null>
     userId: row.userId,
     displayName: row.displayName,
     answers: row.answers as Answers,
-    archetype: row.archetype as ArchetypeId,
-    streak: row.streak as ArchetypeId,
+    archetype: (row.archetype in ARCHETYPES ? row.archetype : "dreamer") as ArchetypeId,
+    streak: (row.streak in ARCHETYPES ? row.streak : "explorer") as ArchetypeId,
+    current: isV2(row.answers),
   };
 }
 
@@ -63,17 +71,17 @@ const STATS_TTL_MS = 5 * 60_000;
  */
 export async function crowdStats(): Promise<CrowdStats> {
   if (statsCache && Date.now() - statsCache.at < STATS_TTL_MS) return statsCache.stats;
-  const rows = await need().select({ answers: brainMates.answers, archetype: brainMates.archetype }).from(brainMates);
+  const all = await need().select({ answers: brainMates.answers, archetype: brainMates.archetype }).from(brainMates);
+  // Only current-version results: an old answer has no meaning in the new questions.
+  const rows = all.filter((r) => isV2(r.answers));
   const n = rows.length;
   const counts: Record<string, number> = {};
   const arche: Record<string, number> = {};
+  const bump = (k: string) => (counts[k] = (counts[k] ?? 0) + 1);
   for (const row of rows) {
     const a = row.answers as Answers;
-    for (const r of SINGLE_ROUNDS) if (a[r.id]) counts[`${r.id}:${a[r.id]}`] = (counts[`${r.id}:${a[r.id]}`] ?? 0) + 1;
-    for (const c of SWIPE_ROUND.cards) {
-      const v = a.r5?.[c.id];
-      if (v) counts[`r5:${c.id}:${v}`] = (counts[`r5:${c.id}:${v}`] ?? 0) + 1;
-    }
+    for (const sc of SCENARIOS) if (a.s[sc.id]) bump(`${sc.id}:${a.s[sc.id]}`);
+    for (const st of STATEMENTS) if (a.t[st.id] !== undefined) bump(`${st.id}:${a.t[st.id]}`);
     arche[row.archetype] = (arche[row.archetype] ?? 0) + 1;
   }
   const share: Record<string, number> = {};
@@ -237,11 +245,20 @@ async function intentOf(userId: string) {
   return u ?? { lookingFor: [], canHelpWith: [] };
 }
 
-/** A finished link's comparison, sender as "a". */
+/**
+ * Who on a finished link still has a result from the old questionnaire —
+ * the link page says so instead of showing a stale comparison.
+ */
+export async function needsRetake(link: LinkRow): Promise<{ sender: boolean; recipient: boolean }> {
+  const [a, b] = await Promise.all([getBrainMate(link.senderId), link.recipientId ? getBrainMate(link.recipientId) : null]);
+  return { sender: !a?.current, recipient: !b?.current };
+}
+
+/** A finished link's comparison, sender as "a". Null until both are on the current questionnaire. */
 export async function comparisonFor(link: LinkRow): Promise<Comparison | null> {
   if (!link.completedAt || !link.recipientId) return null;
   const [a, b] = await Promise.all([getBrainMate(link.senderId), getBrainMate(link.recipientId)]);
-  if (!a || !b) return null;
+  if (!a || !b || !a.current || !b.current) return null;
   const [ia, ib, stats] = await Promise.all([intentOf(a.userId), intentOf(b.userId), crowdStats()]);
   return compare(
     { name: a.displayName, answers: a.answers, lookingFor: ia.lookingFor, canHelpWith: ia.canHelpWith },

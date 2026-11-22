@@ -46,6 +46,9 @@ export function tone(step = 0, length = 0.12) {
 
 export function buzz(ms: number | number[] = 12) {
   try {
+    // Browsers refuse (and log) vibration before the first tap on a page.
+    const nav = navigator as Navigator & { userActivation?: { hasBeenActive: boolean } };
+    if (nav.userActivation && !nav.userActivation.hasBeenActive) return;
     navigator.vibrate?.(ms);
   } catch {
     /* unsupported */

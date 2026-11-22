@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
 import { getProfileById } from "@/lib/profiles";
-import { ARCHETYPES, relationsOf, streakLine, type ArchetypeId } from "@/lib/brainMate/archetypes";
+import { ARCHETYPES, TRAITS, TRAIT_INFO, relationsOf, streakLine, type ArchetypeId } from "@/lib/brainMate/archetypes";
 import { OUTCOMES } from "@/lib/brainMate/compare";
 import { MIN_CROWD, howDidItKnow, resultFor, strandsFor } from "@/lib/brainMate/score";
 import { ArchetypeMark } from "@/lib/brainMate/symbols";
@@ -22,6 +22,7 @@ export default async function MyBrainMate() {
   if (!user) redirect("/brain-mate");
   const me = await getBrainMate(user.id);
   if (!me) redirect("/brain-mate/play");
+  if (!me.current) return <RetakeScreen name={me.displayName} archetype={me.archetype} />;
 
   const tz = (await cookies()).get("bm_tz")?.value ?? "Asia/Kolkata";
   const [stats, links, profile, origin] = await Promise.all([crowdStats(), myLinks(user.id, tz), getProfileById(user.id), siteOrigin()]);
@@ -38,12 +39,9 @@ export default async function MyBrainMate() {
   const rel = relationsOf(me.archetype);
   const intentMissing = !profile?.lookingFor?.length || !profile?.canHelpWith?.length || !profile?.name;
 
-  const sliders = [
-    { label: "How you think", lo: "Gut", hi: "Evidence", v: res.sliders.think },
-    { label: "How you connect", lo: "One-to-one", hi: "Crowd", v: res.sliders.connect },
-    { label: "How you work", lo: "Ideas", hi: "Execution", v: res.sliders.work },
-    { label: "Your pace", lo: "Starter", hi: "Finisher", v: res.sliders.pace },
-  ];
+  // Eight traits, as positions between their two ends. ±2.5 standard units
+  // spans the whole bar; the middle is a typical player.
+  const sliders = TRAITS.map((k) => ({ label: TRAIT_INFO[k].name, lo: TRAIT_INFO[k].lo, hi: TRAIT_INFO[k].hi, v: res.traits[k] / 2.5 }));
 
   return (
     <main className="pb-10">
@@ -141,8 +139,8 @@ export default async function MyBrainMate() {
 
         {/* ---------------------------------------------------- layers */}
         <section className="bm-card p-5">
-          <p className="mb-4 text-[12px] font-extrabold tracking-[0.18em] text-[var(--bm-brand)]">YOUR FOUR LAYERS</p>
-          <div className="flex flex-col gap-4">
+          <p className="mb-4 text-[12px] font-extrabold tracking-[0.18em] text-[var(--bm-brand)]">YOUR EIGHT TRAITS</p>
+          <div className="flex flex-col gap-3.5">
             {sliders.map((s) => (
               <div key={s.label}>
                 <p className="text-[14px] font-bold">{s.label}</p>
@@ -163,7 +161,7 @@ export default async function MyBrainMate() {
 
         <section className="bm-card p-5">
           <p className="mb-2 text-[12px] font-extrabold tracking-[0.18em] text-[var(--bm-brand)]">HOW DID IT KNOW</p>
-          <p className="text-[1.05rem] font-bold leading-snug">&ldquo;{howDidItKnow(me.answers, stats)}&rdquo;</p>
+          <p className="text-[1.05rem] font-bold leading-snug">{howDidItKnow(me.answers, stats)}</p>
         </section>
 
         <section className="bm-card p-5">
@@ -185,13 +183,13 @@ export default async function MyBrainMate() {
           <div className="flex flex-col gap-3">
             {(
               [
-                ["power_duo", [...new Set([...a.powerDuo, ...rel.PD])].slice(0, 3)],
+                ["power_duo", a.powerDuo],
                 ["mind_twins", rel.BM],
-                ["friendly_friction", [a.friction, ...rel.FF.filter((x) => x !== a.friction)].slice(0, 2)],
+                ["friendly_friction", rel.FF.slice(0, 3)],
                 ["beautiful_chaos", rel.BC],
               ] as const
             )
-              .filter(([, ids]) => ids.length)
+              .filter(([, ids]) => ids.length > 0)
               .map(([o, ids]) => (
                 <div key={o} className="flex items-center justify-between gap-3">
                   <span className="whitespace-nowrap text-[14px] font-extrabold" style={{ color: OUTCOMES[o].color }}>
@@ -208,6 +206,10 @@ export default async function MyBrainMate() {
                 </div>
               ))}
           </div>
+          <p className="mt-4 text-[13px] text-[var(--bm-soft)]">
+            {a.edge.kind === "clash" ? "You clash most with" : "No real friction with anyone — your opposite is"}{" "}
+            <b className="text-[var(--bm-ink)]">{ARCHETYPES[a.edge.id].name}</b>.
+          </p>
         </section>
 
         {/* ----------------------------------------------- collection */}
@@ -260,6 +262,8 @@ export default async function MyBrainMate() {
                       <span style={{ color: OUTCOMES[l.outcome].color }}>
                         {OUTCOMES[l.outcome].label} · {l.similarity}
                       </span>
+                    ) : l.state === "done" ? (
+                      <span className="text-[var(--bm-soft)]">Needs a retake</span>
                     ) : l.state === "waiting" ? (
                       <span className="text-[var(--bm-soft)]">Waiting…</span>
                     ) : (
@@ -289,6 +293,29 @@ export default async function MyBrainMate() {
             Open OpenNetworks
           </Link>
         </div>
+      </div>
+    </main>
+  );
+}
+
+/** A result from the first questionnaire: it can't be read by the new one, so ask once, kindly. */
+function RetakeScreen({ name, archetype }: { name: string; archetype: ArchetypeId }) {
+  const a = ARCHETYPES[archetype];
+  return (
+    <main className="bm-shell">
+      <div className="flex flex-1 flex-col justify-center gap-5 text-center">
+        <span className="mx-auto grid h-24 w-24 place-items-center rounded-full" style={{ background: a.color }}>
+          <ArchetypeMark id={archetype} size={60} color={a.ink} />
+        </span>
+        <h1 className="bm-display text-[2.2rem]">Brain-Mate got sharper, {name.split(" ")[0]}.</h1>
+        <p className="text-[15px] text-[var(--bm-soft)]">
+          New questions built on personality research: eight traits, a lightning round with strength, and a final duel that adapts to you.
+          Retake it for a more accurate card and sharper Wavelengths — your links update by themselves.
+        </p>
+        <Link href="/brain-mate/play" className="bm-btn bm-btn-brand">
+          Retake · 2½ min
+        </Link>
+        <p className="text-[12px] text-[var(--bm-soft)]">Last time you were {a.name}. Let&apos;s see if it holds.</p>
       </div>
     </main>
   );

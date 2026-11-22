@@ -13,7 +13,7 @@ export async function GET(req: Request) {
   const user = await getSessionUser();
   if (!user) return new Response("Sign in first.", { status: 401 });
   const me = await getBrainMate(user.id);
-  if (!me) return new Response("Play first.", { status: 404 });
+  if (!me || !me.current) return new Response("Play first.", { status: 404 });
   const stats = await crowdStats();
   const colleague = new URL(req.url).searchParams.get("v") === "colleague";
   return new ImageResponse(

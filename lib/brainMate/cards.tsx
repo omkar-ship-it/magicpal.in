@@ -163,7 +163,7 @@ export function IdentityCard({
             <div style={{ display: "flex", fontSize: 42, fontWeight: 800, marginTop: 6 }}>{colleague ? a.blindSpot : a.roast}</div>
           </div>
           <div style={{ display: "flex", fontSize: 34, color: soft }}>
-            {`My Power Duo: ${short(a.powerDuo[0])}  ·  I clash with: ${short(a.friction)}`}
+            {`My Power Duo: ${short(a.powerDuo[0])}  ·  ${a.edge.kind === "clash" ? "I clash with" : "My opposite"}: ${short(a.edge.id)}`}
           </div>
         </div>
         <div style={{ display: "flex", flex: 1 }} />

@@ -91,6 +91,25 @@ function waitForOtp(email, timeoutMs = 5000) {
   });
 }
 
+/**
+ * The app's Brain-Mate scoring, loaded straight from the TypeScript source
+ * (Node strips the types; this hook resolves its extensionless imports).
+ */
+async function loadBrainMate() {
+  const { registerHooks } = await import("node:module");
+  registerHooks({
+    resolve(spec, ctx, next) {
+      try {
+        return next(spec, ctx);
+      } catch (e) {
+        if (spec.startsWith(".")) return next(`${spec}.ts`, ctx);
+        throw e;
+      }
+    },
+  });
+  return import("../lib/brainMate/score.ts");
+}
+
 async function signUp(email) {
   const jar = makeJar();
   await api("/api/auth/request-otp", { method: "POST", jar, body: { email } });
@@ -175,29 +194,37 @@ async function main() {
     console.log("\nBrain-Mate");
     const bmD = await signUp(bmEmailD);
     const bmE = await signUp(bmEmailE);
-    const base = (tilt) => ({
-      r1: tilt ? "imagine" : "act",
-      r2: tilt ? "ignite" : "steady",
-      r3: tilt ? "imagine" : "act",
-      r4: tilt ? "ignite" : "steady",
-      r5: { s1: "start", s2: "whatif", s3: "make", s4: "wander", s5: "try", s6: "idea" },
-      r6: tilt ? "imagine" : "act",
-      r7: tilt ? "ignite" : "steady",
-      r8: ["freedom", "adventure"],
-      r9: ["places", "startups", "art"],
-    });
-    const ARCH = ["dreamer", "explorer", "creator", "maverick", "detective", "strategist", "spark", "maker", "doer", "connector", "mentor", "peacemaker"];
-    const noTerms = await api("/api/brain-mate/result", { method: "POST", jar: bmD.jar, body: { name: "Dee", answers: { ...base(true), duel: "dreamer" } } });
+    // Real games, built with the app's own scoring so the duel cards are
+    // exactly the ones the server expects.
+    const { nextDuel } = await loadBrainMate();
+    const game = (tilt) => {
+      const a = {
+        v: 2,
+        s: tilt
+          ? { s1: "o", s2: "o", s3: "a", s4: "o", s5: "e", s6: "o", s7: "a", s8: "o" }
+          : { s1: "d", s2: "c", s3: "h", s4: "s", s5: "c", s6: "c", s7: "h", s8: "h" },
+        t: Object.fromEntries([...Array(16)].map((_, i) => [`t${i + 1}`, tilt ? (i < 8 ? 3 : 0) : i < 8 ? 1 : 2])),
+        values: tilt ? ["freedom", "adventure"] : ["helping", "stability"],
+        tiles: ["places", "startups", "art"],
+        duels: [],
+      };
+      for (let k = 0; k < 3; k++) {
+        const c = nextDuel(a);
+        a.duels.push({ a: c.a, b: c.b, pick: c.a });
+      }
+      return a;
+    };
+    const noTerms = await api("/api/brain-mate/result", { method: "POST", jar: bmD.jar, body: { name: "Dee", answers: game(true) } });
     assert(noTerms.status === 400, "saving a game needs the terms accepted");
-    const accepted = [];
-    for (const duel of ARCH) {
-      const r = await api("/api/brain-mate/result", { method: "POST", jar: bmD.jar, body: { name: "Dee", answers: { ...base(true), duel }, acceptTerms: true } });
-      if (r.status === 200) accepted.push(duel);
-    }
-    assert(accepted.length === 2, "the final duel accepts exactly the two archetypes the answers lead to");
-    const mine = await pool.query("select archetype from brain_mates where user_id = (select id from users where email = $1)", [bmEmailD]);
-    assert(accepted.includes(mine.rows[0]?.archetype), "the stored archetype is computed from the answers");
-    const bad = await api("/api/brain-mate/result", { method: "POST", jar: bmD.jar, body: { name: "Dee", answers: { ...base(true), r1: "everything", duel: "dreamer" } } });
+    const saved = await api("/api/brain-mate/result", { method: "POST", jar: bmD.jar, body: { name: "Dee", answers: game(true), acceptTerms: true } });
+    assert(saved.status === 200, "a real game saves");
+    const forged = game(true);
+    forged.duels[0] = { ...forged.duels[0], a: forged.duels[0].b, b: forged.duels[0].a === "doer" ? "maker" : "doer" };
+    const forgedRes = await api("/api/brain-mate/result", { method: "POST", jar: bmD.jar, body: { name: "Dee", answers: forged } });
+    assert(forgedRes.status === 400, "a duel card the answers don't lead to is refused");
+    const mine = await pool.query("select archetype, answers->>'v' as v from brain_mates where user_id = (select id from users where email = $1)", [bmEmailD]);
+    assert(mine.rows[0]?.archetype === saved.data.archetype && mine.rows[0]?.v === "2", "the stored archetype is the server's, on the current version");
+    const bad = await api("/api/brain-mate/result", { method: "POST", jar: bmD.jar, body: { name: "Dee", answers: { ...game(true), t: { ...game(true).t, t3: 7 } } } });
     assert(bad.status === 400, "an answer the game can't produce is refused");
 
     const noGame = await api("/api/brain-mate/links", { method: "POST", jar: bmE.jar, body: { name: "Dee" } });
@@ -210,18 +237,12 @@ async function main() {
     const own = await api(`/api/brain-mate/links/${bmSlug}/claim`, { method: "POST", jar: bmD.jar, body: {} });
     assert(own.status === 409, "the sender can't answer their own link");
 
-    let eAccepted = false;
-    for (const duel of ARCH) {
-      const r = await api("/api/brain-mate/result", {
-        method: "POST",
-        jar: bmE.jar,
-        body: { name: "Eve", answers: { ...base(false), duel }, acceptTerms: true, link: bmSlug },
-      });
-      if (r.status === 200) {
-        eAccepted = !r.data.linkError;
-        break;
-      }
-    }
+    const eRes = await api("/api/brain-mate/result", {
+      method: "POST",
+      jar: bmE.jar,
+      body: { name: "Eve", answers: game(false), acceptTerms: true, link: bmSlug },
+    });
+    const eAccepted = eRes.status === 200 && !eRes.data.linkError;
     assert(eAccepted, "the friend's game completes the link in the same request");
     const linkRow = await pool.query("select completed_at, recipient_id from brain_mate_links where slug = $1", [bmSlug]);
     assert(linkRow.rows[0]?.completed_at && linkRow.rows[0]?.recipient_id, "…and the link is marked done with its recipient");

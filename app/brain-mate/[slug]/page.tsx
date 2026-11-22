@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
 import { OUTCOMES } from "@/lib/brainMate/compare";
-import { comparisonFor, getBrainMate, getLink, stateOf } from "@/lib/brainMate/server";
+import { comparisonFor, getBrainMate, getLink, needsRetake, stateOf } from "@/lib/brainMate/server";
 import { siteOrigin } from "@/lib/brainMate/origin";
 import AuthGate from "@/components/brainMate/AuthGate";
 import CompareView from "@/components/brainMate/CompareView";
@@ -78,7 +78,38 @@ export default async function LinkPage({ params, searchParams }: Params) {
   // ------------------------------------------------------------ done
   if (state === "done") {
     const c = await comparisonFor(link);
-    if (!c) notFound();
+    if (!c) {
+      // Finished on the first questionnaire: show who still needs to retake
+      // instead of a stale comparison. The link updates itself afterwards.
+      const need = await needsRetake(link);
+      const recipientName = first(link.recipientName);
+      const waitingOn = [need.sender ? senderName : null, need.recipient ? recipientName : null].filter(Boolean) as string[];
+      const meNeeds = (isSender && need.sender) || (isRecipient && need.recipient);
+      return (
+        <main className="bm-shell">
+          {header}
+          <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
+            <span className="text-[3rem]">🔁</span>
+            <h1 className="bm-display text-[2rem]">
+              {senderName} × {recipientName}: a new Wavelength is coming
+            </h1>
+            <p className="text-[15px] text-[var(--bm-soft)]">
+              Brain-Mate got sharper. {waitingOn.join(" and ")} {waitingOn.length > 1 ? "need" : "needs"} to retake it — then this link shows
+              your new comparison by itself.
+            </p>
+            {meNeeds ? (
+              <Link href="/brain-mate/play" className="bm-btn bm-btn-brand">
+                Retake · 2½ min
+              </Link>
+            ) : (
+              <Link href="/brain-mate" className="bm-btn bm-btn-brand">
+                Find your Brain-Mates
+              </Link>
+            )}
+          </div>
+        </main>
+      );
+    }
     const player = isSender || isRecipient;
     const view = (
       <div className="flex flex-col gap-3 pt-3">

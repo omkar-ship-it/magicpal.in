@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Offline analysis scripts (CommonJS), not app code — see its README.
+    "scripts/brain-mate-sim/**",
   ]),
 ]);
 

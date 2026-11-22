@@ -27,5 +27,13 @@ export default async function PlayPage({ searchParams }: { searchParams: Promise
   const defaultName =
     me?.displayName ?? (linkProp && link ? link.recipientName : null) ?? user.name?.split(" ")[0] ?? "";
 
-  return <Game defaultName={defaultName} needsTerms={!accepted} link={linkProp} stats={stats.n >= 20 ? stats : null} />;
+  return (
+    <Game
+      defaultName={defaultName}
+      needsTerms={!accepted}
+      link={linkProp}
+      stats={stats.n >= 20 ? stats : null}
+      retake={Boolean(me && !me.current)}
+    />
+  );
 }

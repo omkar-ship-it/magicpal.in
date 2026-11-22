@@ -1,321 +1,354 @@
-import {
-  ARCHETYPES,
-  GRID,
-  MODES,
-  REALMS,
-  REALM_COLOR,
-  isArchetypeId,
-  type ArchetypeId,
-  type Mode,
-  type Realm,
-} from "./archetypes";
-import { PICK_ROUNDS, ROUNDS, SINGLE_ROUNDS, SWIPE_ROUND, type Effect } from "./rounds";
+import { ARCHETYPES, ARCHETYPE_IDS, TRAITS, TRAIT_INFO, type ArchetypeId, type Trait } from "./archetypes";
+import { AGREE, AGREE_VALUE, SCENARIOS, STATEMENTS, TILES, VALUES, type Loading } from "./rounds";
 
 /**
- * Brain-Mate scoring: answers in, archetype out.
+ * Brain-Mate v2 scoring: answers → eight trait scores → nearest archetype.
  *
- * Deterministic and pure. The same answers always give the same result, the
- * server recomputes everything from the raw answers (a client cannot post an
- * archetype), and the game runs the same code live to drive the narrowing
- * ring — so what the player watches shrink is exactly what decides them.
+ * Pure and deterministic. The server recomputes everything from the raw
+ * answers (a client can't post an archetype), and the game runs the same
+ * code live to drive the narrowing ring and to build each duel card.
+ *
+ * The constants below were fitted by simulation (scripts/brain-mate-sim):
+ * 20,000 synthetic players with known traits answering with realistic
+ * noise. In that simulation trait scores correlate 0.82–0.85 with the true
+ * traits, players who clearly fit one archetype get it 76% of the time and
+ * the same one on a retake 63%, and every archetype lands on ~8.3% of
+ * players. They are a starting point — refit NORM_* and BIAS from real
+ * answers once a few hundred people have played.
  */
 
+export const VERSION = 2;
+
+export type DuelAnswer = { a: ArchetypeId; b: ArchetypeId; pick: ArchetypeId };
+
 export type Answers = {
-  r1?: string;
-  r2?: string;
-  r3?: string;
-  r4?: string;
-  /** Lightning round: card id → chosen option id. */
-  r5?: Record<string, string>;
-  r6?: string;
-  r7?: string;
-  r8?: string[];
-  r9?: string[];
-  /** The archetype picked in the final duel. */
-  duel?: ArchetypeId;
-  /** How long the lightning round took, for the "gut speed" line. */
-  lightningMs?: number;
+  v: 2;
+  /** scenario id → option id */
+  s: Record<string, string>;
+  /** statement id → 0..3 (Nope, Not really, Kinda, Totally) */
+  t: Record<string, number>;
+  values: string[];
+  tiles: string[];
+  duels: DuelAnswer[];
+  /** How long the statements took, for the "gut speed" line. */
+  ms?: number;
 };
 
-export type Points = Record<Realm | Mode, number>;
+export type Traits = Record<Trait, number>;
 
-const zero = (): Points => ({
-  imagine: 0,
-  reason: 0,
-  act: 0,
-  relate: 0,
-  ignite: 0,
-  seek: 0,
-  steady: 0,
-});
+// Population norms for the raw trait scores (mean, sd) and the per-archetype
+// offsets that keep the twelve evenly spread. From the simulation.
+const NORM_MU = [0.3471, 0.3113, 0.292, 0.3139, 0.2233, 0.3765, 0.3125, 0.1634];
+const NORM_SD = [0.5677, 0.6082, 0.6465, 0.6745, 0.5934, 0.6121, 0.6011, 0.6713];
+const BIAS: Record<ArchetypeId, number> = {
+  dreamer: 0.124,
+  explorer: 0.037,
+  creator: 0.042,
+  maverick: -0.04,
+  detective: -0.014,
+  strategist: 0,
+  spark: -0.02,
+  maker: 0.049,
+  doer: -0.046,
+  connector: 0.013,
+  mentor: -0.026,
+  peacemaker: -0.119,
+};
 
-function add(p: Points, e: Effect | undefined) {
-  if (!e) return;
-  for (const [k, v] of Object.entries(e)) p[k as keyof Points] += v ?? 0;
+export const DUEL_COUNT = 3;
+const DUEL_STEP = 0.45;
+
+const vec = (t: Partial<Record<Trait, number>>) => TRAITS.map((k) => t[k] ?? 0);
+const dot = (a: number[], b: number[]) => a.reduce((s, x, i) => s + x * b[i], 0);
+const norm = (a: number[]) => Math.sqrt(dot(a, a)) || 1;
+const cos = (a: number[], b: number[]) => dot(a, b) / (norm(a) * norm(b));
+const PROFILE: Record<ArchetypeId, number[]> = Object.fromEntries(
+  ARCHETYPE_IDS.map((id) => [id, vec(ARCHETYPES[id].profile)])
+) as Record<ArchetypeId, number[]>;
+
+/** Raw trait scores from whatever has been answered so far. */
+function raw(a: Partial<Answers>): number[] {
+  const sum = TRAITS.map(() => 0);
+  const n = TRAITS.map(() => 0);
+  const add = (load: Loading, value: number | null) =>
+    TRAITS.forEach((k, i) => {
+      const x = load[k];
+      if (!x) return;
+      n[i] += Math.abs(x);
+      if (value !== null) sum[i] += x * value;
+    });
+  for (const sc of SCENARIOS) {
+    const chosen = a.s?.[sc.id];
+    if (chosen === undefined) continue;
+    for (const o of sc.options) add(o.load, o.id === chosen ? 2 : 0);
+  }
+  for (const st of STATEMENTS) {
+    const v = a.t?.[st.id];
+    if (v === undefined) continue;
+    add(st.load, AGREE_VALUE[v]);
+  }
+  return sum.map((x, i) => (n[i] ? x / n[i] : NORM_MU[i]));
 }
 
-/** Raw axis points from everything answered so far (the duel excluded). */
-export function pointsFor(a: Answers): Points {
-  const p = zero();
-  for (const r of SINGLE_ROUNDS) {
-    const chosen = a[r.id];
-    add(p, r.options.find((o) => o.id === chosen)?.effect);
-  }
-  for (const c of SWIPE_ROUND.cards) {
-    const chosen = a.r5?.[c.id];
-    if (chosen === c.left.id) add(p, c.left.effect);
-    if (chosen === c.right.id) add(p, c.right.effect);
-  }
-  for (const r of PICK_ROUNDS) {
-    for (const id of a[r.id] ?? []) add(p, r.options.find((o) => o.id === id)?.effect);
-  }
-  return p;
+/** Trait scores in standard units (0 = typical, ±1 = one spread away). */
+export function traitVector(a: Partial<Answers>): number[] {
+  return raw(a).map((x, i) => (x - NORM_MU[i]) / NORM_SD[i]);
 }
 
-const DUEL_BONUS = 4;
-
-/** Every archetype ranked, best first. Ties break on grid order, so it is stable. */
-export function ranking(a: Answers, withDuel = true): { id: ArchetypeId; score: number }[] {
-  const p = pointsFor(a);
-  const out: { id: ArchetypeId; score: number }[] = [];
-  for (const r of REALMS)
-    for (const m of MODES) {
-      const id = GRID[r][m];
-      out.push({ id, score: p[r] + p[m] + (withDuel && a.duel === id ? DUEL_BONUS : 0) });
-    }
-  return out
-    .map((x, i) => ({ ...x, i }))
-    .sort((x, y) => y.score - x.score || x.i - y.i)
-    .map(({ id, score }) => ({ id, score }));
+function ranked(z: number[]): { id: ArchetypeId; c: number }[] {
+  return ARCHETYPE_IDS.map((id) => ({ id, c: cos(z, PROFILE[id]) + BIAS[id] })).sort((x, y) => y.c - x.c);
 }
 
-/** How many silhouettes stay lit after each round — the narrowing ring. */
-export const ALIVE_AFTER = [12, 10, 8, 7, 6, 5, 4, 3, 3, 2];
+function withDuels(z: number[], duels: DuelAnswer[]): number[] {
+  const out = [...z];
+  for (const d of duels) {
+    const diff = PROFILE[d.a].map((x, i) => x - PROFILE[d.b][i]);
+    const n = norm(diff);
+    const sign = d.pick === d.a ? 1 : -1;
+    diff.forEach((x, i) => (out[i] += (sign * DUEL_STEP * x) / n));
+  }
+  return out;
+}
 
-export function aliveAfter(a: Answers, roundsDone: number): ArchetypeId[] {
-  const k = ALIVE_AFTER[Math.min(roundsDone, ALIVE_AFTER.length - 1)];
-  return ranking(a, false)
-    .slice(0, k)
+/** Silhouettes still lit on the ring, by how far the player has got. */
+export function stillInPlay(a: Partial<Answers>, fraction: number): ArchetypeId[] {
+  const keep = Math.max(2, Math.round(12 - 10 * Math.min(1, fraction)));
+  return ranked(withDuels(traitVector(a), a.duels ?? []))
+    .slice(0, keep)
     .map((x) => x.id);
 }
 
-// ---------------------------------------------------------------- duel
-export type Duel = {
-  kind: "mode" | "realm" | "superpower";
-  prompt: string;
+// ------------------------------------------------------------------ duels
+export type DuelCard = {
   a: ArchetypeId;
   b: ArchetypeId;
   lineA: string;
   lineB: string;
 };
 
-const DUEL_STEM: Record<Mode, string> = {
-  ignite: "You leave a great evening having…",
-  seek: "Your perfect afternoon:",
-  steady: "What you're quietly proudest of:",
-};
-
-/** The final round, built from the two archetypes this player is closest to. */
-export function duelFor(a: Answers): Duel {
-  const [first, second] = ranking(a, false);
-  const A = ARCHETYPES[first.id];
-  const B = ARCHETYPES[second.id];
-  if (A.realm === B.realm)
-    return { kind: "mode", prompt: "Last one. Which is more you?", a: A.id, b: B.id, lineA: A.modeLine, lineB: B.modeLine };
-  if (A.mode === B.mode)
-    return { kind: "realm", prompt: DUEL_STEM[A.mode], a: A.id, b: B.id, lineA: A.realmLine, lineB: B.realmLine };
-  return {
-    kind: "superpower",
-    prompt: "Which would your friends say about you?",
-    a: A.id,
-    b: B.id,
-    lineA: A.superpower,
-    lineB: B.superpower,
-  };
+/**
+ * The next duel card: the player's current top two (or the next pair down
+ * if that pair was already asked), contrasted on the two traits where their
+ * profiles differ most. Null once all duels are answered.
+ */
+export function nextDuel(a: Partial<Answers>): DuelCard | null {
+  const done = a.duels ?? [];
+  if (done.length >= DUEL_COUNT) return null;
+  const r = ranked(withDuels(traitVector(a), done));
+  const asked = new Set(done.map((d) => [d.a, d.b].sort().join("|")));
+  const A = r[0].id;
+  let B = r[1].id;
+  if (asked.has([A, B].sort().join("|"))) B = r[2].id;
+  const diff = TRAITS.map((k, i) => ({ k, d: PROFILE[A][i] - PROFILE[B][i] })).sort((x, y) => Math.abs(y.d) - Math.abs(x.d));
+  const line = (positive: boolean) =>
+    diff
+      .slice(0, 2)
+      .filter((x) => Math.abs(x.d) >= 0.5)
+      .map((x) => {
+        const info = TRAIT_INFO[x.k];
+        return (x.d > 0) === positive ? info.hiLine : info.loLine;
+      })
+      .join(" · ");
+  const lineA = line(true);
+  const lineB = line(false);
+  // Two profiles that barely differ get their superpowers instead.
+  if (!lineA || !lineB) return { a: A, b: B, lineA: ARCHETYPES[A].superpower, lineB: ARCHETYPES[B].superpower };
+  return { a: A, b: B, lineA, lineB };
 }
 
-// ------------------------------------------------------------ validation
+// ------------------------------------------------------------- validation
 /**
- * Accepts only answers the game could have produced: every round answered
- * with a real option, picks of the right size, and a duel between the two
- * archetypes those answers actually lead to. Anything else is refused, so
- * the stored record is always a real play.
+ * Only answers the game could have produced: every question answered with
+ * a real option, picks of the right size, and each duel exactly the card
+ * the earlier answers lead to. Anything else is refused.
  */
-export function cleanAnswers(raw: unknown): Answers | null {
-  if (!raw || typeof raw !== "object") return null;
-  const r = raw as Record<string, unknown>;
-  const out: Answers = {};
-  for (const round of SINGLE_ROUNDS) {
-    const v = r[round.id];
-    if (typeof v !== "string" || !round.options.some((o) => o.id === v)) return null;
-    out[round.id] = v;
+export function cleanAnswers(input: unknown): Answers | null {
+  if (!input || typeof input !== "object") return null;
+  const r = input as Record<string, unknown>;
+  const s = (r.s ?? {}) as Record<string, unknown>;
+  const t = (r.t ?? {}) as Record<string, unknown>;
+  const out: Answers = { v: 2, s: {}, t: {}, values: [], tiles: [], duels: [] };
+  for (const sc of SCENARIOS) {
+    const v = s[sc.id];
+    if (typeof v !== "string" || !sc.options.some((o) => o.id === v)) return null;
+    out.s[sc.id] = v;
   }
-  const swipes = r.r5 as Record<string, unknown> | undefined;
-  if (!swipes || typeof swipes !== "object") return null;
-  out.r5 = {};
-  for (const c of SWIPE_ROUND.cards) {
-    const v = swipes[c.id];
-    if (v !== c.left.id && v !== c.right.id) return null;
-    out.r5[c.id] = v;
+  for (const st of STATEMENTS) {
+    const v = t[st.id];
+    if (typeof v !== "number" || !Number.isInteger(v) || v < 0 || v > 3) return null;
+    out.t[st.id] = v;
   }
-  for (const round of PICK_ROUNDS) {
-    const v = r[round.id];
+  const pick = (v: unknown, from: { id: string }[], count: number) => {
     if (!Array.isArray(v)) return null;
     const ids = [...new Set(v.filter((x): x is string => typeof x === "string"))];
-    if (ids.length !== round.count || !ids.every((id) => round.options.some((o) => o.id === id))) return null;
-    out[round.id] = ids;
+    return ids.length === count && ids.every((id) => from.some((o) => o.id === id)) ? ids : null;
+  };
+  const values = pick(r.values, VALUES, 2);
+  const tiles = pick(r.tiles, TILES, 3);
+  if (!values || !tiles) return null;
+  out.values = values;
+  out.tiles = tiles;
+  const duels = Array.isArray(r.duels) ? r.duels : [];
+  if (duels.length !== DUEL_COUNT) return null;
+  for (const d of duels as Record<string, unknown>[]) {
+    const card = nextDuel(out);
+    if (!card || d?.a !== card.a || d?.b !== card.b || (d.pick !== card.a && d.pick !== card.b)) return null;
+    out.duels.push({ a: card.a, b: card.b, pick: d.pick as ArchetypeId });
   }
-  const duel = duelFor(out);
-  if (!isArchetypeId(r.duel) || (r.duel !== duel.a && r.duel !== duel.b)) return null;
-  out.duel = r.duel;
-  const ms = Number(r.lightningMs);
-  if (Number.isFinite(ms) && ms > 0 && ms < 600_000) out.lightningMs = Math.round(ms);
+  const ms = Number(r.ms);
+  if (Number.isFinite(ms) && ms > 0 && ms < 900_000) out.ms = Math.round(ms);
   return out;
 }
 
-// ---------------------------------------------------------------- result
-export type Sliders = {
-  /** -1 gut / intuition … +1 evidence */
-  think: number;
-  /** -1 one-to-one … +1 crowd */
-  connect: number;
-  /** -1 ideas … +1 execution */
-  work: number;
-  /** -1 starter … +1 finisher */
-  pace: number;
-};
+export const isV2 = (a: unknown): a is Answers => Boolean(a && typeof a === "object" && (a as { v?: number }).v === 2);
 
+// ------------------------------------------------------------------ result
 export type Result = {
   archetype: ArchetypeId;
   streak: ArchetypeId;
-  /** Top three archetypes as percentages summing to 100. */
+  /** The top two were nearly tied — say so rather than pretend. */
+  cusp: boolean;
+  /** Top three as percentages summing to 100. */
   mix: { id: ArchetypeId; pct: number }[];
-  sliders: Sliders;
-  values: string[];
-  tiles: string[];
+  /** Trait scores in standard units, clipped to ±2.5. */
+  traits: Traits;
 };
 
-const ratio = (plus: number, minus: number) => (plus + minus === 0 ? 0 : (plus - minus) / (plus + minus));
-
-export function slidersFor(a: Answers): Sliders {
-  const p = pointsFor(a);
-  const room = a.r4 === "ignite" ? 1 : a.r4 === "seek" ? 0.15 : -1;
-  return {
-    think: ratio(p.reason, p.imagine),
-    connect: Math.max(-1, Math.min(1, room * 0.75 + ratio(p.relate, p.reason) * 0.25)),
-    work: ratio(p.act, (p.imagine + p.reason) / 2),
-    pace: ratio(p.steady, p.ignite),
-  };
-}
-
 export function resultFor(a: Answers): Result {
-  const ranked = ranking(a, true);
-  const top = ranked.slice(0, 3);
-  // Squared so the winner reads as a winner: three near-equal thirds would
-  // say "you are nothing in particular", which is untrue and unshareable.
-  const weights = top.map((x) => Math.max(0.5, x.score) ** 2);
-  const total = weights.reduce((s, w) => s + w, 0);
-  const pcts = weights.map((w) => Math.round((w / total) * 100));
-  pcts[0] += 100 - pcts.reduce((s, x) => s + x, 0);
+  const z = withDuels(traitVector(a), a.duels);
+  const r = ranked(z);
+  const top = r.slice(0, 3);
+  // Soft enough to read as a blend: a clear type shows ~60/25/15, not 96/4/0.
+  const w = top.map((x) => Math.exp(x.c / 0.2));
+  const total = w.reduce((s, x) => s + x, 0);
+  const pct = w.map((x) => Math.round((x / total) * 100));
+  pct[0] += 100 - pct.reduce((s, x) => s + x, 0);
+  const traits = Object.fromEntries(TRAITS.map((k, i) => [k, Math.max(-2.5, Math.min(2.5, z[i]))])) as Traits;
   return {
-    archetype: ranked[0].id,
-    streak: ranked[1].id,
-    mix: top.map((x, i) => ({ id: x.id, pct: pcts[i] })),
-    sliders: slidersFor(a),
-    values: a.r8 ?? [],
-    tiles: a.r9 ?? [],
+    archetype: r[0].id,
+    streak: r[1].id,
+    cusp: r[0].c - r[1].c < 0.05,
+    mix: top.map((x, i) => ({ id: x.id, pct: pct[i] })),
+    traits,
   };
 }
 
 // ------------------------------------------------------ "how did it know"
 export type CrowdStats = {
-  /** Players counted. Below MIN_CROWD the split lines stay hidden. */
   n: number;
-  /** "r1:imagine" → share of players who picked it, 0–1. */
+  /** "s3:a" or "t5:3" → share of players who answered that, 0–1. */
   share: Record<string, number>;
-  /** archetype → share of players, 0–1. */
   archetypes: Record<string, number>;
 };
 
 export const MIN_CROWD = 20;
 
-const OPTION_LABEL = new Map<string, string>();
-for (const r of SINGLE_ROUNDS) for (const o of r.options) OPTION_LABEL.set(`${r.id}:${o.id}`, o.label);
-for (const c of SWIPE_ROUND.cards) {
-  OPTION_LABEL.set(`r5:${c.id}:${c.left.id}`, c.left.label);
-  OPTION_LABEL.set(`r5:${c.id}:${c.right.id}`, c.right.label);
-}
-export const optionLabel = (key: string) => OPTION_LABEL.get(key) ?? "";
+export const HIGH_PHRASE: Record<Trait, string> = {
+  O: "ideas everywhere",
+  I: "always asking why",
+  D: "the one who finishes",
+  S: "a plan for everything",
+  E: "charged up by people",
+  A: "a natural lead",
+  C: "reading the room",
+  H: "keeping the peace",
+};
+export const LOW_PHRASE: Record<Trait, string> = {
+  O: "loyal to what works",
+  I: "happy without the why",
+  D: "quick to move on",
+  S: "plans optional",
+  E: "a one-good-conversation person",
+  A: "happy to back the lead",
+  C: "problem first",
+  H: "not afraid of the hard thing",
+};
 
-/** Row × a mode answer that pulls the other way → one personal line. */
-const MIXED: { realm: Realm; key: string; line: string }[] = [
-  { realm: "reason", key: "r2:ignite", line: "Careful thinker. Reckless with domains." },
-  { realm: "reason", key: "r4:ignite", line: "You think like a detective but walk into a room like a spark. Nobody sees the questions coming." },
-  { realm: "reason", key: "r4:steady", line: "You don't small-talk. You cross-examine, kindly." },
-  { realm: "imagine", key: "r7:ignite", line: "You don't just imagine the future. You'll fight for it." },
-  { realm: "imagine", key: "r7:steady", line: "Big dreams, and no need to win the argument about them." },
-  { realm: "imagine", key: "r5:s4:follow", line: "A dreamer with a route planned. Rare, and a little dangerous." },
-  { realm: "act", key: "r2:seek", line: "You research like a detective, then build anyway." },
-  { realm: "act", key: "r4:steady", line: "Quiet in the room, loud in the work." },
-  { realm: "relate", key: "r4:ignite", line: "You don't find your people. You assemble them." },
-  { realm: "relate", key: "r3:act", line: "A people person with a toolbox." },
-  { realm: "relate", key: "r4:steady", line: "You don't work the room. You change one person's night." },
-];
+/** The pair of statements for each trait: [agree-means-high, agree-means-low]. */
+const PAIR: Record<Trait, [string, string]> = {
+  O: ["t1", "t9"],
+  I: ["t2", "t10"],
+  D: ["t3", "t11"],
+  S: ["t4", "t12"],
+  E: ["t5", "t13"],
+  A: ["t6", "t14"],
+  C: ["t7", "t15"],
+  H: ["t8", "t16"],
+};
 
-function picked(a: Answers): string[] {
-  const keys: string[] = [];
-  for (const r of SINGLE_ROUNDS) if (a[r.id]) keys.push(`${r.id}:${a[r.id]}`);
-  for (const c of SWIPE_ROUND.cards) if (a.r5?.[c.id]) keys.push(`r5:${c.id}:${a.r5[c.id]}`);
-  return keys;
-}
+export const scenarioLabel = (key: string) => {
+  const [sid, oid] = key.split(":");
+  return SCENARIOS.find((s) => s.id === sid)?.options.find((o) => o.id === oid)?.label ?? "";
+};
+export const statementText = (id: string) => STATEMENTS.find((s) => s.id === id)?.text ?? "";
 
 /**
- * One line that proves the result came from *your* answers. Facts are
- * picked by rule, in a fixed priority order; nothing here is invented.
+ * One line that proves the result came from *your* answers. Picked by
+ * rule, in a fixed priority order; nothing here is invented.
  */
 export function howDidItKnow(a: Answers, stats: CrowdStats | null): string {
   const res = resultFor(a);
   const me = ARCHETYPES[res.archetype];
-  const keys = new Set(picked(a));
 
-  const mixed = MIXED.find((m) => m.realm === me.realm && keys.has(m.key));
-  if (mixed) return mixed.line;
-
-  const realmRounds = [a.r1, a.r3, a.r6];
-  if (realmRounds.every((x) => x && x === realmRounds[0])) {
-    const word = { imagine: "Imagination", reason: "The puzzle", act: "Building", relate: "People" }[realmRounds[0] as Realm];
-    return `${word}, three times out of three. You don't do it sometimes — it's who you are.`;
+  // A trait you answered the same way twice, at full strength, from both sides.
+  for (const k of TRAITS) {
+    const [hi, lo] = PAIR[k];
+    if (a.t[hi] === 3 && a.t[lo] === 0)
+      return `“${statementText(hi)}” Totally. “${statementText(lo)}” Nope. That's ${HIGH_PHRASE[k]}, both ways round.`;
+    if (a.t[hi] === 0 && a.t[lo] === 3)
+      return `“${statementText(lo)}” Totally — and you meant it both ways round. ${cap(LOW_PHRASE[k])}.`;
   }
 
   if (stats && stats.n >= MIN_CROWD) {
     let rare: { key: string; share: number } | null = null;
-    for (const k of keys) {
-      const s = stats.share[k];
-      if (s !== undefined && s < 0.12 && (!rare || s < rare.share)) rare = { key: k, share: s };
+    for (const [sid, oid] of Object.entries(a.s)) {
+      const share = stats.share[`${sid}:${oid}`];
+      if (share !== undefined && share < 0.12 && (!rare || share < rare.share)) rare = { key: `${sid}:${oid}`, share };
     }
-    if (rare)
-      return `You picked “${optionLabel(rare.key)}”. Only ${Math.max(1, Math.round(rare.share * 100))}% of people do.`;
+    if (rare) return `You picked “${scenarioLabel(rare.key)}”. Only ${Math.max(1, Math.round(rare.share * 100))}% of people do.`;
   }
 
-  if (a.lightningMs && a.lightningMs < 8_000)
-    return `${Math.max(1, Math.round(a.lightningMs / 1000))} seconds for the lightning round. You trust your gut, and it trusts you back.`;
-  if (a.lightningMs && a.lightningMs > 20_000) return "You thought about every single swipe. Of course you did.";
+  const order = TRAITS.map((k) => ({ k, z: res.traits[k] })).sort((x, y) => y.z - x.z);
+  const hi = order[0];
+  const lo = order[order.length - 1];
+  if (hi.z > 0.8 && lo.z < -0.5) return `${cap(HIGH_PHRASE[hi.k])}, and ${LOW_PHRASE[lo.k]}. That mix is what makes ${me.name}.`;
 
-  const other = ARCHETYPES[res.streak];
-  return `It came down to ${me.name.replace("The ", "")} vs ${other.name.replace("The ", "")}. You chose ${me.name.replace("The ", "")} — and the ${other.name.replace("The ", "")} in you is why it was close.`;
+  const last = a.duels[a.duels.length - 1];
+  if (last) {
+    const other = last.pick === last.a ? last.b : last.a;
+    return `It came down to ${short(last.pick)} vs ${short(other)} — and the ${short(other)} in you is why it was close.`;
+  }
+  return `${cap(HIGH_PHRASE[hi.k])}. That's the heart of ${me.name}.`;
 }
 
-/** Keywords flashed in the recap montage, in the order they were answered. */
-export { MONTAGE } from "./rounds";
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const short = (id: ArchetypeId) => ARCHETYPES[id].name.replace("The ", "");
 
-// ------------------------------------------------------------ the strands
+/** Words flashed in the recap montage, in the order the scenarios were answered. */
+export function montageWords(a: Partial<Answers>): string[] {
+  return SCENARIOS.map((sc) => sc.options.find((o) => o.id === a.s?.[sc.id])?.word).filter((w): w is string => Boolean(w));
+}
+
+export const agreeWord = (v: number | undefined) => (v === undefined ? "—" : AGREE[v]);
+
+// ------------------------------------------------------------- the strands
 /**
  * The generative art behind every card: one strand per answer, coloured by
- * the row it pointed at and shaped by the column. Deterministic from the
- * answers, so two Dreamers never share a card and the same person always
- * gets the same one.
+ * the trait it spoke to. Deterministic, so the same person always gets the
+ * same art and no two cards are alike.
  */
 export type Strand = { d: string; color: string; width: number; opacity: number };
+
+export const TRAIT_COLOR: Record<Trait, string> = {
+  O: "#7B4DFF",
+  I: "#0E7C93",
+  D: "#E07A00",
+  S: "#1F3A8A",
+  E: "#2FA84F",
+  A: "#FF6B4A",
+  C: "#4E8F6B",
+  H: "#1D5C45",
+};
 
 function hash(s: string): number {
   let h = 2166136261;
@@ -326,46 +359,38 @@ function hash(s: string): number {
   return h >>> 0;
 }
 
-function effectColor(e: Effect | undefined): string {
-  if (!e) return "#999";
-  for (const r of REALMS) if (e[r]) return REALM_COLOR[r];
-  if (e.ignite) return "#FF6B4A";
-  if (e.seek) return "#0EA5B8";
-  return "#8D7B72";
+function traitOf(load: Loading): Trait {
+  return (Object.entries(load).sort((x, y) => Math.abs(y[1] ?? 0) - Math.abs(x[1] ?? 0))[0]?.[0] ?? "O") as Trait;
 }
 
 /** Strands on a 400×400 canvas centred at 200,200. */
-export function strandsFor(a: Answers, seed = ""): Strand[] {
+export function strandsFor(a: Partial<Answers>, seed = ""): Strand[] {
   const out: Strand[] = [];
-  const push = (key: string, e: Effect | undefined, weight: number) => {
+  const push = (key: string, trait: Trait, weight: number, shape: number) => {
     const h = hash(seed + key);
     const angle = ((h % 360) * Math.PI) / 180;
     const sweep = 0.9 + ((h >>> 9) % 100) / 60;
     const r1 = 60 + ((h >>> 3) % 70);
     const r2 = 120 + ((h >>> 13) % 70);
     const p = (r: number, t: number) => `${(200 + r * Math.cos(t)).toFixed(1)} ${(200 + r * Math.sin(t)).toFixed(1)}`;
-    const isSteady = e?.steady !== undefined;
-    const isIgnite = e?.ignite !== undefined;
-    const d = isIgnite
-      ? `M ${p(30, angle)} Q ${p(r2, angle + 0.25)} ${p(r2 + 40, angle + 0.05)}`
-      : isSteady
-        ? `M ${p(r1, angle)} A ${r1} ${r1} 0 0 1 ${p(r1, angle + sweep)}`
-        : `M ${p(r1, angle)} C ${p(r2, angle + sweep / 3)} ${p(r1 * 0.6, angle + (sweep * 2) / 3)} ${p(r2, angle + sweep)}`;
-    out.push({ d, color: effectColor(e), width: 2 + weight * 2.5, opacity: 0.35 + weight * 0.2 });
+    const d =
+      shape === 0
+        ? `M ${p(30, angle)} Q ${p(r2, angle + 0.25)} ${p(r2 + 40, angle + 0.05)}`
+        : shape === 1
+          ? `M ${p(r1, angle)} A ${r1} ${r1} 0 0 1 ${p(r1, angle + sweep)}`
+          : `M ${p(r1, angle)} C ${p(r2, angle + sweep / 3)} ${p(r1 * 0.6, angle + (sweep * 2) / 3)} ${p(r2, angle + sweep)}`;
+    out.push({ d, color: TRAIT_COLOR[trait], width: 2 + weight * 2.5, opacity: 0.35 + weight * 0.2 });
   };
-  for (const round of ROUNDS) {
-    if (round.kind === "cards") {
-      const o = round.options.find((x) => x.id === a[round.id]);
-      if (o) push(`${round.id}:${o.id}`, o.effect, 1.4);
-    } else if (round.kind === "swipe") {
-      for (const c of round.cards) {
-        const v = a.r5?.[c.id];
-        const o = v === c.left.id ? c.left : v === c.right.id ? c.right : null;
-        if (o) push(`r5:${c.id}:${o.id}`, o.effect, 0.6);
-      }
-    } else {
-      for (const id of a[round.id] ?? []) push(`${round.id}:${id}`, round.options.find((x) => x.id === id)?.effect, 0.4);
-    }
+  for (const sc of SCENARIOS) {
+    const o = sc.options.find((x) => x.id === a.s?.[sc.id]);
+    if (o) push(`${sc.id}:${o.id}`, traitOf(o.load), 1.4, hash(o.id) % 3);
   }
+  for (const st of STATEMENTS) {
+    const v = a.t?.[st.id];
+    if (v === undefined) continue;
+    const strength = Math.abs(AGREE_VALUE[v]) / 1.5;
+    push(`${st.id}:${v}`, traitOf(st.load), 0.3 + 0.5 * strength, v >= 2 ? 0 : 1);
+  }
+  for (const id of [...(a.values ?? []), ...(a.tiles ?? [])]) push(`p:${id}`, "C", 0.4, 2);
   return out;
 }

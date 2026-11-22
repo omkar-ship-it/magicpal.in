@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ARCHETYPES, streakLine, type ArchetypeId } from "@/lib/brainMate/archetypes";
-import { MONTAGE, SWIPE_ROUND } from "@/lib/brainMate/rounds";
-import { MIN_CROWD, strandsFor, type Answers } from "@/lib/brainMate/score";
+import { MIN_CROWD, montageWords, strandsFor, type Answers } from "@/lib/brainMate/score";
 import { ArchetypeMark } from "@/lib/brainMate/symbols";
 import { buzz, tone } from "./feel";
 
@@ -13,7 +12,8 @@ export type RevealData = {
   answers: Answers;
   archetype: ArchetypeId;
   streak: ArchetypeId;
-  loser: ArchetypeId;
+  /** The top two were nearly tied. */
+  cusp: boolean;
   rarity: number;
   players: number;
   know: string;
@@ -30,7 +30,7 @@ export type RevealData = {
  * a reason — it's the laugh.
  */
 
-const T = { shatter: 1500, inhale: 2050, bloom: 2600, name: 3000, tagline: 3900, rarity: 4500, hand: 5100 };
+const T = { shatter: 1700, inhale: 2250, bloom: 2800, name: 3200, tagline: 4100, rarity: 4700, hand: 5300 };
 
 function seeded(i: number) {
   const x = Math.sin(i * 9301 + 49297) * 233280;
@@ -81,7 +81,9 @@ export default function Reveal({ data }: { data: RevealData }) {
   const rarityLine =
     data.players >= MIN_CROWD
       ? `1 in ${Math.max(2, Math.round(1 / Math.max(data.rarity, 0.01)))} people are ${a.name.replace("The ", "")}s`
-      : `One of the first ${Math.max(1, data.players)} Brain-Mates`;
+      : data.players <= 1
+        ? "The very first Brain-Mate"
+        : `One of the first ${data.players} Brain-Mates`;
   const soft = a.ink === "#ffffff" ? "rgba(255,255,255,0.75)" : "rgba(42,30,0,0.7)";
   const chip = a.ink === "#ffffff" ? "rgba(255,255,255,0.16)" : "rgba(42,30,0,0.1)";
 
@@ -114,7 +116,7 @@ export default function Reveal({ data }: { data: RevealData }) {
                   ))}
                 </svg>
                 <span className="bm-fade-up opacity-60" style={{ animation: "bm-inhale 0.5s ease-in forwards" }}>
-                  <ArchetypeMark id={data.loser} size={70} color="#ffffff" />
+                  <ArchetypeMark id={data.streak} size={70} color="#ffffff" />
                 </span>
               </div>
             )}
@@ -155,12 +157,24 @@ export default function Reveal({ data }: { data: RevealData }) {
             </div>
 
             {t >= T.name && (
-              <h1 className="bm-display mt-4 text-[2.7rem]" aria-label={a.name}>
-                {a.name.toUpperCase().split("").map((ch, i) => (
-                  <span key={i} className="bm-letter" style={{ animationDelay: `${i * 45}ms` }} aria-hidden="true">
-                    {ch === " " ? " " : ch}
-                  </span>
-                ))}
+              <h1 className="bm-display mt-4 text-[clamp(2rem,10vw,2.7rem)]" aria-label={a.name}>
+                {/* Letters animate one by one, but words never break mid-way. */}
+                {a.name
+                  .toUpperCase()
+                  .split(" ")
+                  .map((word, w, words) => {
+                    const offset = words.slice(0, w).join(" ").length + (w ? 1 : 0);
+                    return (
+                      <span key={w} className="inline-block whitespace-nowrap" aria-hidden="true">
+                        {word.split("").map((ch, k) => (
+                          <span key={k} className="bm-letter" style={{ animationDelay: `${(offset + k) * 45}ms` }}>
+                            {ch}
+                          </span>
+                        ))}
+                        {w < words.length - 1 ? "\u00A0" : ""}
+                      </span>
+                    );
+                  })}
               </h1>
             )}
             {t >= T.tagline && (
@@ -227,13 +241,13 @@ export default function Reveal({ data }: { data: RevealData }) {
 
             {allFlipped && (
               <div className="mt-6 flex w-full flex-col items-center gap-4">
-                <p className="bm-fade-up max-w-[22rem] text-[1.1rem] font-bold leading-snug">&ldquo;{data.know}&rdquo;</p>
+                <p className="bm-fade-up max-w-[22rem] text-[1.1rem] font-bold leading-snug">{data.know}</p>
                 <span
                   className="bm-stamp flex items-center gap-2 rounded-full px-4 py-2 text-[14px] font-extrabold"
                   style={{ background: ARCHETYPES[data.streak].color, color: ARCHETYPES[data.streak].ink, animationDelay: "0.3s" }}
                 >
                   <ArchetypeMark id={data.streak} size={20} color={ARCHETYPES[data.streak].ink} stroke={8} />
-                  {streakLine(data.streak)}
+                  {data.cusp ? `${a.name.replace("The ", "")}–${ARCHETYPES[data.streak].name.replace("The ", "")} cusp` : streakLine(data.streak)}
                 </span>
                 {data.note && <p className="text-[13px] font-semibold opacity-80">{data.note}</p>}
                 <Link
@@ -250,15 +264,4 @@ export default function Reveal({ data }: { data: RevealData }) {
       </div>
     </main>
   );
-}
-
-/** Your own answers as single words, in the order you gave them. */
-function montageWords(a: Answers): string[] {
-  const out: string[] = [];
-  for (const id of ["r1", "r2", "r3", "r4"] as const) if (a[id]) out.push(MONTAGE[`${id}:${a[id]}`]);
-  const sw = SWIPE_ROUND.cards[1];
-  const v = a.r5?.[sw.id];
-  if (v) out.push(v === sw.left.id ? sw.left.label : sw.right.label);
-  for (const id of ["r6", "r7"] as const) if (a[id]) out.push(MONTAGE[`${id}:${a[id]}`]);
-  return out.filter(Boolean);
 }

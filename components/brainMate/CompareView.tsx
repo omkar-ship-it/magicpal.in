@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ARCHETYPES, type ArchetypeId } from "@/lib/brainMate/archetypes";
+import { ARCHETYPES, TRAITS, TRAIT_INFO, type ArchetypeId } from "@/lib/brainMate/archetypes";
 import { OUTCOMES, type Comparison } from "@/lib/brainMate/compare";
 import { ArchetypeMark } from "@/lib/brainMate/symbols";
 
@@ -65,12 +65,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-const SLIDERS = [
-  { k: "think", lo: "Gut", hi: "Evidence" },
-  { k: "connect", lo: "One-to-one", hi: "Crowd" },
-  { k: "work", lo: "Ideas", hi: "Execution" },
-  { k: "pace", lo: "Starter", hi: "Finisher" },
-] as const;
+const SLIDERS = TRAITS.map((k) => ({ k, lo: TRAIT_INFO[k].lo, hi: TRAIT_INFO[k].hi, name: TRAIT_INFO[k].name }));
 
 export default function CompareView({
   c,
@@ -122,6 +117,25 @@ export default function CompareView({
         )}
       </Section>
 
+      <Section title="How you fit">
+        <div className="flex flex-col gap-2.5">
+          {c.fit.map((f, i) => (
+            <div key={f.label}>
+              <div className="flex justify-between text-[13px] font-bold">
+                <span>{f.label}</span>
+                <span>{f.value}</span>
+              </div>
+              <div className="bm-bar mt-1">
+                <span style={{ width: `${Math.max(4, f.value)}%`, background: "var(--bm-brand)", animationDelay: `${i * 90}ms` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 text-[12px] text-[var(--bm-soft)]">
+          Compatibility rewards complementary roles and a clear lead, and similar warmth and structure — what research on working pairs finds matters.
+        </p>
+      </Section>
+
       <Section title="Side by side">
         <div className="mb-3 flex gap-4 text-[12px] font-bold">
           <span className="flex items-center gap-1.5">
@@ -131,12 +145,13 @@ export default function CompareView({
             <span className="h-3 w-3 rounded-full border-2 bg-white" style={{ borderColor: B.color }} /> {c.b.name}
           </span>
         </div>
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3.5">
           {SLIDERS.map((s) => {
-            const pa = ((c.a.sliders[s.k] + 1) / 2) * 100;
-            const pb = ((c.b.sliders[s.k] + 1) / 2) * 100;
+            const pa = ((c.a.traits[s.k] / 2.5 + 1) / 2) * 100;
+            const pb = ((c.b.traits[s.k] / 2.5 + 1) / 2) * 100;
             return (
               <div key={s.k}>
+                <p className="text-[13px] font-bold">{s.name}</p>
                 <div className="flex justify-between text-[12px] font-semibold text-[var(--bm-soft)]">
                   <span>{s.lo}</span>
                   <span>{s.hi}</span>

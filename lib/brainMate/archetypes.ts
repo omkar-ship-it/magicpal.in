@@ -39,6 +39,26 @@ export type ArchetypeId =
   | "mentor"
   | "peacemaker";
 
+/**
+ * The eight traits Brain-Mate measures — seven aspects of the Big Five
+ * (DeYoung's model) plus harmony vs challenge. Anxiety/emotional stability
+ * is deliberately left out: unflattering, sensitive, and no use for
+ * meeting people.
+ */
+export type Trait = "O" | "I" | "D" | "S" | "E" | "A" | "C" | "H";
+export const TRAITS: Trait[] = ["O", "I", "D", "S", "E", "A", "C", "H"];
+
+export const TRAIT_INFO: Record<Trait, { name: string; lo: string; hi: string; loLine: string; hiLine: string }> = {
+  O: { name: "Imagination", lo: "Proven ways", hi: "New possibilities", loLine: "Perfect what already works", hiLine: "Imagine what could be" },
+  I: { name: "Inquiry", lo: "Get it working", hi: "Find out why", loLine: "Get it working", hiLine: "Find out why" },
+  D: { name: "Drive", lo: "Move on", hi: "See it through", loLine: "Move on once it's figured out", hiLine: "See it through to the end" },
+  S: { name: "Structure", lo: "Keep it open", hi: "Have a plan", loLine: "Keep it open", hiLine: "Have a plan" },
+  E: { name: "Social energy", lo: "One good conversation", hi: "The whole room", loLine: "Be in one good conversation", hiLine: "Be in the middle of the room" },
+  A: { name: "Assertiveness", lo: "Back the lead", hi: "Take the lead", loLine: "Back the person leading", hiLine: "Take the lead" },
+  C: { name: "Warmth", lo: "The problem", hi: "The people", loLine: "Look after the problem", hiLine: "Look after the people" },
+  H: { name: "Harmony", lo: "Say the hard thing", hi: "Keep it together", loLine: "Say the uncomfortable thing", hiLine: "Keep the group together" },
+};
+
 export type Archetype = {
   id: ArchetypeId;
   name: string;
@@ -65,11 +85,16 @@ export type Archetype = {
   role: string;
   /** A question someone could open with. */
   askMe: string;
-  powerDuo: [ArchetypeId, ArchetypeId];
-  friction: ArchetypeId;
-  /** The two duel lines — see lib/brainMate/rounds DUEL_*. */
-  modeLine: string;
-  realmLine: string;
+  /** Best complements first, from the derived matrix. */
+  powerDuo: ArchetypeId[];
+  /**
+   * The card's provocation. "clash" when the friction rules genuinely fire
+   * for some archetype; four archetypes have no real friction with anyone,
+   * and for them it's honestly "My opposite" — the most different profile.
+   */
+  edge: { kind: "clash" | "opposite"; id: ArchetypeId };
+  /** Where this archetype sits on the eight traits, in standard units. */
+  profile: Record<Trait, number>;
 };
 
 const A = (a: Archetype) => a;
@@ -94,10 +119,9 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     does: "imagines it",
     role: "the direction",
     askMe: "What would you build if it couldn't fail?",
-    powerDuo: ["doer", "strategist"],
-    friction: "detective",
-    modeLine: "Pitch the big vision tomorrow. Details later.",
-    realmLine: "sketched a future nobody else could see",
+    powerDuo: ["maker", "doer", "strategist"],
+    edge: { kind: "clash", id: "detective" },
+    profile: { O: 2, I: 0, D: 0, S: -1, E: 1, A: 1, C: 0, H: 0 },
   }),
   explorer: A({
     id: "explorer",
@@ -118,10 +142,9 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     does: "finds where to go",
     role: "the scout",
     askMe: "What's the most interesting thing you've learned this month?",
-    powerDuo: ["maker", "spark"],
-    friction: "doer",
-    modeLine: "Wander for a month before deciding what it is.",
-    realmLine: "somewhere new, with no map",
+    powerDuo: ["maker", "doer", "spark"],
+    edge: { kind: "opposite", id: "peacemaker" },
+    profile: { O: 1.5, I: 1, D: -0.5, S: -1.5, E: 0.5, A: 0, C: 0, H: 0 },
   }),
   creator: A({
     id: "creator",
@@ -142,10 +165,9 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     does: "makes it beautiful",
     role: "the craft",
     askMe: "What's something you made that still feels like you?",
-    powerDuo: ["strategist", "doer"],
-    friction: "detective",
-    modeLine: "Disappear until the thing is beautiful.",
-    realmLine: "something you made that still feels like you",
+    powerDuo: ["doer", "explorer"],
+    edge: { kind: "opposite", id: "maverick" },
+    profile: { O: 2, I: 0, D: 1, S: 0, E: -0.5, A: 0, C: 0, H: 0.5 },
   }),
   maverick: A({
     id: "maverick",
@@ -166,10 +188,9 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     does: "questions it",
     role: "the stress test",
     askMe: "What does everyone in your field believe that's wrong?",
-    powerDuo: ["maker", "connector"],
-    friction: "strategist",
-    modeLine: "Stand up and say the plan is wrong.",
-    realmLine: "changed someone's mind",
+    powerDuo: ["doer", "maker"],
+    edge: { kind: "clash", id: "peacemaker" },
+    profile: { O: 0.5, I: 1, D: 0, S: -1, E: 0, A: 1, C: -0.5, H: -2 },
   }),
   detective: A({
     id: "detective",
@@ -190,10 +211,9 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     does: "finds what's really wrong",
     role: "the truth",
     askMe: "What's a problem you couldn't stop thinking about?",
-    powerDuo: ["maker", "doer"],
-    friction: "spark",
-    modeLine: "Quietly dig until you know why it's wrong.",
-    realmLine: "a mystery you're finally cracking",
+    powerDuo: ["doer", "explorer"],
+    edge: { kind: "clash", id: "spark" },
+    profile: { O: 0, I: 2, D: 0.5, S: 0.5, E: -1, A: 0, C: 0, H: 0 },
   }),
   strategist: A({
     id: "strategist",
@@ -214,10 +234,9 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     does: "plans the path",
     role: "the plan",
     askMe: "What are you planning three moves from now?",
-    powerDuo: ["dreamer", "creator"],
-    friction: "maker",
-    modeLine: "Redraw the plan so it can't go wrong.",
-    realmLine: "a plan that worked exactly as drawn",
+    powerDuo: ["explorer", "dreamer"],
+    edge: { kind: "clash", id: "maker" },
+    profile: { O: 0, I: 1, D: 1, S: 2, E: 0, A: 0.5, C: 0, H: 0 },
   }),
   spark: A({
     id: "spark",
@@ -238,10 +257,9 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     does: "gets it moving",
     role: "the momentum",
     askMe: "What would you start this weekend if someone joined you?",
-    powerDuo: ["doer", "maker"],
-    friction: "detective",
-    modeLine: "Get ten people moving by tonight.",
-    realmLine: "got a Saturday plan — and everyone's in",
+    powerDuo: ["explorer", "doer"],
+    edge: { kind: "clash", id: "detective" },
+    profile: { O: 0.5, I: -0.5, D: 0, S: -1, E: 2, A: 1, C: 0, H: 0 },
   }),
   maker: A({
     id: "maker",
@@ -262,10 +280,9 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     does: "builds it",
     role: "the prototype",
     askMe: "What are you building right now?",
-    powerDuo: ["dreamer", "detective"],
-    friction: "strategist",
-    modeLine: "Have a rough version working by tonight.",
-    realmLine: "something half-built on the table",
+    powerDuo: ["explorer", "dreamer", "maverick"],
+    edge: { kind: "clash", id: "strategist" },
+    profile: { O: 0.5, I: -0.5, D: 2, S: -1, E: 0, A: 0, C: 0, H: 0 },
   }),
   doer: A({
     id: "doer",
@@ -286,10 +303,9 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     does: "delivers it",
     role: "the finish line",
     askMe: "What's the last thing you shipped that you're proud of?",
-    powerDuo: ["dreamer", "spark"],
-    friction: "explorer",
-    modeLine: "Finish what everyone else started.",
-    realmLine: "the thing that shipped because you didn't let it slip",
+    powerDuo: ["dreamer", "explorer", "detective"],
+    edge: { kind: "opposite", id: "maverick" },
+    profile: { O: -0.5, I: 0, D: 2, S: 1, E: 0, A: 0.5, C: 0, H: 0 },
   }),
   connector: A({
     id: "connector",
@@ -310,10 +326,9 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     does: "brings in the right people",
     role: "the network",
     askMe: "Who's the most interesting person you met this year?",
-    powerDuo: ["mentor", "maker"],
-    friction: "detective",
-    modeLine: "Introduce two people who'll change each other's year.",
-    realmLine: "introduced half the room to the other half",
+    powerDuo: ["explorer", "doer"],
+    edge: { kind: "clash", id: "detective" },
+    profile: { O: 0, I: 0, D: 0, S: 0, E: 2, A: 0, C: 1, H: 0.5 },
   }),
   mentor: A({
     id: "mentor",
@@ -334,10 +349,9 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     does: "helps everyone grow",
     role: "the guide",
     askMe: "What's the best advice you've ever ignored?",
-    powerDuo: ["connector", "spark"],
-    friction: "maverick",
-    modeLine: "Spend an hour helping one person see their next step.",
-    realmLine: "a long talk where someone figures themselves out",
+    powerDuo: ["doer"],
+    edge: { kind: "opposite", id: "dreamer" },
+    profile: { O: 0, I: 1, D: 0, S: 0, E: -0.5, A: 0, C: 2, H: 0.5 },
   }),
   peacemaker: A({
     id: "peacemaker",
@@ -358,10 +372,9 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     does: "keeps everyone together",
     role: "the glue",
     askMe: "What's a disagreement you're glad you had?",
-    powerDuo: ["doer", "strategist"],
-    friction: "maverick",
-    modeLine: "Get a divided room to agree.",
-    realmLine: "a team that's still together because of you",
+    powerDuo: ["explorer", "dreamer", "doer"],
+    edge: { kind: "clash", id: "maverick" },
+    profile: { O: 0, I: 0, D: 0, S: 0.5, E: 0, A: -1, C: 1, H: 2 },
   }),
 };
 
@@ -395,44 +408,36 @@ export const REALM_COLOR: Record<Realm, string> = {
 
 // ------------------------------------------------------------ the matrix
 /**
- * The default story for any two archetypes. A storytelling baseline, not
- * the result: the scores in lib/brainMate/compare decide the outcome, and
- * this only breaks ties in the middle band.
+ * The default story for any two archetypes — a baseline the scores in
+ * lib/brainMate/compare override. Derived from the archetype profiles by
+ * the same rules the comparison uses (see scripts/brain-mate-sim), not
+ * written by hand:
  *
- * Omkar's matrix, with the corrections agreed on 2026-11-23 so that every
- * archetype has at least two Power Duos and one Friendly Friction, and the
- * three people archetypes stop getting "Good Chemistry" with everyone.
+ *   BM  profiles very similar, and no leadership or challenger clash
+ *   FF  a research-backed friction source fires: both lead, two
+ *       challengers, an evidence-first/reserved vs gut-first/social gap, a
+ *       planner vs improviser whose roles don't complement, challenge vs harmony
+ *   PD  complementary roles (ideas ↔ execution, lead ↔ support)
+ *   BC  very different, with nothing clashing
+ *   GC  no strong default — the two people's scores decide
  */
 export type MatrixCode = "BM" | "PD" | "GC" | "FF" | "BC";
 
-const ORDER: ArchetypeId[] = [
-  "dreamer",
-  "explorer",
-  "creator",
-  "detective",
-  "strategist",
-  "maverick",
-  "maker",
-  "spark",
-  "doer",
-  "connector",
-  "mentor",
-  "peacemaker",
-];
+const ORDER: ArchetypeId[] = ["dreamer", "explorer", "creator", "maverick", "detective", "strategist", "spark", "maker", "doer", "connector", "mentor", "peacemaker"];
 
 const ROWS = [
-  "BM BM BM FF PD FF PD PD PD GC GC GC",
-  "BM BM BM GC BC BM PD PD FF GC GC GC",
-  "BM BM BM FF PD BC PD PD PD GC GC GC",
-  "FF GC FF BM BM FF PD FF PD FF GC GC",
-  "PD BC PD BM BM FF FF FF PD GC GC PD",
-  "FF BM BC FF FF BM PD FF FF PD FF FF",
-  "PD PD PD PD FF PD BM PD PD PD GC GC",
-  "PD PD PD FF FF FF PD BM PD GC PD GC",
-  "PD FF PD PD PD FF PD PD BM GC GC PD",
-  "GC GC GC FF GC PD PD GC GC BM PD BM",
-  "GC GC GC GC GC FF GC PD GC PD BM GC",
-  "GC GC GC GC PD FF GC GC PD BM GC BM",
+  "BM BM BM FF BC PD FF PD PD GC BC PD",
+  "BM BM PD GC PD PD PD PD PD PD GC PD",
+  "BM PD BM BC GC GC BC BM PD GC GC BC",
+  "FF GC BC BM GC GC FF PD PD BC BC FF",
+  "BC PD GC GC BM BM FF GC PD GC BM GC",
+  "PD PD GC GC BM BM FF BM BM GC GC GC",
+  "FF PD BC FF FF FF BM BM PD BM BC BC",
+  "PD PD BM PD GC BM BM BM BM GC GC GC",
+  "PD PD PD PD PD BM PD BM BM PD PD PD",
+  "GC PD GC BC GC GC BM GC PD BM BM BM",
+  "BC GC GC BC BM GC BC GC PD BM BM BM",
+  "PD PD BC FF GC GC BC GC PD BM BM BM",
 ].map((r) => r.split(" ") as MatrixCode[]);
 
 export function matrixCode(a: ArchetypeId, b: ArchetypeId): MatrixCode {

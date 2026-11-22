@@ -1,218 +1,177 @@
-import type { Mode, Realm } from "./archetypes";
+import type { Trait } from "./archetypes";
 
 /**
- * The ten rounds of Brain-Mate.
+ * Brain-Mate v2 — the question bank.
  *
- * Every single-choice round measures exactly one side of the hidden grid —
- * a 4-option round picks a row (realm), a 3-option round picks a column
- * (mode) — so options stay few and every archetype has the same number of
- * ways in. No option uses archetype vocabulary, and each option in a round
- * should be as attractive as the others: if one sounds like the "right"
- * answer, everybody picks it and the distribution collapses.
+ * Built on the eight traits in archetypes.ts. Two kinds of question, mixed
+ * on purpose:
  *
- * Effects are points: single rounds score 3, a swipe 1, a packed value or a
- * weekend tile 0.5. The final duel (round 10) is not listed here; it is
- * built per player from their two closest archetypes — see score.ts.
+ *  - Scenarios (8): four options, each pointing at ONE trait, written to be
+ *    equally attractive so the answer reflects habit rather than who you'd
+ *    like to be. Behaviour ("you…"), never self-image ("you are…").
+ *  - Statements (16): Nope / Not really / Kinda / Totally. Two per trait,
+ *    one of each pair reverse-worded, so agreeing with everything inflates
+ *    nothing. These give a *level* on each trait rather than a choice
+ *    between traits, which is what makes comparing two people fair.
+ *
+ * Every trait is measured by 4–6 questions across both kinds. Values and
+ * interests feed similarity only, never the archetype. The final duel is
+ * adaptive and built per player — see score.ts.
+ *
+ * Changing a loading here changes what the scores mean: re-run
+ * scripts/brain-mate-sim and refit the norms in score.ts before shipping.
  */
 
-export type Effect = Partial<Record<Realm | Mode, number>>;
+export type Loading = Partial<Record<Trait, number>>;
 
-export type Option = { id: string; label: string; effect: Effect };
+export type ScenarioOption = { id: string; label: string; load: Loading; word: string };
+export type Scenario = { id: string; title: string; prompt: string; options: ScenarioOption[] };
+export type Statement = { id: string; text: string; load: Loading };
+export type PickOption = { id: string; label: string; emoji: string };
 
-export type SingleRound = {
-  kind: "cards";
-  id: "r1" | "r2" | "r3" | "r4" | "r6" | "r7";
-  title: string;
-  prompt: string;
-  /** "row" rounds have 4 options, "column" rounds 3. */
-  axis: "realm" | "mode";
-  options: Option[];
-  /** How the cards are drawn — the variety is what makes it a game. */
-  look?: "headline";
-};
-
-export type SwipeCard = { id: string; left: Option; right: Option };
-
-export type SwipeRound = {
-  kind: "swipe";
-  id: "r5";
-  title: string;
-  prompt: string;
-  cards: SwipeCard[];
-};
-
-export type PickRound = {
-  kind: "pick";
-  id: "r8" | "r9";
-  title: string;
-  prompt: string;
-  /** Exactly this many must be chosen. */
-  count: number;
-  look: "bag" | "tiles";
-  options: (Option & { emoji: string })[];
-};
-
-export type Round = SingleRound | SwipeRound | PickRound;
-
-const realm = (r: Realm, n = 3): Effect => ({ [r]: n });
-const mode = (m: Mode, n = 3): Effect => ({ [m]: n });
-
-export const ROUNDS: Round[] = [
+export const SCENARIOS: Scenario[] = [
   {
-    kind: "cards",
-    id: "r1",
+    id: "s1",
     title: "Free Sunday",
     prompt: "No plans. What pulls you in first?",
-    axis: "realm",
     options: [
-      { id: "imagine", label: "Daydreaming up something that doesn't exist yet", effect: realm("imagine") },
-      { id: "reason", label: "A puzzle, or a rabbit hole I can't climb out of", effect: realm("reason") },
-      { id: "act", label: "Building or fixing something with my hands", effect: realm("act") },
-      { id: "relate", label: "Calling someone. Or five people.", effect: realm("relate") },
+      { id: "o", label: "Dreaming up something that doesn't exist yet", load: { O: 1 }, word: "daydreams" },
+      { id: "i", label: "A rabbit hole on how something works", load: { I: 1 }, word: "rabbit holes" },
+      { id: "d", label: "Finally finishing that half-done project", load: { D: 1 }, word: "finished it" },
+      { id: "e", label: "Getting people together for something", load: { E: 1 }, word: "rounded people up" },
     ],
   },
   {
-    kind: "cards",
-    id: "r2",
-    title: "Midnight idea",
-    prompt: "An idea hits you at midnight. By morning you've…",
-    axis: "mode",
-    options: [
-      { id: "ignite", label: "Told three people and bought the domain", effect: mode("ignite") },
-      { id: "seek", label: "Opened 23 tabs about it", effect: mode("seek") },
-      { id: "steady", label: "Slept on it and made a plan", effect: mode("steady") },
-    ],
-  },
-  {
-    kind: "cards",
-    id: "r3",
+    id: "s2",
     title: "Stuck team",
-    prompt: "The group project is stuck. You…",
-    axis: "realm",
+    prompt: "Your team's project is stuck. You…",
     options: [
-      { id: "imagine", label: "Pitch a wild new direction", effect: realm("imagine") },
-      { id: "reason", label: "Dig into what's actually broken", effect: realm("reason") },
-      { id: "act", label: "Hack together a quick version", effect: realm("act") },
-      { id: "relate", label: "Get everyone back on the same page", effect: realm("relate") },
+      { id: "o", label: "Reframe the problem completely", load: { O: 1 }, word: "reframed it" },
+      { id: "i", label: "Dig into the data for the real cause", load: { I: 1 }, word: "found the cause" },
+      { id: "a", label: "Take charge and reset the plan", load: { A: 1 }, word: "took charge" },
+      { id: "c", label: "Check how everyone's actually doing", load: { C: 1 }, word: "checked in" },
     ],
   },
   {
-    kind: "cards",
-    id: "r4",
+    id: "s3",
+    title: "The meeting",
+    prompt: "Someone in a meeting says something you think is wrong. You…",
+    options: [
+      { id: "a", label: "Push back, right there", load: { A: 1, H: -1 }, word: "pushed back" },
+      { id: "i", label: "Ask the question that exposes the gap", load: { I: 1 }, word: "the killer question" },
+      { id: "c", label: "Find them after and talk it through", load: { C: 1 }, word: "talked after" },
+      { id: "h", label: "Find the part that's right and build on it", load: { H: 1 }, word: "built on it" },
+    ],
+  },
+  {
+    id: "s4",
+    title: "New project",
+    prompt: "A new project lands on you. First move?",
+    options: [
+      { id: "o", label: "Sketch what it could become", load: { O: 1 }, word: "what it could be" },
+      { id: "s", label: "Break it into steps with dates", load: { S: 1 }, word: "steps and dates" },
+      { id: "d", label: "Get a rough version working today", load: { D: 1 }, word: "working today" },
+      { id: "e", label: "Work out who else should be in on it", load: { E: 1 }, word: "who's in" },
+    ],
+  },
+  {
+    id: "s5",
     title: "Room of strangers",
-    prompt: "You walk into a room where you know nobody. You…",
-    axis: "mode",
+    prompt: "A room where you know nobody. You…",
     options: [
-      { id: "ignite", label: "Walk straight up to the liveliest group", effect: mode("ignite") },
-      { id: "seek", label: "Drift around and sample a few conversations", effect: mode("seek") },
-      { id: "steady", label: "Find one person and go deep", effect: mode("steady") },
+      { id: "e", label: "Walk up to the liveliest group", load: { E: 1 }, word: "liveliest group" },
+      { id: "c", label: "Find one person and go deep", load: { C: 1 }, word: "one deep talk" },
+      { id: "q", label: "Watch for a while before choosing someone", load: { E: -1 }, word: "watched first" },
+      { id: "d", label: "Find something useful to do, like helping set up", load: { D: 1 }, word: "helped set up" },
     ],
   },
   {
-    kind: "swipe",
-    id: "r5",
-    title: "Lightning round",
-    prompt: "Gut only. Don't think.",
-    cards: [
-      {
-        id: "s1",
-        left: { id: "start", label: "Start it", effect: { ignite: 1 } },
-        right: { id: "finish", label: "Finish it", effect: { steady: 1 } },
-      },
-      {
-        id: "s2",
-        left: { id: "whatif", label: "What if?", effect: { imagine: 1 } },
-        right: { id: "why", label: "Why?", effect: { reason: 1 } },
-      },
-      {
-        id: "s3",
-        left: { id: "make", label: "Make it", effect: { act: 1 } },
-        right: { id: "talk", label: "Talk it through", effect: { relate: 1 } },
-      },
-      {
-        id: "s4",
-        left: { id: "wander", label: "Wander off the map", effect: { seek: 1 } },
-        right: { id: "follow", label: "Follow the map", effect: { steady: 1 } },
-      },
-      {
-        id: "s5",
-        left: { id: "think", label: "Think it through", effect: { reason: 1 } },
-        right: { id: "try", label: "Try it now", effect: { act: 1 } },
-      },
-      {
-        id: "s6",
-        left: { id: "idea", label: "A brilliant idea", effect: { imagine: 1 } },
-        right: { id: "person", label: "A brilliant person", effect: { relate: 1 } },
-      },
+    id: "s6",
+    title: "Big decision",
+    prompt: "A friend asks for help with a big decision. You…",
+    options: [
+      { id: "o", label: "Help them see options they missed", load: { O: 1 }, word: "new options" },
+      { id: "s", label: "Lay out the trade-offs together", load: { S: 1 }, word: "the trade-offs" },
+      { id: "a", label: "Tell them straight what you'd do", load: { A: 1 }, word: "told it straight" },
+      { id: "c", label: "Mostly listen until they figure it out", load: { C: 1 }, word: "listened" },
     ],
   },
   {
-    kind: "cards",
-    id: "r6",
-    title: "Your headline",
-    prompt: "Which headline about you would you frame?",
-    axis: "realm",
-    look: "headline",
+    id: "s7",
+    title: "Group trip",
+    prompt: "Group trip. Your unofficial role?",
     options: [
-      { id: "imagine", label: "Saw it before anyone else did", effect: realm("imagine") },
-      { id: "reason", label: "Cracked what nobody could", effect: realm("reason") },
-      { id: "act", label: "Built it in a weekend", effect: realm("act") },
-      { id: "relate", label: "Everyone they helped, rose", effect: realm("relate") },
+      { id: "s", label: "The planner with the spreadsheet", load: { S: 1 }, word: "the spreadsheet" },
+      { id: "a", label: "The one who decides when everyone dithers", load: { A: 1 }, word: "the decider" },
+      { id: "e", label: "The DJ and the mood", load: { E: 1 }, word: "the DJ" },
+      { id: "h", label: "The one keeping everyone happy", load: { H: 1 }, word: "kept the peace" },
     ],
   },
   {
-    kind: "cards",
-    id: "r7",
-    title: "The disagreement",
-    prompt: "Someone strongly disagrees with you. You…",
-    axis: "mode",
+    id: "s8",
+    title: "Where to eat",
+    prompt: "The group can't agree where to eat. You…",
     options: [
-      { id: "ignite", label: "Game on. I'll argue it out.", effect: mode("ignite") },
-      { id: "seek", label: "Ask questions until I get their side", effect: mode("seek") },
-      { id: "steady", label: "Find what we agree on, and move on", effect: mode("steady") },
-    ],
-  },
-  {
-    kind: "pick",
-    id: "r8",
-    title: "Pack your bag",
-    prompt: "You can only take two. What matters most right now?",
-    count: 2,
-    look: "bag",
-    options: [
-      { id: "freedom", emoji: "🪁", label: "Freedom", effect: { ignite: 0.5, imagine: 0.5 } },
-      { id: "mastery", emoji: "🎯", label: "Mastery", effect: { seek: 0.5, reason: 0.5 } },
-      { id: "recognition", emoji: "🏆", label: "Recognition", effect: { ignite: 0.5, act: 0.5 } },
-      { id: "difference", emoji: "🌱", label: "Making a difference", effect: { relate: 0.5, seek: 0.5 } },
-      { id: "belonging", emoji: "🏡", label: "Belonging", effect: { relate: 0.5, steady: 0.5 } },
-      { id: "adventure", emoji: "🧭", label: "Adventure", effect: { seek: 0.5, imagine: 0.5 } },
-      { id: "lasting", emoji: "🏛️", label: "Building something that lasts", effect: { steady: 0.5, act: 0.5 } },
-    ],
-  },
-  {
-    kind: "pick",
-    id: "r9",
-    title: "Your weekend",
-    prompt: "Pick three you'd happily lose a weekend to.",
-    count: 3,
-    look: "tiles",
-    options: [
-      { id: "places", emoji: "🗺️", label: "New places", effect: { imagine: 0.5 } },
-      { id: "tinkering", emoji: "🔧", label: "Tinkering", effect: { act: 0.5 } },
-      { id: "art", emoji: "🎨", label: "Art, music, content", effect: { imagine: 0.5 } },
-      { id: "puzzles", emoji: "🧩", label: "Puzzles", effect: { reason: 0.5 } },
-      { id: "startups", emoji: "🚀", label: "Startup talk", effect: { act: 0.5 } },
-      { id: "sports", emoji: "🏸", label: "Sports & outdoors", effect: { act: 0.5 } },
-      { id: "people", emoji: "🎉", label: "Meeting people", effect: { relate: 0.5 } },
-      { id: "teaching", emoji: "🧑‍🏫", label: "Teaching & volunteering", effect: { relate: 0.5 } },
-      { id: "books", emoji: "📚", label: "Books, films, ideas", effect: { reason: 0.5 } },
+      { id: "a", label: "Just pick, and everyone follows", load: { A: 1 }, word: "just picked" },
+      { id: "h", label: "Find the place everyone can live with", load: { H: 1 }, word: "found the middle" },
+      { id: "o", label: "Suggest somewhere nobody's tried", load: { O: 1 }, word: "somewhere new" },
+      { id: "i", label: "Check reviews and pick the best-rated", load: { I: 1 }, word: "read the reviews" },
     ],
   },
 ];
 
-export const SINGLE_ROUNDS = ROUNDS.filter((r): r is SingleRound => r.kind === "cards");
-export const SWIPE_ROUND = ROUNDS.find((r): r is SwipeRound => r.kind === "swipe")!;
-export const PICK_ROUNDS = ROUNDS.filter((r): r is PickRound => r.kind === "pick");
+export const STATEMENTS: Statement[] = [
+  { id: "t1", text: "I have more ideas than time.", load: { O: 1 } },
+  { id: "t2", text: "I need to know why something works.", load: { I: 1 } },
+  { id: "t3", text: "I finish what I start, even the boring part.", load: { D: 1 } },
+  { id: "t4", text: "My calendar is my second brain.", load: { S: 1 } },
+  { id: "t5", text: "A room full of people charges me up.", load: { E: 1 } },
+  { id: "t6", text: "In a group, I usually end up leading.", load: { A: 1 } },
+  { id: "t7", text: "I can tell when someone's having a bad day.", load: { C: 1 } },
+  { id: "t8", text: "I'd rather keep the peace than win the argument.", load: { H: 1 } },
+  { id: "t9", text: "I'd rather perfect what works than try something new.", load: { O: -1 } },
+  { id: "t10", text: "If it works, I don't need to know why.", load: { I: -1 } },
+  { id: "t11", text: "I lose interest once the exciting part is over.", load: { D: -1 } },
+  { id: "t12", text: "I'm happiest when the plan stays loose.", load: { S: -1 } },
+  { id: "t13", text: "Small talk drains me.", load: { E: -1 } },
+  { id: "t14", text: "I'd rather back a good leader than be one.", load: { A: -1 } },
+  { id: "t15", text: "I'd rather fix the problem than talk about feelings.", load: { C: -1 } },
+  { id: "t16", text: "If everyone agrees too fast, I start arguing.", load: { H: -1 } },
+];
+
+/**
+ * The order statements are shown in: interleaved so the two items for one
+ * trait never sit together, which would make the reversal obvious.
+ */
+export const STATEMENT_ORDER = ["t1", "t13", "t6", "t10", "t3", "t16", "t7", "t12", "t2", "t9", "t5", "t14", "t4", "t11", "t8", "t15"];
+
+/** Nope / Not really / Kinda / Totally — the four taps. */
+export const AGREE = ["Nope", "Not really", "Kinda", "Totally"] as const;
+export const AGREE_VALUE = [-1.5, -0.5, 0.5, 1.5];
+
+/** Schwartz's values, in plain words. Pick two. */
+export const VALUES: PickOption[] = [
+  { id: "freedom", emoji: "🪁", label: "Freedom" },
+  { id: "adventure", emoji: "🧭", label: "Adventure" },
+  { id: "achievement", emoji: "🏆", label: "Achievement" },
+  { id: "influence", emoji: "📣", label: "Influence" },
+  { id: "stability", emoji: "🏛️", label: "Stability" },
+  { id: "helping", emoji: "🤲", label: "Helping others" },
+  { id: "fairness", emoji: "⚖️", label: "Fairness" },
+  { id: "fun", emoji: "🎉", label: "Fun" },
+];
+
+export const TILES: PickOption[] = [
+  { id: "places", emoji: "🗺️", label: "New places" },
+  { id: "tinkering", emoji: "🔧", label: "Tinkering" },
+  { id: "art", emoji: "🎨", label: "Art, music, content" },
+  { id: "puzzles", emoji: "🧩", label: "Puzzles" },
+  { id: "startups", emoji: "🚀", label: "Startup talk" },
+  { id: "sports", emoji: "🏸", label: "Sports & outdoors" },
+  { id: "people", emoji: "🎉", label: "Meeting people" },
+  { id: "teaching", emoji: "🧑‍🏫", label: "Teaching & volunteering" },
+  { id: "books", emoji: "📚", label: "Books, films, ideas" },
+];
 
 /** What a shared weekend tile suggests two people do together. */
 export const TILE_ACTIVITY: Record<string, string> = {
@@ -227,27 +186,5 @@ export const TILE_ACTIVITY: Record<string, string> = {
   books: "Swap one book each and meet when you've both finished.",
 };
 
-/** One-word labels for the recap montage before the reveal. */
-export const MONTAGE: Record<string, string> = {
-  "r1:imagine": "daydreams",
-  "r1:reason": "rabbit holes",
-  "r1:act": "hands-on",
-  "r1:relate": "five calls",
-  "r2:ignite": "bought the domain",
-  "r2:seek": "23 tabs",
-  "r2:steady": "slept on it",
-  "r3:imagine": "wild direction",
-  "r3:reason": "what's broken?",
-  "r3:act": "quick version",
-  "r3:relate": "same page",
-  "r4:ignite": "liveliest group",
-  "r4:seek": "sampling",
-  "r4:steady": "going deep",
-  "r6:imagine": "saw it first",
-  "r6:reason": "cracked it",
-  "r6:act": "built it",
-  "r6:relate": "they rose",
-  "r7:ignite": "game on",
-  "r7:seek": "asked why",
-  "r7:steady": "common ground",
-};
+export const VALUE_BY_ID = new Map(VALUES.map((v) => [v.id, v]));
+export const TILE_BY_ID = new Map(TILES.map((t) => [t.id, t]));
