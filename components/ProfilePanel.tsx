@@ -72,6 +72,7 @@ type Draft = {
  * worst state to be in here.
  */
 export default function ProfilePanel({
+  brainMate = null,
   networks,
   connections,
   peerCount = 0,
@@ -80,6 +81,8 @@ export default function ProfilePanel({
   onDone,
   onOpenNetwork,
 }: {
+  /** The member's Brain-Mate card in miniature (or a way in), shown under their name. */
+  brainMate?: React.ReactNode;
   networks: NetworkOption[];
   /** Accepted connections — the one number that says the product worked. */
   connections: number;
@@ -398,6 +401,8 @@ export default function ProfilePanel({
         </div>
       </div>
       )}
+
+      {!firstRun && brainMate}
 
       {/* The bar exists to answer "why bother" — every unfilled line is a
           recommendation that can't be made, in either direction. It

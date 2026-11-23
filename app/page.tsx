@@ -4,6 +4,8 @@ import { DEFAULT_RADIUS_KM } from "@/lib/rules";
 import MapShell from "@/components/MapShellLoader";
 import { linkedinEnabled } from "@/lib/linkedin";
 import { getBrainMate } from "@/lib/brainMate/server";
+import { resultFor } from "@/lib/brainMate/score";
+import { ARCHETYPES } from "@/lib/brainMate/archetypes";
 
 /**
  * The app opens on the map — no landing page.
@@ -22,16 +24,20 @@ export default async function Home({
   const { net, panel, join, event, li } = await searchParams;
   const user = await getSessionUser();
 
-  // Brain-Mate is offered to every signed-in member: the full invitation
-  // until they've played the current version, then a chip wearing their
-  // archetype. Read here so it's in the first paint, not a second request.
+  // Brain-Mate: a prominent invitation on the map for members who haven't
+  // played the current version; for those who have, it lives in their
+  // profile. Read here so it's in the first paint, not a second request.
   const bm = user ? await getBrainMate(user.id).catch(() => null) : null;
   const brainMate = !user
     ? null
     : !bm
       ? ({ state: "new" } as const)
       : bm.current
-        ? ({ state: "played", archetype: bm.archetype } as const)
+        ? ({
+            state: "played",
+            archetype: bm.archetype,
+            mix: resultFor(bm.answers).mix.map((m) => `${m.pct}% ${ARCHETYPES[m.id].name.replace("The ", "")}`).join(" · "),
+          } as const)
         : ({ state: "retake", archetype: bm.archetype } as const);
 
   // Fetched here rather than in the client: the first thing a visitor has

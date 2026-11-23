@@ -40,7 +40,7 @@ import PinsPanel from "./PinsPanel";
 import SignInPanel from "./SignInPanel";
 import ProfilePanel from "./ProfilePanel";
 import PublicOptIn from "./PublicOptIn";
-import HomeInvite, { HomePanelBanner, type BrainMateStatus } from "./brainMate/HomeInvite";
+import { ProfileBrainMate, type BrainMateStatus } from "./brainMate/HomeInvite";
 import ForYouPanel from "./ForYouPanel";
 import { IconChat, IconHidden, IconX } from "./Icons";
 import { BRAND_NAME } from "@/lib/brand";
@@ -113,8 +113,7 @@ export default function MapShell({
   /** Null for visitors; otherwise whether they've played Brain-Mate. */
   brainMate?: BrainMateStatus | null;
 }) {
-  // While the Brain-Mate invitation is open, the off-map nudge waits its turn.
-  const [bmFull, setBmFull] = useState(false);
+
   const [data, setData] = useState<ShellPayload>(initial);
   const [facets, setFacets] = useState<Facets>(NO_FACETS);
   /**
@@ -663,7 +662,6 @@ export default function MapShell({
             because its other caller — the Events window — wraps it. In
             this slot it had none, so the page simply stopped at the
             bottom of the window with the roster cut in half. */}
-        {signedIn && onboarded && brainMate && <HomePanelBanner status={brainMate} />}
         {data.selfEvent && editingHome ? (
           <div className="min-h-0 flex-1 overflow-y-auto">
           <EditEvent
@@ -1028,6 +1026,10 @@ export default function MapShell({
         width={440}
       >
         <ProfilePanel
+          // Brain-Mate is paused as an invitation (no prompt on the map or in
+          // the Home panel) while the flows are refined; members who have
+          // already played still see their own card here.
+          brainMate={signedIn && onboarded && brainMate?.state === "played" ? <ProfileBrainMate status={brainMate} /> : null}
           networks={data.networks}
           connections={data.connections}
           // The reason to finish: somebody is already there.
@@ -1183,12 +1185,9 @@ export default function MapShell({
         <PublicOptIn networkName={data.scope.name} onDone={() => void load({})} />
       )}
 
-      {signedIn && onboarded && (myVisibility === "off" || !data.hasSignals) && isOpenNet && !bmFull && (
+      {signedIn && onboarded && (myVisibility === "off" || !data.hasSignals) && isOpenNet && (
         <OffMapNudge needsPin={myVisibility === "off"} onProfile={() => openWin("profile")} />
       )}
-
-      {/* Brain-Mate, for every signed-in member once onboarding is done. */}
-      {signedIn && onboarded && brainMate && <HomeInvite status={brainMate} onFullChange={setBmFull} />}
     </div>
   );
 }
