@@ -7,7 +7,9 @@ function gauss(){ let u=0,w=0; while(!u)u=Math.random(); while(!w)w=Math.random(
 const BETA = 1.3;
 const WYR = T.map((k) => one(k));
 const TEND = T.map((k) => one(k));
-const CALLS = [[one("A"),one("C")],[one("H"),one("A")],[one("O"),one("D")],[one("S"),one("E")],[one("I"),one("C")],[one("D"),one("H")]];
+const CALLS = [[one("A"),one("C")],[one("H"),one("A")],[one("O"),one("D")],[one("S"),one("E")],[one("I"),one("C")],[one("D"),one("H")],
+  [one("D"),one("I")],   // c7 build what doesn't exist vs learn all about what does
+  [one("O"),one("I")]];  // c8 picture where it could go vs work out how it works
 const RANK = [[one("D"),one("O"),one("C"),one("E"),one("S")],[one("O"),one("I"),one("A"),one("H"),one("D")],[one("S"),one("E"),one("A"),one("C"),one("H")]];
 const SLIDERS = [one("D"),one("S"),one("H"),one("A"),one("E"),one("C")];
 const pick = (opts, t) => { const w = opts.map(o => Math.exp(BETA*dot(o,t)+0.35*gauss())); let r=Math.random()*w.reduce((a,b)=>a+b); for (let i=0;i<w.length;i++){ r-=w[i]; if(r<=0) return i;} return w.length-1; };

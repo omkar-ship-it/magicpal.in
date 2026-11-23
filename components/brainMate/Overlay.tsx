@@ -98,7 +98,7 @@ export default function Overlay({ mode, onClose, onSection }: { mode: OverlayMod
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="absolute right-3 top-[max(env(safe-area-inset-top,0px),10px)] z-[95] grid h-9 w-9 place-items-center rounded-full bg-black/25 text-[18px] font-bold text-white backdrop-blur"
+          className="absolute right-3 top-[max(env(safe-area-inset-top,0px),10px)] z-[95] grid h-9 w-9 place-items-center rounded-full border border-[var(--line)] bg-[var(--card)] text-[16px] font-semibold text-[var(--ink)] shadow-[var(--shadow)]"
         >
           ✕
         </button>

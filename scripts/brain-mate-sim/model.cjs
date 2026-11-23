@@ -4,9 +4,9 @@ const v = (o) => T.map((k) => o[k] ?? 0);
 
 // ---- archetype prototypes (z-units)
 const P = {
-  dreamer:    v({O:2, S:-1, E:1, A:1}),
-  explorer:   v({O:1.5, I:1, D:-0.5, S:-1.5, E:0.5}),
-  creator:    v({O:2, D:1, E:-0.5, H:0.5}),
+  dreamer:    v({O:2, D:0.5, S:-0.5, E:0.3, A:0.5}),   // imaginative, ambitious, future-oriented (brief)
+  explorer:   v({O:1.5, I:1.2, D:-0.5, S:-1.5, E:0.5}), // curious, adventurous, open-minded
+  creator:    v({O:2, D:0.8, E:0.3, C:0.3, H:0.3}),    // creative, expressive, inventive
   maverick:   v({O:0.5, I:1, S:-1, A:1, C:-0.5, H:-2}),
   detective:  v({I:2, D:0.5, S:0.5, E:-1}),
   strategist: v({I:1, D:1, S:2, A:0.5}),

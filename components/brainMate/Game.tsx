@@ -70,7 +70,7 @@ const ORDER: Section[] = ["rather", "tend", "calls", "ranks", "sliders", "values
 const SECTION_TITLE: Record<Section, { n: string; title: string; hint: string }> = {
   rather: { n: "1", title: "Would You Rather", hint: "Both sides are good. Pick the real you." },
   tend: { n: "2", title: "Is This You?", hint: "The real you, when life gives you a choice. A busy season doesn't count." },
-  calls: { n: "3", title: "Tough Calls", hint: "Six small dilemmas. No right answers — just yours." },
+  calls: { n: "3", title: "Tough Calls", hint: "Eight small dilemmas. No right answers — just yours." },
   ranks: { n: "4", title: "Prioritise", hint: "Push what matters most to the top." },
   sliders: { n: "5", title: "Where Do You Sit?", hint: "Drag your dot to where you really are." },
   values: { n: "6", title: "Pack Your Bag", hint: "Room for two things. Choose well." },
@@ -289,13 +289,13 @@ export default function Game({ defaultName, needsTerms, link, stats, previous, o
               </span>
             </label>
           )}
-          <div className="rounded-[1.1rem] bg-white/70 p-3.5 text-[13.5px] leading-[1.5]">
+          <div className="rounded-[1.1rem] bg-[var(--sunk)] p-3.5 text-[13.5px] leading-[1.5]">
             <b>Answer as the real you</b> — when life gives you a choice. A busy season (a new job, a little one, exams) doesn&apos;t change
             who you are.
           </div>
           <button
             type="button"
-            className="flex items-center gap-3 self-start rounded-full border-[1.5px] border-[var(--bm-line)] bg-white px-4 py-2 text-[14px] font-semibold"
+            className="flex items-center gap-3 self-start rounded-full border border-[var(--bm-line)] bg-[var(--bm-card)] px-4 py-2 text-[14px] font-semibold"
             onClick={() => {
               const on = !sound;
               setSound(on);
@@ -326,12 +326,10 @@ export default function Game({ defaultName, needsTerms, link, stats, previous, o
     );
   }
 
-  const night = stage !== "title" || next !== "rather";
-
   return (
-    <main className={`bm-full transition-[background,color] duration-700 ${night ? "bm-dark" : ""}`} style={{ background: night ? "#14102a" : undefined }}>
+    <main className="bm-full">
       <div className="bm-shell">
-        <Ring alive={alive} dark={night} />
+        <Ring alive={alive} />
         <Constellation innerRef={skyRef} answers={answers} />
 
         <div className="flex flex-1 flex-col">
@@ -524,12 +522,12 @@ export default function Game({ defaultName, needsTerms, link, stats, previous, o
 }
 
 // ------------------------------------------------------------- chrome
-function Ring({ alive, dark }: { alive: Set<ArchetypeId>; dark: boolean }) {
+function Ring({ alive }: { alive: Set<ArchetypeId> }) {
   return (
     <div className="flex items-center justify-between gap-1 pt-1" aria-label={`${alive.size} of 12 archetypes still possible`}>
       {ARCHETYPE_IDS.map((id) => (
         <span key={id} className="bm-ring-dot grid aspect-square w-full max-w-[26px] place-items-center rounded-full" data-alive={alive.has(id)}>
-          <ArchetypeMark id={id} size={20} stroke={7} color={dark ? "#fff" : "#241A16"} />
+          <ArchetypeMark id={id} size={20} stroke={7} color="currentColor" />
         </span>
       ))}
     </div>
@@ -589,7 +587,7 @@ function TitleCard({ section, onDone }: { section: Section; onDone: () => void }
 
 function Undo({ onClick }: { onClick: (() => void) | null }) {
   return (
-    <button onClick={onClick ?? undefined} disabled={!onClick} className="text-[13px] font-semibold text-white/60 disabled:opacity-0">
+    <button onClick={onClick ?? undefined} disabled={!onClick} className="text-[13px] font-semibold text-[var(--bm-soft)] disabled:opacity-0">
       ↩ undo
     </button>
   );
@@ -598,7 +596,7 @@ function Undo({ onClick }: { onClick: (() => void) | null }) {
 function Head({ kicker, prompt, meta }: { kicker: string; prompt: string; meta?: string }) {
   return (
     <div className="bm-fade-up mb-4">
-      <p className="flex justify-between text-[12px] font-extrabold tracking-[0.2em] text-[#FFB59E]">
+      <p className="flex justify-between text-[12px] font-extrabold tracking-[0.2em] text-[var(--bm-brand)]">
         <span>{kicker.toUpperCase()}</span>
         {meta && <span className="opacity-60">{meta}</span>}
       </p>
@@ -653,12 +651,12 @@ function RatherView({
       <Head kicker="Would you rather…" prompt="Pick the real you." meta={`${done + 1} / ${RATHER.length}`} />
       <div className="flex flex-col gap-3">
         {card("a", first, "bm-duel-left")}
-        <div className="text-center text-[13px] font-extrabold tracking-[0.25em] text-white/50">OR</div>
+        <div className="text-center text-[13px] font-extrabold tracking-[0.25em] text-[var(--bm-soft)]">OR</div>
         {card("b", second, "bm-duel-right")}
       </div>
       <div className="mt-auto flex items-center justify-between pt-4 text-[13px]">
         <Undo onClick={done ? () => onUndo(order[done - 1].id) : null} />
-        <span className="text-white/50">{done >= 3 ? `⚡ ×${done}` : "both are good"}</span>
+        <span className="text-[var(--bm-soft)]">{done >= 3 ? `⚡ ×${done}` : "both are good"}</span>
       </div>
     </section>
   );
@@ -686,12 +684,12 @@ function TendView({
     <section key={t.id} className="flex flex-1 flex-col">
       <Head kicker="Is this you?" prompt="How often is this you?" meta={`${done + 1} / ${TENDENCIES.length}`} />
       <div className="flex flex-1 items-center">
-        <div className="bm-stamp w-full rounded-[1.6rem] bg-white px-6 py-9 text-center text-[1.35rem] font-extrabold leading-snug text-[var(--bm-ink)]" style={{ animationDuration: "0.35s" }}>
+        <div className="bm-stamp w-full rounded-[1.4rem] border border-[var(--bm-line)] bg-[var(--bm-card)] px-6 py-9 shadow-[var(--shadow)] text-center text-[1.35rem] font-extrabold leading-snug text-[var(--bm-ink)]" style={{ animationDuration: "0.35s" }}>
           “{t.text}”
         </div>
       </div>
       <div className="mt-5">
-        <div className="mb-2 h-2 overflow-hidden rounded-full bg-white/10">
+        <div className="mb-2 h-2 overflow-hidden rounded-full bg-[var(--bm-line)]">
           <div className="h-full rounded-full transition-[width] duration-300" style={{ width: `${chosen === null ? 0 : ((chosen + 1) / 4) * 100}%`, background: chosen === null ? "transparent" : colours[chosen] }} />
         </div>
         <div className="grid grid-cols-4 gap-2">
@@ -699,7 +697,7 @@ function TendView({
             <button
               key={label}
               className="flex min-h-[60px] items-center justify-center rounded-[1rem] px-1 text-center text-[13px] font-extrabold leading-tight transition-transform active:scale-90"
-              style={{ background: colours[v], color: v === 1 || v === 2 ? "#17110e" : "#fff", outline: chosen === v ? "3px solid #fff" : "none" }}
+              style={{ background: colours[v], color: v === 1 || v === 2 ? "#17110e" : "#fff", outline: chosen === v ? "3px solid var(--bm-ink)" : "none" }}
               onClick={(e) => {
                 if (chosen !== null) return;
                 setChosen(v);
@@ -715,7 +713,7 @@ function TendView({
           ))}
         </div>
       </div>
-      <div className="mt-3 flex justify-between text-[12px] text-white/50">
+      <div className="mt-3 flex justify-between text-[12px] text-[var(--bm-soft)]">
         <Undo onClick={done ? () => onUndo(order[done - 1].id) : null} />
         <span>the real you, not this week</span>
       </div>
@@ -772,7 +770,7 @@ function CallView({
         })}
       </div>
       <div className="mt-3 flex min-h-[40px] justify-center">
-        {split && <span className="bm-split rounded-full bg-white px-4 py-2 text-[14px] font-bold text-[var(--bm-ink)]">{split}</span>}
+        {split && <span className="bm-split rounded-full bg-[var(--bm-ink)] px-4 py-2 text-[14px] font-bold text-[var(--bm-cream)]">{split}</span>}
       </div>
       <div className="mt-auto pt-2">
         <Undo onClick={onUndo} />
@@ -813,14 +811,14 @@ function RankView({
   return (
     <section className="flex flex-1 flex-col">
       <Head kicker={`Prioritise · round ${index + 1} of ${RANKS.length}`} prompt={round.prompt} />
-      <p className="-mt-2 mb-3 text-[13px] text-white/60">Push the most “you” to the top.</p>
+      <p className="-mt-2 mb-3 text-[13px] text-[var(--bm-soft)]">Push the most “you” to the top.</p>
       <div className="relative" style={{ height: order.length * ROW }}>
         {round.cards.map((c) => {
           const pos = order.indexOf(c.id);
           return (
             <div
               key={c.id}
-              className="absolute inset-x-0 flex items-center gap-3 rounded-[1.1rem] bg-white px-3 text-[var(--bm-ink)] shadow-[0_10px_24px_-16px_rgba(0,0,0,0.7)]"
+              className="absolute inset-x-0 flex items-center gap-3 rounded-[1.1rem] border border-[var(--bm-line)] bg-[var(--bm-card)] px-3 text-[var(--bm-ink)] shadow-[var(--shadow)]"
               style={{ top: pos * ROW, height: ROW - 8, transition: "top 0.35s cubic-bezier(0.34,1.56,0.64,1)", border: pos === 0 ? "2px solid #FFB800" : "2px solid transparent" }}
             >
               <span className="w-7 text-center text-[1.15rem] font-extrabold">{medals[pos]}</span>
@@ -918,20 +916,20 @@ function SlidersView({
             timer.current = window.setTimeout(() => value !== null && onSet(value), 650);
           }}
         >
-          <div className="absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-white/15" />
+          <div className="absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-[var(--bm-line)]" />
           {[0, 25, 50, 75, 100].map((t) => (
-            <span key={t} className="absolute top-1/2 h-3 w-0.5 -translate-y-1/2 bg-white/30" style={{ left: `${t}%` }} />
+            <span key={t} className="absolute top-1/2 h-3 w-0.5 -translate-y-1/2 bg-[var(--bm-soft)] opacity-40" style={{ left: `${t}%` }} />
           ))}
           <span
             className={`absolute top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full text-[1.1rem] font-extrabold text-white shadow-[0_10px_24px_-8px_rgba(255,107,74,0.9)] ${
-              value === null ? "bm-heartbeat bg-white/25" : "bg-[var(--bm-brand)]"
+              value === null ? "bm-heartbeat bg-[var(--bm-soft)] opacity-60" : "bg-[var(--bm-brand)]"
             }`}
             style={{ left: `${pct}%`, transition: dragging ? "none" : "left 0.25s" }}
           >
             {initial}
           </span>
         </div>
-        <p className="mt-4 text-center text-[13px] text-white/60">{value === null ? "Tap or drag to place yourself" : "Let go to lock it in"}</p>
+        <p className="mt-4 text-center text-[13px] text-[var(--bm-soft)]">{value === null ? "Tap or drag to place yourself" : "Let go to lock it in"}</p>
       </div>
       <div className="mt-3">
         <Undo onClick={onUndo} />
@@ -959,12 +957,12 @@ function PickView({
   return (
     <section className="flex flex-1 flex-col">
       <Head kicker="Pack your bag" prompt={prompt} />
-      <div className="mb-3 flex min-h-[56px] items-center justify-center gap-3 rounded-[1.4rem] border-2 border-dashed border-white/20 p-3">
-        {ids.length === 0 && <span className="text-[14px] text-white/60">🎒 Your bag is empty</span>}
+      <div className="mb-3 flex min-h-[56px] items-center justify-center gap-3 rounded-[1.4rem] border-2 border-dashed border-[var(--bm-line)] p-3">
+        {ids.length === 0 && <span className="text-[14px] text-[var(--bm-soft)]">🎒 Your bag is empty</span>}
         {ids.map((id) => {
           const o = options.find((x) => x.id === id)!;
           return (
-            <span key={id} className="bm-stamp rounded-full bg-white px-3 py-1.5 text-[14px] font-bold text-[var(--bm-ink)]">
+            <span key={id} className="bm-stamp rounded-full bg-[var(--bm-ink)] px-3 py-1.5 text-[14px] font-bold text-[var(--bm-cream)]">
               {o.emoji} {o.label}
             </span>
           );
@@ -984,7 +982,7 @@ function PickView({
               style={{
                 animationDelay: `${i * 40}ms`,
                 borderColor: on ? "var(--bm-brand)" : undefined,
-                background: on ? "#FFF1EC" : undefined,
+                background: on ? "var(--sunk)" : undefined,
                 opacity: !on && full ? 0.45 : 1,
                 color: "var(--bm-ink)",
               }}
@@ -1036,7 +1034,7 @@ function CheckView({
       <div className="flex flex-1 items-center">
         <div
           key={card.id}
-          className="bm-fade-up w-full rounded-[1.6rem] bg-white px-6 py-10 text-center text-[1.4rem] font-extrabold leading-tight text-[var(--bm-ink)]"
+          className="bm-fade-up w-full rounded-[1.4rem] border border-[var(--bm-line)] bg-[var(--bm-card)] px-6 py-10 shadow-[var(--shadow)] text-center text-[1.4rem] font-extrabold leading-tight text-[var(--bm-ink)]"
           style={{ transform: stamp ? `translateX(${stamp === "yes" ? 420 : -420}px)` : undefined, transition: "transform 0.28s" }}
         >
           “{card.text}”
@@ -1086,7 +1084,7 @@ function DuelStage({
       }}
     >
       <span className="mb-3 flex justify-center opacity-25">
-        <ArchetypeMark id={id} size={40} color="#241A16" />
+        <ArchetypeMark id={id} size={40} color="currentColor" />
       </span>
       {line}
     </button>
@@ -1094,18 +1092,18 @@ function DuelStage({
   return (
     <section key={round} className="flex flex-1 flex-col">
       <div className="bm-fade-up mb-5 text-center">
-        <p className="text-[12px] font-extrabold tracking-[0.2em] text-[#FFB59E]">
+        <p className="text-[12px] font-extrabold tracking-[0.2em] text-[var(--bm-brand)]">
           THE FINAL DUEL · {round} / {DUEL_COUNT}
         </p>
         <h2 className="bm-display bm-heartbeat mt-1 text-[1.8rem]">{round === DUEL_COUNT ? "Last one. Which is more you?" : "Which is more you?"}</h2>
-        <p className="mt-1 text-[13px] text-white/60">You&apos;d rather…</p>
+        <p className="mt-1 text-[13px] text-[var(--bm-soft)]">You&apos;d rather…</p>
       </div>
       <div className="flex flex-col gap-3">
         {side(card.a, card.lineA, "bm-duel-left")}
-        <div className="text-center text-[13px] font-extrabold tracking-[0.2em] text-white/50">OR</div>
+        <div className="text-center text-[13px] font-extrabold tracking-[0.2em] text-[var(--bm-soft)]">OR</div>
         {side(card.b, card.lineB, "bm-duel-right")}
       </div>
-      {saving && <p className="mt-6 text-center text-[15px] font-semibold text-white/70">Reading your mind…</p>}
+      {saving && <p className="mt-6 text-center text-[15px] font-semibold text-[var(--bm-soft)]">Reading your mind…</p>}
       {error && <p className="mt-6 text-center text-[14px] font-semibold text-[#FF9C7A]">{error} Pick again to retry.</p>}
     </section>
   );

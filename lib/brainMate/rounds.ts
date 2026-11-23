@@ -20,7 +20,7 @@ import type { Trait } from "./archetypes";
  *
  *   1. Would you rather   8 pairs — the two ends of ONE trait, both appealing
  *   2. Is this you?       8 tendencies — Rarely / Sometimes / Often / Almost always
- *   3. Tough calls        6 dilemmas — two traits pulled against each other
+ *   3. Tough calls        8 dilemmas — two traits pulled against each other
  *   4. Prioritise         3 rounds — push 5 cards up and down
  *   5. Where do you sit?  6 sliders
  *   + Pack your bag (values, similarity only), double-checks when answers
@@ -102,6 +102,18 @@ export const CALLS: Call[] = [
     prompt: "Something's due soon and the person you're working with is struggling.",
     a: { trait: "D", emoji: "⚡", label: "Take over their part and get it done" },
     b: { trait: "H", emoji: "🌱", label: "Slow down and help them through it" },
+  },
+  {
+    id: "c7",
+    prompt: "If you had time for one big thing, you'd rather…",
+    a: { trait: "D", emoji: "🛠️", label: "Build something that didn't exist before" },
+    b: { trait: "I", emoji: "🔍", label: "Learn everything about something that fascinates you" },
+  },
+  {
+    id: "c8",
+    prompt: "Something new is starting. What pulls you in first?",
+    a: { trait: "O", emoji: "🔭", label: "Picturing where it could be in five years" },
+    b: { trait: "I", emoji: "⚙️", label: "Working out how it actually works" },
   },
 ];
 

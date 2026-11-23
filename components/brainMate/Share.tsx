@@ -111,7 +111,7 @@ export function IdentityShare({ archetypeName, origin }: { archetypeName: string
           <button
             key={l}
             className="flex-1 rounded-full py-2 transition-colors"
-            style={{ background: colleague === (i === 1) ? "#fff" : "transparent" }}
+            style={{ background: colleague === (i === 1) ? "var(--card)" : "transparent" }}
             onClick={() => setColleague(i === 1)}
           >
             {l}
@@ -168,8 +168,8 @@ export function DailyLink({
     const url = `${origin}/brain-mate/${sent.slug}`;
     return (
       <div className="flex flex-col gap-3">
-        <div className="rounded-[1.2rem] bg-[#FFF1EC] p-4">
-          <p className="text-[12px] font-extrabold tracking-[0.18em] text-[var(--bm-brand)]">TODAY&apos;S WAVELENGTH</p>
+        <div className="rounded-[1.2rem] bg-[var(--sunk)] p-4">
+          <p className="text-[12px] font-extrabold tracking-[0.18em] text-[var(--bm-brand)]">TODAY&apos;S WAVELENGTH CHECK</p>
           <p className="mt-1 text-[1.15rem] font-extrabold">
             {sent.recipient}
             {today?.state === "done" ? " played ✓" : today?.state === "expired" ? " missed it" : ""}
@@ -215,9 +215,9 @@ export function DailyLink({
       }}
     >
       <div>
-        <p className="text-[12px] font-extrabold tracking-[0.18em] text-[var(--bm-brand)]">ONE PERSON. ONE CHALLENGE.</p>
+        <p className="text-[12px] font-extrabold tracking-[0.18em] text-[var(--bm-brand)]">TODAY&apos;S WAVELENGTH CHECK</p>
         <p className="mt-1 text-[15px] text-[var(--bm-soft)]">
-          Share with a friend or colleague to find your Wavelength. One a day — choose well.
+          Who should it be? When they play, you&apos;ll both see how you click.
         </p>
       </div>
       <input
@@ -234,7 +234,7 @@ export function DailyLink({
             type="button"
             key={r}
             className="flex-1 rounded-full py-2.5 capitalize transition-colors"
-            style={{ background: relation === r ? "#fff" : "transparent" }}
+            style={{ background: relation === r ? "var(--card)" : "transparent" }}
             onClick={() => setRelation(r)}
             aria-pressed={relation === r}
           >
@@ -242,9 +242,9 @@ export function DailyLink({
           </button>
         ))}
       </div>
-      {error && <p className="text-[13px] font-semibold text-[#c2410c]">{error}</p>}
+      {error && <p className="text-[13px] font-semibold text-[var(--warn)]">{error}</p>}
       <button className="bm-btn bm-btn-brand" disabled={busy || name.trim().length < 2}>
-        {busy ? "Making your link…" : "Create today's link"}
+        {busy ? "Making your link…" : "Create the link"}
       </button>
     </form>
   );
@@ -280,7 +280,7 @@ export function ClaimButton({ slug, label, onDone }: { slug: string; label: stri
       >
         {busy ? "Lining up your waves…" : label}
       </button>
-      {error && <p className="text-center text-[13px] font-semibold text-[#c2410c]">{error}</p>}
+      {error && <p className="text-center text-[13px] font-semibold text-[var(--warn)]">{error}</p>}
     </div>
   );
 }
@@ -302,5 +302,45 @@ export function NudgeButton({ slug, url, text }: { slug: string; url: string; te
     >
       {state === "error" ? "Already nudged" : "Nudge them (once)"}
     </a>
+  );
+}
+
+/**
+ * The one call to action on the identity card: a single Wavelength check a
+ * day. Collapsed, it's an invitation; tapped, it becomes the name field;
+ * once sent, it shows today's check and when the next one unlocks.
+ */
+export function WavelengthCta({
+  myName,
+  origin,
+  today,
+}: {
+  myName: string;
+  origin: string;
+  today: { slug: string; recipient: string; state: "waiting" | "done" | "expired" } | null;
+}) {
+  const [open, setOpen] = useState(false);
+  if (today || open) return <DailyLink myName={myName} origin={origin} today={today} />;
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-start gap-3">
+        <span className="text-[2rem] leading-none" aria-hidden="true">
+          🌊
+        </span>
+        <div>
+          <p className="text-[1.15rem] font-bold leading-snug">Who&apos;s on your wavelength?</p>
+          <p className="mt-0.5 text-[14px] text-[var(--bm-soft)]">Send a Wavelength check to one person. You get one a day — so pick well.</p>
+        </div>
+      </div>
+      <button
+        className="bm-btn bm-btn-brand"
+        onClick={() => {
+          buzz(12);
+          setOpen(true);
+        }}
+      >
+        Check our Wavelength
+      </button>
+    </div>
   );
 }

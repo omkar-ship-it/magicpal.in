@@ -161,44 +161,23 @@ export function ProfileBrainMate({ status, onOpen }: { status: BrainMateStatus; 
     );
   }
   const a = ARCHETYPES[status.archetype];
+  // One quiet row, in the same style as the profile header above it; the
+  // card itself opens as a window over the map.
   return (
-    <div className="mb-4 overflow-hidden rounded-2xl" style={{ background: a.color, color: a.ink }}>
-      <button type="button" onClick={onOpen} className="flex w-full items-center gap-3 p-3.5 text-left">
-        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full" style={{ background: "rgba(255,255,255,0.18)" }}>
-          <ArchetypeMark id={a.id} size={30} color={a.ink} stroke={7} />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-[10.5px] font-extrabold tracking-[0.16em] opacity-80">YOUR BRAIN-MATE</span>
-          <span className="block text-[17px] font-extrabold leading-tight">{a.name}</span>
-          <span className="block text-[12px] opacity-85">{status.mix}</span>
-        </span>
-        <span className="text-[20px] font-extrabold" aria-hidden="true">
-          ›
-        </span>
-      </button>
-      <div className="px-3.5 pb-3.5">
-        <p className="rounded-xl px-3 py-2 text-[13px] font-semibold leading-snug" style={{ background: "rgba(255,255,255,0.16)" }}>
-          ✦ {a.superpower}
-        </p>
-        <div className="mt-2.5 flex gap-2">
-          <button
-            type="button"
-            onClick={onOpen}
-            className="flex-1 rounded-full py-2 text-center text-[13px] font-extrabold"
-            style={{ background: a.ink, color: a.color }}
-          >
-            Open my card
-          </button>
-          <button
-            type="button"
-            onClick={onOpen}
-            className="flex-1 rounded-full py-2 text-center text-[13px] font-extrabold"
-            style={{ border: `1.5px solid ${a.ink}`, color: a.ink }}
-          >
-            Find my Wavelength
-          </button>
-        </div>
-      </div>
-    </div>
+    <button
+      type="button"
+      onClick={onOpen}
+      className="mb-4 flex w-full items-center gap-3 rounded-2xl border border-[var(--line)] bg-[var(--card)] p-3 text-left transition-colors hover:border-[var(--brand)]"
+    >
+      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full" style={{ background: a.color }}>
+        <ArchetypeMark id={a.id} size={26} color={a.ink} stroke={7} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[11.5px] text-[var(--ink-soft)]">Your Brain-Mate</span>
+        <span className="block truncate text-[14px] font-semibold">{a.name}</span>
+        <span className="block truncate text-[11.5px] text-[var(--ink-soft)]">{status.mix}</span>
+      </span>
+      <span className="text-[12.5px] font-semibold text-[var(--brand)]">Open ›</span>
+    </button>
   );
 }

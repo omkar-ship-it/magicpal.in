@@ -42,22 +42,22 @@ export type Answers = {
 
 export type Traits = Record<Trait, number>;
 
-const NORM = { mu: [0.0041, 0.0055, 0.0012, 0, -0.0031, 0.0048, -0.0003, -0.0046], sd: [0.7817, 0.7964, 0.7375, 0.8076, 0.7751, 0.7671, 0.7297, 0.7836] };
-const NORM_CHOICE = { mu: [0.0055, 0.0046, 0.001, -0.0012, -0.0031, 0.0037, 0.0018, -0.0033], sd: [0.7661, 0.7678, 0.7091, 0.7857, 0.7644, 0.742, 0.6999, 0.7522] };
-const NORM_LEVEL = { mu: [-0.0006, 0.0075, 0.0018, 0.0022, -0.0031, 0.0071, -0.0047, -0.0072], sd: [1.1286, 1.1389, 0.9647, 0.9969, 0.9588, 0.9791, 0.9591, 0.9991] };
+const NORM = { mu: [-0.0009, -0.002, -0.0006, -0.002, 0.0051, 0.0004, 0.0016, -0.0069], sd: [0.7191, 0.6879, 0.6999, 0.8112, 0.7745, 0.7682, 0.7321, 0.7861] };
+const NORM_CHOICE = { mu: [0.0008, -0.0008, -0.002, 0.0002, 0.0071, 0.0018, -0.0003, -0.0057], sd: [0.6946, 0.6538, 0.6684, 0.789, 0.7635, 0.7422, 0.7014, 0.7553] };
+const NORM_LEVEL = { mu: [-0.0078, -0.0066, 0.0029, -0.0056, 0.0018, -0.0025, 0.0055, -0.0094], sd: [1.1315, 1.1371, 0.9576, 0.9981, 0.9584, 0.9796, 0.9609, 0.9998] };
 const BIAS: Record<ArchetypeId, number> = {
-  dreamer: 0.089,
-  explorer: 0,
-  creator: 0.081,
-  maverick: -0.037,
-  detective: 0.008,
-  strategist: -0.004,
-  spark: 0.002,
-  maker: 0.07,
-  doer: -0.081,
-  connector: 0.025,
-  mentor: -0.01,
-  peacemaker: -0.143,
+  dreamer: 0.126,
+  explorer: -0.021,
+  creator: 0.139,
+  maverick: -0.069,
+  detective: -0.002,
+  strategist: -0.011,
+  spark: -0.027,
+  maker: 0.051,
+  doer: -0.094,
+  connector: 0.014,
+  mentor: 0.012,
+  peacemaker: -0.118,
 };
 
 /** Choice-style vs strength-style disagreement that triggers double-checks (≈1 player in 4). */

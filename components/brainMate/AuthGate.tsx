@@ -80,7 +80,7 @@ export default function AuthGate({ cta = "Send me a code", onDone }: { cta?: str
           />
         </>
       )}
-      {error && <p className="text-[13px] font-semibold text-[#c2410c]">{error}</p>}
+      {error && <p className="text-[13px] font-semibold text-[var(--warn)]">{error}</p>}
       <button className="bm-btn bm-btn-brand" disabled={busy}>
         {busy ? "One moment…" : step === "email" ? cta : "Let's play"}
       </button>

@@ -18,7 +18,7 @@ function play(t) {
   for (let k = 0; k < 3; k++) { const c = Sc.nextDuel(a); const diff = PROTO[c.a].map((x,i)=>x-PROTO[c.b][i]); const d = diff.map((x)=>x/norm(diff)); a.duels.push({ a: c.a, b: c.b, pick: Math.random() < 1/(1+Math.exp(-1.3*1.4*dot(d,t)-0.35*gauss())) ? c.a : c.b }); }
   return a;
 }
-const BIAS = require("./constants4.json").BIAS;
+const BIAS = require("./constants5.json").BIAS;
 const truth = (t) => Object.entries(PROTO).map(([id,p])=>({ id, c: dot(t,p)/(norm(t)*norm(p)) + BIAS[id] })).sort((x,y)=>y.c-x.c);
 const N = 5000, p = (x, n = N) => (100*x/n).toFixed(1)+"%"; let valid=0, clear=0, cHit=0, cRe=0, top3=0, checked=0; const dist={};
 for (let i=0;i<N;i++){ const t=B.person(); const tr=truth(t); const a1=play(t), a2=play(t); if (Sc.cleanAnswers(JSON.parse(JSON.stringify(a1)))) valid++; if (Object.keys(a1.checks).length) checked++;

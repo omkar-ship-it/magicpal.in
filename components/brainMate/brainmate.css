@@ -9,20 +9,21 @@
  * the movement doesn't.
  */
 
+/* Brain-Mate wears the app's own palette (and so its dark mode): these
+   point at the tokens in app/globals.css rather than defining a theme. */
 .bm-root {
-  --bm-cream: #faf7f5;
-  --bm-ink: #241a16;
-  --bm-soft: #7a6b63;
-  --bm-line: #ece2dc;
-  --bm-brand: #ff6b4a;
-  --bm-card: #ffffff;
+  --bm-cream: var(--bg);
+  --bm-ink: var(--ink);
+  --bm-soft: var(--ink-soft);
+  --bm-line: var(--line);
+  --bm-brand: var(--brand);
+  --bm-card: var(--card);
   --bm-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --bm-ease: cubic-bezier(0.22, 1, 0.36, 1);
   min-height: 100dvh;
   background: var(--bm-cream);
   color: var(--bm-ink);
   -webkit-tap-highlight-color: transparent;
-  color-scheme: light;
 }
 
 /* A full-screen surface on its own page; the whole window inside the overlay. */
@@ -57,8 +58,8 @@
 }
 
 .bm-display {
-  font-weight: 800;
-  letter-spacing: -0.03em;
+  font-weight: 700;
+  letter-spacing: -0.025em;
   line-height: 1.02;
 }
 
@@ -69,10 +70,10 @@
   gap: 0.5rem;
   border-radius: 999px;
   padding: 0.95rem 1.5rem;
-  font-weight: 700;
+  font-weight: 600;
   font-size: 1rem;
   background: var(--bm-ink);
-  color: #fff;
+  color: var(--bm-cream);
   transition: transform 0.15s var(--bm-spring), opacity 0.2s;
   border: 0;
   cursor: pointer;
@@ -84,14 +85,16 @@
   opacity: 0.4;
   cursor: default;
 }
+/* The app's primary button. */
 .bm-btn-brand {
-  background: var(--bm-brand);
-  box-shadow: 0 14px 30px -14px rgba(255, 107, 74, 0.9);
+  background: linear-gradient(120deg, var(--brand), var(--brand-deep));
+  color: #fff;
+  box-shadow: 0 10px 22px -12px var(--brand);
 }
 .bm-btn-ghost {
-  background: transparent;
+  background: var(--bm-card);
   color: var(--bm-ink);
-  border: 1.5px solid var(--bm-line);
+  border: 1px solid var(--bm-line);
 }
 .bm-btn-light {
   background: rgba(255, 255, 255, 0.2);
@@ -102,8 +105,8 @@
 .bm-input {
   width: 100%;
   border-radius: 1rem;
-  border: 1.5px solid var(--bm-line);
-  background: #fff;
+  border: 1px solid var(--bm-line);
+  background: var(--bm-card);
   padding: 0.9rem 1rem;
   font-size: 1.05rem;
   outline: none;
@@ -115,17 +118,19 @@
 
 .bm-card {
   background: var(--bm-card);
-  border-radius: 1.5rem;
-  border: 1.5px solid var(--bm-line);
+  border-radius: 1.25rem;
+  border: 1px solid var(--bm-line);
+  box-shadow: var(--shadow);
 }
 
 /* ------------------------------------------------------- answer cards */
 .bm-option {
   width: 100%;
   text-align: left;
-  border-radius: 1.35rem;
-  border: 2px solid var(--bm-line);
-  background: #fff;
+  border-radius: 1.1rem;
+  border: 1.5px solid var(--bm-line);
+  background: var(--bm-card);
+  color: var(--bm-ink);
   padding: 1.1rem 1.15rem;
   font-size: 1.05rem;
   font-weight: 650;
@@ -221,9 +226,11 @@
   user-select: none;
   transition: transform 0.28s var(--bm-spring), opacity 0.25s;
 }
+/* Retired: the game used to go dark mid-way. Kept as a no-op so nothing
+   that still names it changes colour. */
 .bm-dark {
-  background: #17110e;
-  color: #fff;
+  background: var(--bm-cream);
+  color: var(--bm-ink);
 }
 
 /* The This-or-That timer ring: purely a nudge, nothing happens at zero. */

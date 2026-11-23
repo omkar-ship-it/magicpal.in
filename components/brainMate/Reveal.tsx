@@ -88,13 +88,15 @@ export default function Reveal({ data }: { data: RevealData }) {
       : data.players <= 1
         ? "The very first Brain-Mate"
         : `One of the first ${data.players} Brain-Mates`;
-  const soft = a.ink === "#ffffff" ? "rgba(255,255,255,0.75)" : "rgba(42,30,0,0.7)";
-  const chip = a.ink === "#ffffff" ? "rgba(255,255,255,0.16)" : "rgba(42,30,0,0.1)";
+  // The app's own surfaces, with the archetype as the accent — and a tint
+  // mixed from the card colour so it holds up in dark mode too.
+  const soft = "var(--bm-soft)";
+  const chip = `color-mix(in srgb, ${a.color} 14%, var(--bm-card))`;
 
   return (
     <main
       className="bm-flood bm-full relative overflow-hidden"
-      style={{ background: bloomed ? a.color : "#120c0a", color: bloomed ? a.ink : "#fff" }}
+      style={{ background: "var(--bm-cream)", color: "var(--bm-ink)" }}
     >
       <div className="bm-shell">
         {/* --------------------------------------------- before the bloom */}
@@ -126,8 +128,8 @@ export default function Reveal({ data }: { data: RevealData }) {
                         y1={y1}
                         x2={x2}
                         y2={y2}
-                        stroke="#fff"
-                        strokeOpacity={0.35}
+                        stroke="currentColor"
+                        strokeOpacity={0.25}
                         strokeWidth={0.6}
                         className="bm-orb-strand"
                         style={{ animationDelay: `${i * 70}ms` }}
@@ -159,10 +161,10 @@ export default function Reveal({ data }: { data: RevealData }) {
             <div className="relative mt-4 grid h-[190px] w-[190px] place-items-center">
               <svg viewBox="0 0 400 400" className="absolute inset-0 h-full w-full">
                 {strandsFor(data.answers, data.name).map((s, i) => (
-                  <path key={i} d={s.d} stroke={a.ink} strokeWidth={s.width} strokeOpacity={0.3} fill="none" strokeLinecap="round" />
+                  <path key={i} d={s.d} stroke={a.color} strokeWidth={s.width} strokeOpacity={0.3} fill="none" strokeLinecap="round" />
                 ))}
               </svg>
-              <div className="bm-bloom grid h-[132px] w-[132px] place-items-center rounded-full" style={{ background: chip }}>
+              <div className="bm-bloom grid h-[132px] w-[132px] place-items-center rounded-full shadow-[0_18px_40px_-18px_rgba(0,0,0,0.45)]" style={{ background: a.color }}>
                 <span className={`bm-idle-${a.mode}`}>
                   <ArchetypeMark id={a.id} size={96} color={a.ink} />
                 </span>
@@ -178,7 +180,7 @@ export default function Reveal({ data }: { data: RevealData }) {
                     animationDelay: `${c.delay}s`,
                   }}
                 >
-                  <ArchetypeMark id={a.id} size={c.size} color={a.ink} stroke={8} />
+                  <ArchetypeMark id={a.id} size={c.size} color={a.color} stroke={8} />
                 </span>
               ))}
             </div>
@@ -221,7 +223,7 @@ export default function Reveal({ data }: { data: RevealData }) {
                   {data.mix.map((m, i) => (
                     <span
                       key={m.id}
-                      style={{ width: `${m.pct}%`, background: i === 0 ? a.ink : ARCHETYPES[m.id].color, opacity: i === 0 ? 0.95 : 0.9 }}
+                      style={{ width: `${m.pct}%`, background: ARCHETYPES[m.id].color, opacity: i === 0 ? 1 : 0.75 }}
                     />
                   ))}
                 </div>
@@ -257,13 +259,15 @@ export default function Reveal({ data }: { data: RevealData }) {
                         aria-label={open ? `${c.k}: ${c.v}` : `Flip card ${i + 1}`}
                       >
                         <div className="bm-flip-inner">
-                          <div className="bm-flip-face items-center" style={{ background: chip, border: `1.5px solid ${soft}` }}>
-                            <span className="opacity-60">
-                              <ArchetypeMark id={a.id} size={30} color={a.ink} />
+                          <div className="bm-flip-face items-center" style={{ background: chip, border: `1.5px solid var(--bm-line)` }}>
+                            <span className="opacity-70">
+                              <ArchetypeMark id={a.id} size={30} color={a.color} />
                             </span>
                           </div>
-                          <div className="bm-flip-back" style={{ background: a.ink === "#ffffff" ? "#fff" : "#2A1E00", color: a.color }}>
-                            <span className="text-[11px] font-extrabold tracking-[0.18em] opacity-70">{c.k.toUpperCase()}</span>
+                          <div className="bm-flip-back" style={{ background: "var(--bm-card)", color: "var(--bm-ink)", border: "1.5px solid var(--bm-line)" }}>
+                            <span className="text-[11px] font-extrabold tracking-[0.18em]" style={{ color: a.color }}>
+                              {c.k.toUpperCase()}
+                            </span>
                             <span className="text-[1.05rem] font-extrabold leading-snug">{c.v}</span>
                           </div>
                         </div>
@@ -296,8 +300,8 @@ export default function Reveal({ data }: { data: RevealData }) {
                 <button
                   type="button"
                   onClick={data.next.onClick}
-                  className="bm-btn bm-fade-up mt-2 w-full"
-                  style={{ background: a.ink, color: a.color, animationDelay: "0.5s" }}
+                  className="bm-btn bm-btn-brand bm-fade-up mt-2 w-full"
+                  style={{ animationDelay: "0.5s" }}
                 >
                   {data.next.label} →
                 </button>

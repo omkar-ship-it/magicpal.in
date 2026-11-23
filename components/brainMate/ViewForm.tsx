@@ -60,7 +60,7 @@ export default function ViewForm({ slug, other }: { slug: string; other: string 
           </div>
         );
       })}
-      {error && <p className="text-[13px] font-semibold text-[#c2410c]">{error}</p>}
+      {error && <p className="text-[13px] font-semibold text-[var(--warn)]">{error}</p>}
       <button
         className="bm-btn bm-btn-brand"
         disabled={!all || busy}

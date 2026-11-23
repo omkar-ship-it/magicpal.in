@@ -203,8 +203,8 @@ async function main() {
         rather: Object.fromEntries([...Array(8)].map((_, i) => [`w${i + 1}`, tilt ? 1 : 0])),
         tend: Object.fromEntries([...Array(8)].map((_, i) => [`t${i + 1}`, tilt ? 3 : 1])),
         calls: tilt
-          ? { c1: "a", c2: "b", c3: "a", c4: "b", c5: "a", c6: "a" }
-          : { c1: "b", c2: "a", c3: "b", c4: "a", c5: "b", c6: "b" },
+          ? { c1: "a", c2: "b", c3: "a", c4: "b", c5: "a", c6: "a", c7: "a", c8: "a" }
+          : { c1: "b", c2: "a", c3: "b", c4: "a", c5: "b", c6: "b", c7: "b", c8: "b" },
         ranks: tilt
           ? { r1: ["o", "e", "d", "c", "s"], r2: ["o", "i", "a", "d", "h"], r3: ["e", "a", "s", "c", "h"] }
           : { r1: ["c", "s", "d", "o", "e"], r2: ["h", "d", "i", "o", "a"], r3: ["c", "h", "s", "a", "e"] },

@@ -166,7 +166,7 @@ export default function CompareCard({
                     <div className="relative mt-1 h-2 rounded-full bg-[var(--bm-line)]">
                       <span className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full" style={{ left: `${((c.a.traits[k] / 2.5 + 1) / 2) * 100}%`, background: A.color }} />
                       <span
-                        className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] bg-white"
+                        className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] bg-[var(--bm-card)]"
                         style={{ left: `${((c.b.traits[k] / 2.5 + 1) / 2) * 100}%`, borderColor: B.color }}
                       />
                     </div>
