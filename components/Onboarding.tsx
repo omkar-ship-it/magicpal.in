@@ -9,8 +9,9 @@ import VisibilityPicker, { type Visibility } from "./VisibilityPicker";
 import Avatar from "./Avatar";
 import { IconCheck, IconGlobe, IconPin, IconSparkle, IconUser } from "./Icons";
 import { SECTORS, TOPICS } from "@/lib/intents";
-import { MAX_INTERESTS, MAX_TOPICS } from "@/lib/rules";
-import { GOALS, MAX_GOALS, fromGoals, goalsFrom, suggestFor } from "@/lib/goals";
+import { MAX_CUSTOM, MAX_INTERESTS, MAX_TOPICS } from "@/lib/rules";
+import { MAX_GOALS, fromGoals, goalsFrom, isGoalPhrase, suggestFor } from "@/lib/goals";
+import GoalPicker from "./GoalPicker";
 import { LINKEDIN_HELP, normalizeLinkedin } from "@/lib/linkedinProfile";
 
 /**
@@ -71,7 +72,7 @@ const STEPS = [
   {
     id: "what",
     title: "What brings you here?",
-    blurb: "Tap one or two — that's all we need to start introducing you.",
+    blurb: "Pick up to three — or add your own. That's all we need to start introducing you.",
   },
 ] as const;
 
@@ -138,7 +139,7 @@ export default function Onboarding({
   const consentRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const linkedinRef = useRef<HTMLInputElement>(null);
-  const [goals, setGoals] = useState<string[]>(() => goalsFrom(draft.lookingFor, draft.canHelpWith));
+  const [goals, setGoals] = useState<string[]>(() => goalsFrom(draft.lookingFor, draft.canHelpWith, draft.customLookingFor));
   const [showAll, setShowAll] = useState(false);
 
   const step = STEPS[i];
@@ -178,18 +179,31 @@ export default function Onboarding({
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => ({ ...d, [k]: v }));
   const suggestions = suggestFor(draft.headline, draft.company, goals);
 
-  /** One tap on a goal: it sets what they're looking for, and what that obviously means they can help with. */
+  /** What they typed under "Something else?" — their own phrases, minus the ones goals wrote. */
+  const typed = draft.customLookingFor.filter((t) => !isGoalPhrase(t));
+
+  /**
+   * One tap on a goal: it sets what they're looking for, what that
+   * obviously means they can help with, and (for the specific ones) the
+   * goal in words. Their typed phrases are left exactly as they are.
+   */
   function pickGoal(id: string) {
-    const next = goals.includes(id) ? goals.filter((g) => g !== id) : [...goals, id].slice(-MAX_GOALS);
+    const next = goals.includes(id) ? goals.filter((x) => x !== id) : goals.length + typed.length >= MAX_GOALS ? goals : [...goals, id];
     const before = fromGoals(goals);
     const after = fromGoals(next);
     setGoals(next);
     setDraft((d) => ({
       ...d,
-      lookingFor: after.lookingFor,
+      lookingFor: after.lookingFor.slice(0, MAX_TOPICS),
       canHelpWith: [...new Set([...d.canHelpWith.filter((t) => !before.canHelpWith.includes(t)), ...after.canHelpWith])].slice(0, MAX_TOPICS),
+      customLookingFor: [...after.phrases, ...d.customLookingFor.filter((t) => !isGoalPhrase(t))].slice(0, MAX_CUSTOM),
     }));
   }
+  const addTyped = (t: string) =>
+    setDraft((d) =>
+      d.customLookingFor.some((x) => x.toLowerCase() === t.toLowerCase()) ? d : { ...d, customLookingFor: [...d.customLookingFor, t].slice(0, MAX_CUSTOM) }
+    );
+  const removeTyped = (t: string) => setDraft((d) => ({ ...d, customLookingFor: d.customLookingFor.filter((x) => x !== t) }));
   function toggle(key: "canHelpWith" | "interests", id: string, max: number) {
     setDraft((d) => {
       const cur = d[key];
@@ -224,7 +238,7 @@ export default function Onboarding({
         };
       }
     }
-    if (id === "what" && goals.length === 0) return { message: "Tap at least one — it's how we find people for you." };
+    if (id === "what" && goals.length + typed.length === 0) return { message: "Pick at least one, or add your own — it's how we find people for you." };
     if (id === "where") {
       if (visibility === "exact" && !hasExact) return { message: "Pick your location from the list." };
       if (visibility !== "exact" && !hasBase) return { message: "Pick your city from the list." };
@@ -480,36 +494,16 @@ export default function Onboarding({
 
         {step.id === "what" && (
           <>
-            <div className="grid grid-cols-2 gap-2">
-              {GOALS.map((g) => {
-                const on = goals.includes(g.id);
-                return (
-                  <button
-                    key={g.id}
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() => pickGoal(g.id)}
-                    className="tap flex min-h-[64px] items-center gap-2.5 rounded-2xl border px-3 py-2.5 text-left text-[13.5px] font-semibold leading-tight transition-colors"
-                    style={{
-                      borderColor: on ? "var(--brand)" : "var(--line)",
-                      background: on ? "color-mix(in srgb, var(--brand) 9%, var(--card))" : "var(--card)",
-                    }}
-                  >
-                    <span className="text-[22px] leading-none" aria-hidden="true">
-                      {g.emoji}
-                    </span>
-                    <span className="min-w-0 flex-1">{g.label}</span>
-                    {on && (
-                      <span className="flex-none text-[var(--brand)]">
-                        <IconCheck size={14} />
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+            <GoalPicker
+              selected={goals}
+              typed={typed}
+              max={MAX_GOALS}
+              onToggle={pickGoal}
+              onAddTyped={addTyped}
+              onRemoveTyped={removeTyped}
+            />
 
-            {goals.length > 0 && (
+            {goals.length + typed.length > 0 && (
               <>
                 <ChipGroup
                   label="You can probably help with"

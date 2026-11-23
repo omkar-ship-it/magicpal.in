@@ -5,6 +5,7 @@ import { SECTORS, TOPICS } from "@/lib/intents";
 import { MAX_INTERESTS, MAX_TOPICS } from "@/lib/rules";
 import { GOALS, MAX_GOALS, fromGoals, suggestFor } from "@/lib/goals";
 import { IconCheck } from "./Icons";
+import GoalPicker from "./GoalPicker";
 
 /**
  * The rest of the profile, asked later and one question at a time, right
@@ -15,7 +16,7 @@ import { IconCheck } from "./Icons";
  */
 
 type Q = "goals" | "help" | "interests";
-type Me = { headline: string; company: string; lookingFor: string[]; canHelpWith: string[]; interests: string[] };
+type Me = { headline: string; company: string; lookingFor: string[]; canHelpWith: string[]; interests: string[]; customLookingFor: string[] };
 
 const SNOOZE = (q: Q) => `qs_snooze_${q}`;
 const today = () => new Date().toISOString().slice(0, 10);
@@ -30,6 +31,7 @@ const snoozed = (q: Q) => {
 export default function QuickSignals({ onSaved, standalone = false }: { onSaved: () => void; standalone?: boolean }) {
   const [me, setMe] = useState<Me | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
+  const [typed, setTyped] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [, setTick] = useState(0);
@@ -39,7 +41,7 @@ export default function QuickSignals({ onSaved, standalone = false }: { onSaved:
       .then((r) => r.json())
       .catch(() => null);
     const p = json?.profile;
-    if (p) setMe({ headline: p.headline ?? "", company: p.company ?? "", lookingFor: p.lookingFor ?? [], canHelpWith: p.canHelpWith ?? [], interests: p.interests ?? [] });
+    if (p) setMe({ headline: p.headline ?? "", company: p.company ?? "", lookingFor: p.lookingFor ?? [], canHelpWith: p.canHelpWith ?? [], interests: p.interests ?? [], customLookingFor: p.customLookingFor ?? [] });
   }, []);
 
   useEffect(() => {
@@ -47,7 +49,7 @@ export default function QuickSignals({ onSaved, standalone = false }: { onSaved:
   }, [refresh]);
 
   if (!me) return null;
-  const q: Q | null = !me.lookingFor.length && !snoozed("goals") ? "goals" : !me.canHelpWith.length && !snoozed("help") ? "help" : !me.interests.length && !snoozed("interests") ? "interests" : null;
+  const q: Q | null = !me.lookingFor.length && !me.customLookingFor.length && !snoozed("goals") ? "goals" : !me.canHelpWith.length && !snoozed("help") ? "help" : !me.interests.length && !snoozed("interests") ? "interests" : null;
   if (!q) return null;
 
   const sug = suggestFor(me.headline, me.company, []);
@@ -61,20 +63,32 @@ export default function QuickSignals({ onSaved, standalone = false }: { onSaved:
   const title = q === "goals" ? "What brings you here?" : q === "help" ? "What could you help people with?" : "What are you into?";
   const sub =
     q === "goals"
-      ? "Tap one or two — it's how we pick who to show you."
+      ? "Pick up to three, or add your own — it's how we pick who to show you."
       : q === "help"
         ? "Tap what you'd be glad to be asked about. People who need it will find you."
         : "Tap a few. Two people into the same thing are worth introducing.";
 
   const save = async () => {
-    if (!picked.length) return;
+    if (!picked.length && !typed.length) return;
     setBusy(true);
     setError("");
-    const body = q === "goals" ? fromGoals(picked) : q === "help" ? { canHelpWith: picked } : { interests: picked };
+    const goals = fromGoals(picked);
+    const body =
+      q === "goals"
+        ? {
+            lookingFor: goals.lookingFor,
+            // Merged, never replaced: what they already said stays.
+            ...(goals.canHelpWith.length ? { canHelpWith: [...new Set([...me.canHelpWith, ...goals.canHelpWith])] } : {}),
+            customLookingFor: [...new Set([...me.customLookingFor, ...goals.phrases, ...typed])],
+          }
+        : q === "help"
+          ? { canHelpWith: picked }
+          : { interests: picked };
     try {
       const res = await fetch("/api/profile/signals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Couldn't save that.");
       setPicked([]);
+      setTyped([]);
       await refresh();
       onSaved();
     } catch (e) {
@@ -89,6 +103,18 @@ export default function QuickSignals({ onSaved, standalone = false }: { onSaved:
       <p className="text-[11px] font-semibold tracking-[0.14em] text-[var(--brand)]">SHARPER INTROS · ONE TAP</p>
       <h3 className="mt-1 text-[15.5px] font-semibold leading-snug">{title}</h3>
       <p className="mt-0.5 text-[12.5px] leading-[1.45] text-[var(--ink-soft)]">{sub}</p>
+      {q === "goals" ? (
+        <div className="mt-3">
+          <GoalPicker
+            selected={picked}
+            typed={typed}
+            max={MAX_GOALS}
+            onToggle={(id) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : p.length + typed.length >= MAX_GOALS ? p : [...p, id]))}
+            onAddTyped={(t) => setTyped((x) => (x.some((y) => y.toLowerCase() === t.toLowerCase()) ? x : [...x, t]))}
+            onRemoveTyped={(t) => setTyped((x) => x.filter((y) => y !== t))}
+          />
+        </div>
+      ) : (
       <div className="mt-3 flex flex-wrap gap-1.5">
         {options.map((o) => {
           const on = picked.includes(o.id);
@@ -113,13 +139,14 @@ export default function QuickSignals({ onSaved, standalone = false }: { onSaved:
           );
         })}
       </div>
+      )}
       {error && (
         <p className="mt-2 text-[12px] font-medium" style={{ color: "var(--warn)" }}>
           {error}
         </p>
       )}
       <div className="mt-3 flex items-center gap-2">
-        <button type="button" className="btn btn-primary btn-sm" disabled={busy || !picked.length} onClick={() => void save()}>
+        <button type="button" className="btn btn-primary btn-sm" disabled={busy || (!picked.length && !typed.length)} onClick={() => void save()}>
           {busy ? "Saving…" : "Save"}
         </button>
         <button
@@ -132,6 +159,7 @@ export default function QuickSignals({ onSaved, standalone = false }: { onSaved:
               /* ignore */
             }
             setPicked([]);
+            setTyped([]);
             setTick((t) => t + 1);
           }}
         >

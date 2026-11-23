@@ -5,8 +5,8 @@ import { users } from "@/lib/db/schema";
 import { getSessionUser } from "@/lib/session";
 import { getProfileById } from "@/lib/profiles";
 import { canEmbed, embed, signalText } from "@/lib/ai";
-import { validSectors, validTopics } from "@/lib/intents";
-import { MAX_INTERESTS, MAX_TOPICS } from "@/lib/rules";
+import { cleanCustom, validSectors, validTopics } from "@/lib/intents";
+import { MAX_CUSTOM, MAX_CUSTOM_LENGTH, MAX_INTERESTS, MAX_TOPICS } from "@/lib/rules";
 
 /**
  * One signal at a time, from the one-tap questions in For you: what you're
@@ -19,10 +19,11 @@ export async function POST(req: Request) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
   const body = (await req.json().catch(() => null)) ?? {};
-  const patch: Partial<{ lookingFor: string[]; canHelpWith: string[]; interests: string[] }> = {};
+  const patch: Partial<{ lookingFor: string[]; canHelpWith: string[]; interests: string[]; customLookingFor: string[] }> = {};
   if ("lookingFor" in body) patch.lookingFor = validTopics(body.lookingFor).slice(0, MAX_TOPICS);
   if ("canHelpWith" in body) patch.canHelpWith = validTopics(body.canHelpWith).slice(0, MAX_TOPICS);
   if ("interests" in body) patch.interests = validSectors(body.interests).slice(0, MAX_INTERESTS);
+  if ("customLookingFor" in body) patch.customLookingFor = cleanCustom(body.customLookingFor, { max: MAX_CUSTOM, maxLength: MAX_CUSTOM_LENGTH });
   if (!Object.keys(patch).length) return NextResponse.json({ error: "Nothing to save." }, { status: 400 });
   await db.update(users).set(patch).where(eq(users.id, user.id));
 

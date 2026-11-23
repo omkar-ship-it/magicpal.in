@@ -16,40 +16,104 @@ export type Goal = {
   id: string;
   emoji: string;
   label: string;
+  group: GoalGroup;
   lookingFor: string[];
   /** What this goal means you can obviously help with — pre-ticked, since it's implied by what you picked. */
   canHelpWith: string[];
+  /**
+   * Said in words too, when the goal is more specific than its topic —
+   * "an internship" is more than "a new role". Stored with the person's
+   * own phrases, which the matcher reads for meaning.
+   */
+  phrase?: string;
 };
 
+export type GoalGroup = "Career" | "Building something" | "Business & clients" | "Hiring & giving back" | "People & community";
+export const GOAL_GROUPS: GoalGroup[] = ["Career", "Building something", "Business & clients", "Hiring & giving back", "People & community"];
+
+const g = (id: string, emoji: string, label: string, group: GoalGroup, lookingFor: string[], canHelpWith: string[] = [], phrase?: string): Goal => ({
+  id,
+  emoji,
+  label,
+  group,
+  lookingFor,
+  canHelpWith,
+  phrase,
+});
+
 export const GOALS: Goal[] = [
-  { id: "hiring", emoji: "💼", label: "Hiring", lookingFor: ["hiring"], canHelpWith: ["role"] },
-  { id: "job", emoji: "🔎", label: "Finding a job", lookingFor: ["role"], canHelpWith: [] },
-  { id: "raising", emoji: "💰", label: "Raising money", lookingFor: ["funding"], canHelpWith: [] },
-  { id: "investing", emoji: "📈", label: "Investing", lookingFor: ["peers"], canHelpWith: ["funding"] },
-  { id: "cofounder", emoji: "🤝", label: "Finding a co-founder", lookingFor: ["cofounder"], canHelpWith: [] },
-  { id: "customers", emoji: "🛒", label: "Finding customers", lookingFor: ["gtm"], canHelpWith: [] },
-  { id: "advice", emoji: "🧭", label: "Advice & mentoring", lookingFor: ["advice"], canHelpWith: [] },
-  { id: "peers", emoji: "🌱", label: "Meeting people in my field", lookingFor: ["peers"], canHelpWith: [] },
+  // Career
+  g("job", "🔎", "Finding a job", "Career", ["role"]),
+  g("switch", "🔁", "Switching careers", "Career", ["role", "advice"], [], "Switching careers"),
+  g("intern", "🎓", "Internship or first job", "Career", ["role", "advice"], [], "An internship or first job"),
+  g("freelance", "💻", "Freelance or gig work", "Career", ["gtm"], [], "Freelance projects"),
+  g("mentor-me", "🧭", "A mentor or career advice", "Career", ["advice"]),
+  g("learn", "📚", "Learning a new skill", "Career", ["advice", "peers"], [], "Learning a new skill"),
+  // Building something
+  g("start", "🚀", "Starting a company", "Building something", ["cofounder", "advice"], [], "Starting a company"),
+  g("cofounder", "🤝", "Finding a co-founder", "Building something", ["cofounder"]),
+  g("raising", "💰", "Raising money", "Building something", ["funding"]),
+  g("tech", "🛠️", "Tech help to build", "Building something", ["technical"]),
+  g("feedback", "🧪", "Product feedback or testers", "Building something", ["product"]),
+  g("side", "💡", "A side project", "Building something", ["peers", "technical"], [], "Collaborators for a side project"),
+  // Business & clients
+  g("customers", "🛒", "Finding customers", "Business & clients", ["gtm"]),
+  g("clients", "🧾", "Finding clients for my practice", "Business & clients", ["gtm"], [], "Clients for my practice"),
+  g("growth", "📣", "Growing my brand or audience", "Business & clients", ["growth"]),
+  g("partners", "🔗", "Partners or distributors", "Business & clients", ["gtm", "market"], [], "Business partners"),
+  g("suppliers", "📦", "Suppliers or service providers", "Business & clients", ["market"], [], "Suppliers and service providers"),
+  g("market", "🌍", "Entering a new market or city", "Business & clients", ["market"]),
+  // Hiring & giving back
+  g("hiring", "💼", "Hiring", "Hiring & giving back", ["hiring"], ["role"]),
+  g("talent", "👩‍💻", "Freelancers or an agency", "Hiring & giving back", ["hiring"], [], "Freelancers or an agency"),
+  g("investing", "📈", "Investing / angel deals", "Hiring & giving back", ["peers"], ["funding"], "Deal flow"),
+  g("mentoring", "🧑‍🏫", "Mentoring others", "Hiring & giving back", ["peers"], ["advice"]),
+  g("advising", "🎯", "Advising startups", "Hiring & giving back", ["peers"], ["advice", "gtm"], "Startups to advise"),
+  g("volunteer", "❤️", "Volunteering or social impact", "Hiring & giving back", ["peers"], [], "Social impact projects"),
+  // People & community
+  g("peers", "🌱", "Meeting people in my field", "People & community", ["peers"]),
+  g("new", "🏙️", "New in town — meeting people", "People & community", ["peers"], [], "New in the city"),
+  g("creative", "🎨", "Creative collaborators", "People & community", ["peers", "product"], [], "Creative collaborators"),
+  g("research", "🔬", "Research collaborators", "People & community", ["peers", "technical"], [], "Research collaborators"),
+  g("events", "🎟️", "Events and meetups", "People & community", ["peers"], [], "Events and meetups"),
+  g("speaking", "🎤", "Speaking or hosting", "People & community", ["peers", "growth"], [], "Speaking and hosting"),
 ];
 
-export const MAX_GOALS = 2;
+/** Picks allowed in "What brings you here?", counting anything typed. */
+export const MAX_GOALS = 3;
+
+const PHRASES = new Set(GOALS.flatMap((x) => (x.phrase ? [x.phrase.toLowerCase()] : [])));
+/** A phrase that one of the goals wrote, as opposed to one the person typed. */
+export const isGoalPhrase = (s: string) => PHRASES.has(s.trim().toLowerCase());
 
 /** Which goals a saved profile already amounts to (for resuming and re-editing). */
-export function goalsFrom(lookingFor: readonly string[], canHelpWith: readonly string[]): string[] {
-  return GOALS.filter((g) => {
-    if (g.id === "investing") return canHelpWith.includes("funding");
-    if (g.id === "peers") return lookingFor.includes("peers") && !canHelpWith.includes("funding");
-    return g.lookingFor.every((t) => lookingFor.includes(t));
-  })
-    .map((g) => g.id)
-    .slice(0, MAX_GOALS);
+export function goalsFrom(lookingFor: readonly string[], canHelpWith: readonly string[], custom: readonly string[] = []): string[] {
+  const said = new Set(custom.map((c) => c.trim().toLowerCase()));
+  const out: string[] = [];
+  // Goals with their own phrase are known exactly.
+  for (const x of GOALS) if (x.phrase && said.has(x.phrase.toLowerCase())) out.push(x.id);
+  // The rest: when every topic they stand for is there, and nothing more specific already claimed it.
+  const claimed = new Set(out.flatMap((id) => GOALS.find((x) => x.id === id)!.lookingFor));
+  for (const x of GOALS) {
+    if (x.phrase || out.length >= MAX_GOALS) continue;
+    const fits = x.lookingFor.every((t) => lookingFor.includes(t)) && x.canHelpWith.every((t) => canHelpWith.includes(t));
+    if (fits && !x.lookingFor.every((t) => claimed.has(t))) {
+      out.push(x.id);
+      x.lookingFor.forEach((t) => claimed.add(t));
+    }
+  }
+  return out.slice(0, MAX_GOALS);
 }
 
 /** The profile lists a set of goals stands for. */
-export function fromGoals(ids: readonly string[]): { lookingFor: string[]; canHelpWith: string[] } {
-  const picked = GOALS.filter((g) => ids.includes(g.id));
+export function fromGoals(ids: readonly string[]): { lookingFor: string[]; canHelpWith: string[]; phrases: string[] } {
+  const picked = GOALS.filter((x) => ids.includes(x.id));
   const uniq = (xs: string[]) => [...new Set(xs)];
-  return { lookingFor: uniq(picked.flatMap((g) => g.lookingFor)), canHelpWith: uniq(picked.flatMap((g) => g.canHelpWith)) };
+  return {
+    lookingFor: uniq(picked.flatMap((x) => x.lookingFor)),
+    canHelpWith: uniq(picked.flatMap((x) => x.canHelpWith)),
+    phrases: uniq(picked.flatMap((x) => (x.phrase ? [x.phrase] : []))),
+  };
 }
 
 /** Words in a headline or company → what that person can probably help with. */
@@ -60,7 +124,8 @@ const HELP_HINTS: [RegExp, string][] = [
   [/\b(marketing|growth|brand|content|seo|community|social media)/i, "growth"],
   [/\b(recruit|talent|\bhr\b|people ops|human resources)/i, "hiring"],
   [/\b(investor|\bvc\b|angel|venture|capital|fund)/i, "funding"],
-  [/\b(founder|ceo|director|head of|\bvp\b|lead|manager|coach|mentor|consultant|advisor)/i, "advice"],
+  [/\b(founder|ceo|director|head of|\bvp\b|lead|manager|coach|mentor|consultant|advisor|professor|teacher)/i, "advice"],
+  [/\b(doctor|dr\.?\s|physician|surgeon|dermatolog|dentist|therapist|psycholog|lawyer|advocate|attorney|legal|chartered accountant|\bca\b|accountant|architect)/i, "advice"],
 ];
 
 /** Words → interests (sectors). */
