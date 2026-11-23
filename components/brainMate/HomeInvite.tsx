@@ -66,7 +66,10 @@ export default function HomeInvite({
         <span className="grid h-7 w-7 place-items-center rounded-full" style={{ background: a.color }}>
           <ArchetypeMark id={a.id} size={16} color={a.ink} stroke={8} />
         </span>
-        <span>🌊 Find your Brain-Mate</span>
+        <span className="flex flex-col text-left leading-tight">
+          <span>Find your Brain-Mate</span>
+          <span className="text-[11.5px] font-medium text-[var(--ink-soft)]">Play a fun game</span>
+        </span>
       </button>
     );
   }
