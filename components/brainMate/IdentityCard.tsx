@@ -91,7 +91,8 @@ export default function IdentityCard({
           <div className="mt-6">
             <QuickShare
               label="Share my archetype"
-              url={`${card.origin}/brain-mate`}
+              copy={false}
+              url={card.origin.replace("://www.", "://")}
               text={`I'm ${a.name} on Brain-Mate — "${a.tagline}" What are you?`}
               image="/api/brain-mate/card"
               filename="my-archetype.png"

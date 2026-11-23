@@ -127,7 +127,7 @@ export function IdentityShare({ archetypeName, origin }: { archetypeName: string
             const r = await shareImage(
               `/api/brain-mate/card${colleague ? "?v=colleague" : ""}`,
               "my-brain-mate.png",
-              `I'm ${archetypeName} on Brain-Mate. What are you? ${origin}/brain-mate`
+              `I'm ${archetypeName} on Brain-Mate. What are you? ${origin.replace("://www.", "://")}`
             );
             setMsg(r === "shared" ? "Shared ✓" : "Card saved ✓");
           } catch (e) {
@@ -346,6 +346,7 @@ export function QuickShare({
   filename = "brain-mate.png",
   label = "Share",
   tone: look = "brand",
+  copy = true,
 }: {
   url: string;
   text: string;
@@ -354,6 +355,8 @@ export function QuickShare({
   label?: string;
   /** "light" sits on an archetype-coloured card. */
   tone?: "brand" | "light";
+  /** Show "Copy link" under the button. */
+  copy?: boolean;
 }) {
   const [msg, setMsg] = useState("");
   const full = `${text} ${url}`;
@@ -398,21 +401,25 @@ export function QuickShare({
         <a href={`https://wa.me/?text=${encodeURIComponent(full)}`} target="_blank" rel="noopener noreferrer" onClick={() => buzz(8)}>
           WhatsApp
         </a>
-        <span aria-hidden="true">·</span>
-        <button
-          type="button"
-          onClick={async () => {
-            buzz(8);
-            try {
-              await navigator.clipboard.writeText(url);
-              setMsg("Link copied ✓");
-            } catch {
-              setMsg(url);
-            }
-          }}
-        >
-          Copy link
-        </button>
+        {copy && (
+          <>
+            <span aria-hidden="true">·</span>
+            <button
+              type="button"
+              onClick={async () => {
+                buzz(8);
+                try {
+                  await navigator.clipboard.writeText(url);
+                  setMsg("Link copied ✓");
+                } catch {
+                  setMsg(url);
+                }
+              }}
+            >
+              Copy link
+            </button>
+          </>
+        )}
         {image && (
           <>
             <span aria-hidden="true">·</span>

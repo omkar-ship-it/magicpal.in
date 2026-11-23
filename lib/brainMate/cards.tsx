@@ -136,7 +136,7 @@ export function IdentityCard({
         <div style={{ display: "flex", alignSelf: "stretch", justifyContent: "space-between", alignItems: "flex-end" }}>
           <div style={{ display: "flex", flexDirection: "column" }}>
             <div style={{ display: "flex", fontSize: 44, fontWeight: 800 }}>What are you? Find your Brain-Mate</div>
-            <div style={{ display: "flex", fontSize: 30, color: SOFT, marginTop: 6 }}>{`${site}/brain-mate  ·  by OpenNetworks`}</div>
+            <div style={{ display: "flex", fontSize: 30, color: SOFT, marginTop: 6 }}>{`${site}  ·  by OpenNetworks`}</div>
           </div>
         </div>
       </div>
