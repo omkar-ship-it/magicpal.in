@@ -199,16 +199,16 @@ async function main() {
     const { nextDuel, checksNeeded } = await loadBrainMate();
     const game = (tilt) => {
       const a = {
-        v: 4,
-        rather: Object.fromEntries([...Array(8)].map((_, i) => [`w${i + 1}`, tilt ? 1 : 0])),
-        tend: Object.fromEntries([...Array(8)].map((_, i) => [`t${i + 1}`, tilt ? 3 : 1])),
+        v: 5,
+        rather: Object.fromEntries([...Array(9)].map((_, i) => [`w${i + 1}`, tilt ? 1 : 0])),
+        tend: Object.fromEntries([...Array(9)].map((_, i) => [`t${i + 1}`, tilt ? 3 : 1])),
         calls: tilt
-          ? { c1: "a", c2: "b", c3: "a", c4: "b", c5: "a", c6: "a", c7: "a", c8: "a" }
-          : { c1: "b", c2: "a", c3: "b", c4: "a", c5: "b", c6: "b", c7: "b", c8: "b" },
+          ? { c1: "a", c2: "b", c3: "a", c4: "b", c5: "a", c6: "a", c7: "a", c8: "a", c9: "a" }
+          : { c1: "b", c2: "a", c3: "b", c4: "a", c5: "b", c6: "b", c7: "b", c8: "b", c9: "b" },
         ranks: tilt
           ? { r1: ["o", "e", "d", "c", "s"], r2: ["o", "i", "a", "d", "h"], r3: ["e", "a", "s", "c", "h"] }
           : { r1: ["c", "s", "d", "o", "e"], r2: ["h", "d", "i", "o", "a"], r3: ["c", "h", "s", "a", "e"] },
-        sliders: Object.fromEntries([...Array(6)].map((_, i) => [`l${i + 1}`, tilt ? 0.8 : -0.4])),
+        sliders: Object.fromEntries([...Array(7)].map((_, i) => [`l${i + 1}`, tilt ? 0.8 : -0.4])),
         values: tilt ? ["freedom", "adventure"] : ["helping", "stability"],
         checks: {},
         duels: [],
@@ -229,7 +229,7 @@ async function main() {
     const forgedRes = await api("/api/brain-mate/result", { method: "POST", jar: bmD.jar, body: { name: "Dee", answers: forged } });
     assert(forgedRes.status === 400, "a duel card the answers don't lead to is refused");
     const mine = await pool.query("select archetype, answers->>'v' as v from brain_mates where user_id = (select id from users where email = $1)", [bmEmailD]);
-    assert(mine.rows[0]?.archetype === saved.data.archetype && mine.rows[0]?.v === "4", "the stored archetype is the server's, on the current version");
+    assert(mine.rows[0]?.archetype === saved.data.archetype && mine.rows[0]?.v === "5", "the stored archetype is the server's, on the current version");
     const bad = await api("/api/brain-mate/result", { method: "POST", jar: bmD.jar, body: { name: "Dee", answers: { ...game(true), tend: { ...game(true).tend, t3: 9 } } } });
     assert(bad.status === 400, "an answer the game can't produce is refused");
 
@@ -263,7 +263,7 @@ async function main() {
     assert(energy.status === 200, "the optional energy answer saves");
     const energyRow = await pool.query("select answers->>'energy' as e, archetype from brain_mates where user_id = (select id from users where email = $1)", [bmEmailD]);
     assert(energyRow.rows[0]?.e === "family" && energyRow.rows[0]?.archetype === saved.data.archetype, "…without touching the result");
-    const view = Object.fromEntries(["O", "I", "D", "S", "E", "A", "C", "H"].map((k) => [k, 0.5]));
+    const view = Object.fromEntries(["O", "I", "D", "S", "E", "A", "C", "H", "V"].map((k) => [k, 0.5]));
     const bmEmailF = `flowtest.bm-f.${stamp}@example.com`;
     emails.push(bmEmailF);
     const bmF = await signUp(bmEmailF);
@@ -274,7 +274,7 @@ async function main() {
     const twice = await api(`/api/brain-mate/links/${bmSlug}/view`, { method: "POST", jar: bmE.jar, body: { view } });
     assert(twice.status === 409, "…once");
     const badView = await api(`/api/brain-mate/links/${bmSlug}/view`, { method: "POST", jar: bmD.jar, body: { view: { O: 3 } } });
-    assert(badView.status === 400, "a view needs all eight sliders, in range");
+    assert(badView.status === 400, "a view needs all nine sliders, in range");
     const privateCard = await fetch(`${BASE}/api/brain-mate/card`);
     assert(privateCard.status === 401, "your identity image is only ever yours");
     }

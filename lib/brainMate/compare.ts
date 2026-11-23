@@ -84,7 +84,7 @@ const jaccard = (x: string[] = [], y: string[] = []) => {
   return union ? inter / union : 0;
 };
 
-const SIM_W: Record<Trait, number> = { O: 1.5, I: 1, D: 0.5, S: 0.5, E: 1, A: 0.5, C: 1, H: 1 };
+const SIM_W: Record<Trait, number> = { O: 1.5, I: 1, D: 0.5, S: 0.5, E: 1, A: 0.5, C: 1, H: 1, V: 1 };
 
 export function traitSimilarity(a: Traits, b: Traits): number {
   let s = 0;
@@ -107,9 +107,9 @@ export function fitParts(a: Traits, b: Traits) {
   };
 }
 
-// Where a raw score sits among simulated pairs — 21 quantiles each (v4 fit).
-const SIM_Q = [0.0089, 0.2181, 0.2536, 0.281, 0.3054, 0.3262, 0.3444, 0.3634, 0.3811, 0.3996, 0.4172, 0.4352, 0.4527, 0.4716, 0.4903, 0.5109, 0.5352, 0.562, 0.5953, 0.6541, 0.9202];
-const COMP_Q = [0.1742, 0.4535, 0.4972, 0.5277, 0.5517, 0.5726, 0.5917, 0.6093, 0.6261, 0.6429, 0.6589, 0.6756, 0.6931, 0.7104, 0.7289, 0.7489, 0.7713, 0.7962, 0.8233, 0.8623, 0.996];
+// Where a raw score sits among simulated pairs — 21 quantiles each (v5 fit).
+const SIM_Q = [0.0613, 0.2248, 0.2607, 0.2872, 0.3108, 0.33, 0.3492, 0.3672, 0.3842, 0.4016, 0.4189, 0.4355, 0.4524, 0.4699, 0.4882, 0.5097, 0.5332, 0.5589, 0.5935, 0.6541, 0.9511];
+const COMP_Q = [0.1841, 0.4525, 0.4975, 0.5295, 0.5557, 0.5769, 0.5955, 0.6143, 0.6313, 0.6495, 0.6657, 0.6826, 0.6996, 0.7174, 0.7361, 0.7558, 0.7766, 0.8009, 0.8289, 0.8674, 0.9997];
 /** Blend a person's self-scores with what others say, when anyone has rated them. */
 export function blendedTraits(p: Person): Traits {
   const self = selfVector(p.answers);
@@ -153,6 +153,7 @@ const OPPOSITE: Record<Trait, (lo: string, hi: string) => string> = {
   A: (lo, hi) => `${hi} takes the lead; ${lo} backs it.`,
   C: (lo, hi) => `${hi} looks after the people; ${lo} looks after the problem.`,
   H: (lo, hi) => `${hi} keeps it together; ${lo} says the hard thing.`,
+  V: (lo, hi) => `${hi} aims for the moon; ${lo} makes sure you actually land somewhere.`,
 };
 
 export function compare(pa: Person, pb: Person, stats: CrowdStats | null = null): Comparison {
@@ -175,7 +176,7 @@ export function compare(pa: Person, pb: Person, stats: CrowdStats | null = null)
   const pct = (x: number) => Math.round(clip(x) * 100);
   const layers = [
     { label: "Think", value: pct(near(["O", "I"])) },
-    { label: "Drive", value: pct(0.5 * near(["D"]) + 0.5 * vSim) },
+    { label: "Drive", value: pct(0.5 * near(["V", "D"]) + 0.5 * vSim) },
     { label: "Connect", value: pct(near(["E", "C"])) },
     { label: "Work", value: pct(near(["S", "A", "H"])) },
     { label: "Play", value: pct(iSim) },

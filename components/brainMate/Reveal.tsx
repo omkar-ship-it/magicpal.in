@@ -116,7 +116,7 @@ export default function Reveal({ data }: { data: RevealData }) {
               </div>
             ) : (
               <div className={`relative grid h-[220px] w-[220px] place-items-center ${t >= T.inhale ? "bm-inhale" : ""}`}>
-                {/* Your constellation: the eight stars, joined up, about to become your mark. */}
+                {/* Your constellation: the nine stars, joined up, about to become your mark. */}
                 <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full overflow-visible">
                   {TRAITS.map((k, i) => {
                     const [x1, y1] = STAR_POS[k];

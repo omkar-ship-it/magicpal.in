@@ -37,8 +37,8 @@ import Reveal, { type RevealData } from "./Reveal";
  * Brain-Mate v4. Seven sections, about three minutes, played in a window
  * over the map:
  *
- *   1  Would you rather   eight pairs — the two ends of one trait
- *   2  Is this you?       eight tendencies on a four-step meter
+ *   1  Would you rather   nine pairs — the two ends of one trait
+ *   2  Is this you?       nine tendencies on a four-step meter
  *   3  Tough calls        six dilemmas — two traits pulled against each other
  *   4  Prioritise         push five cards up and down, three rounds
  *   5  Where do you sit?  drag your dot along six lines
@@ -70,7 +70,7 @@ const ORDER: Section[] = ["rather", "tend", "calls", "ranks", "sliders", "values
 const SECTION_TITLE: Record<Section, { n: string; title: string; hint: string }> = {
   rather: { n: "1", title: "Would You Rather", hint: "Both sides are good. Pick the real you." },
   tend: { n: "2", title: "Is This You?", hint: "The real you, when life gives you a choice. A busy season doesn't count." },
-  calls: { n: "3", title: "Tough Calls", hint: "Eight small dilemmas. No right answers — just yours." },
+  calls: { n: "3", title: "Tough Calls", hint: "Nine small dilemmas. No right answers — just yours." },
   ranks: { n: "4", title: "Prioritise", hint: "Push what matters most to the top." },
   sliders: { n: "5", title: "Where Do You Sit?", hint: "Drag your dot to where you really are." },
   values: { n: "6", title: "Pack Your Bag", hint: "Room for two things. Choose well." },
@@ -78,8 +78,8 @@ const SECTION_TITLE: Record<Section, { n: string; title: string; hint: string }>
   duel: { n: "7", title: "The Final Duel", hint: "Your two closest matches. Settle it." },
 };
 const TOTAL_STEPS = RATHER.length + TENDENCIES.length + CALLS.length + RANKS.length + SLIDERS.length + 1;
-const STEP_TONE: Record<Trait, number> = { O: 0, I: 2, D: 4, S: 5, E: 7, A: 9, C: 11, H: 12 };
-const PROGRESS_KEY = "bm_progress_v4";
+const STEP_TONE: Record<Trait, number> = { O: 0, I: 2, D: 4, S: 5, E: 7, A: 9, C: 11, H: 12, V: 14 };
+const PROGRESS_KEY = "bm_progress_v5";
 
 function seeded(s: string) {
   let h = 2166136261;
@@ -93,13 +93,13 @@ function shuffle<T>(xs: T[], seed: string): T[] {
     .map((p) => p.x);
 }
 
-const emptyAnswers = (): Answers => ({ v: 4, rather: {}, tend: {}, calls: {}, ranks: {}, sliders: {}, values: [], checks: {}, duels: [] });
+const emptyAnswers = (): Answers => ({ v: 5, rather: {}, tend: {}, calls: {}, ranks: {}, sliders: {}, values: [], checks: {}, duels: [] });
 
 type Saved = { answers: Answers; name: string; seed: string };
 function loadSaved(): Saved | null {
   try {
     const s = JSON.parse(localStorage.getItem(PROGRESS_KEY) ?? "null") as Saved | null;
-    return s && s.answers?.v === 4 ? s : null;
+    return s && s.answers?.v === 5 ? s : null;
   } catch {
     return null;
   }

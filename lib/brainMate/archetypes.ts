@@ -8,7 +8,7 @@
  * Behind the twelve sits a 4 × 3 grid the player never sees:
  *
  *            Ignite      Seek        Steady
- *   Imagine  Dreamer     Explorer    Creator
+ *   Imagine  Visionary   Explorer    Creator
  *   Reason   Maverick    Detective   Strategist
  *   Act      Spark       Maker       Doer
  *   Relate   Connector   Mentor      Peacemaker
@@ -40,23 +40,29 @@ export type ArchetypeId =
   | "peacemaker";
 
 /**
- * The eight traits Brain-Mate measures — seven aspects of the Big Five
- * (DeYoung's model) plus harmony vs challenge. Anxiety/emotional stability
+ * The nine traits Brain-Mate measures — seven aspects of the Big Five
+ * (DeYoung's model), harmony vs challenge, and ambition. Ambition (V) is
+ * kept apart from follow-through (D): a visionary aims huge and may not
+ * love the execution; a doer finishes everything and may aim modestly.
+ * Measuring them as one trait read visionaries as explorers (v5, see
+ * scripts/brain-mate-sim/validity.cjs). Anxiety/emotional stability
  * is deliberately left out: unflattering, sensitive, and no use for
  * meeting people.
  */
-export type Trait = "O" | "I" | "D" | "S" | "E" | "A" | "C" | "H";
-export const TRAITS: Trait[] = ["O", "I", "D", "S", "E", "A", "C", "H"];
+// V is appended (not inserted) so every positional index stays stable.
+export type Trait = "O" | "I" | "D" | "S" | "E" | "A" | "C" | "H" | "V";
+export const TRAITS: Trait[] = ["O", "I", "D", "S", "E", "A", "C", "H", "V"];
 
 export const TRAIT_INFO: Record<Trait, { name: string; lo: string; hi: string; loLine: string; hiLine: string }> = {
   O: { name: "Imagination", lo: "Proven ways", hi: "New possibilities", loLine: "Perfect what already works", hiLine: "Imagine what could be" },
   I: { name: "Inquiry", lo: "Get it working", hi: "Find out why", loLine: "Get it working", hiLine: "Find out why" },
-  D: { name: "Drive", lo: "Move on", hi: "See it through", loLine: "Move on once it's figured out", hiLine: "See it through to the end" },
+  D: { name: "Follow-through", lo: "Move on", hi: "See it through", loLine: "Move on once it's figured out", hiLine: "See it through to the end" },
   S: { name: "Structure", lo: "Keep it open", hi: "Have a plan", loLine: "Keep it open", hiLine: "Have a plan" },
   E: { name: "Social energy", lo: "One good conversation", hi: "The whole room", loLine: "Be in one good conversation", hiLine: "Be in the middle of the room" },
   A: { name: "Assertiveness", lo: "Back the lead", hi: "Take the lead", loLine: "Back the person leading", hiLine: "Take the lead" },
   C: { name: "Warmth", lo: "The problem", hi: "The people", loLine: "Look after the problem", hiLine: "Look after the people" },
   H: { name: "Harmony", lo: "Say the hard thing", hi: "Keep it together", loLine: "Say the uncomfortable thing", hiLine: "Keep the group together" },
+  V: { name: "Ambition", lo: "Steady goals", hi: "Big goals", loLine: "Aim for what you know you'll reach", hiLine: "Aim for something huge" },
 };
 
 /**
@@ -73,6 +79,7 @@ export const TRAIT_PRAISE: Record<Trait, { hi: [string, string]; lo: [string, st
   A: { hi: ["Leadership", "You make the call when it counts."], lo: ["Support", "You make every leader better."] },
   C: { hi: ["Warmth", "People feel looked after around you."], lo: ["Clarity", "You solve the real problem."] },
   H: { hi: ["Harmony", "You bring people together."], lo: ["Candour", "You say what needs saying."] },
+  V: { hi: ["Vision", "You aim where others don't dare to."], lo: ["Realism", "You set goals you actually reach."] },
 };
 
 export type Archetype = {
@@ -119,7 +126,7 @@ export type Archetype = {
    * and for them it's honestly "My opposite" — the most different profile.
    */
   edge: { kind: "clash" | "opposite"; id: ArchetypeId };
-  /** Where this archetype sits on the eight traits, in standard units. */
+  /** Where this archetype sits on the nine traits, in standard units. */
   profile: Record<Trait, number>;
 };
 
@@ -128,21 +135,21 @@ const A = (a: Archetype) => a;
 export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
   dreamer: A({
     id: "dreamer",
-    name: "The Dreamer",
-    tagline: "Sees what could be.",
+    name: "The Visionary",
+    tagline: "Sees where it's all going.",
     realm: "imagine",
     mode: "ignite",
     color: "#7B4DFF",
     ink: "#ffffff",
     tint: "#EEE8FF",
-    traits: ["Imaginative", "Ambitious", "Future-minded"],
+    traits: ["Big-picture", "Ambitious", "Future-minded"],
     superpower: "Sees the door before anyone sees the wall.",
-    roast: "14 ideas. 2 finished.",
-    blindSpot: "Can chase the next idea before landing the last.",
+    roast: "Has a ten-year plan. Not a Tuesday plan.",
+    blindSpot: "Can live in the future and skip the next small step.",
     bestWhen: "handed a blank page and a big question",
     give: "Give me a blank page.",
     dont: "Don't ask for the plan in the first meeting.",
-    does: "imagines it",
+    does: "sees where it's going",
     role: "the direction",
     askMe: "What would you build if it couldn't fail?",
     strengths: ["You see possibilities before anyone else", "You make people excited about what's next", "You aim high — and pull others up with you"],
@@ -150,9 +157,9 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     shineIn: ["Brainstorms", "New ventures", "Big-picture strategy"],
     growthEdge: "Pick one idea and give it a finish line — your vision deserves to be real.",
     thisWeek: "Write down the idea you keep coming back to, and tell one person who could help build it.",
-    powerDuo: ["doer", "strategist", "peacemaker"],
-    edge: { kind: "opposite", id: "mentor" },
-    profile: { O: 2, I: 0, D: 0.5, S: -0.5, E: 0.3, A: 0.5, C: 0, H: 0 },
+    powerDuo: ["doer", "maker", "peacemaker"],
+    edge: { kind: "clash", id: "strategist" },
+    profile: { O: 1.4, I: 0, D: 0, S: -0.7, E: 0.3, A: 0.3, C: 0, H: 0, V: 1.8 },
   }),
   explorer: A({
     id: "explorer",
@@ -178,9 +185,9 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     shineIn: ["Research & discovery", "New markets", "Learning anything fast"],
     growthEdge: "Go deep on one thing you love — breadth plus depth is rare.",
     thisWeek: "Spend an hour on the rabbit hole you've been saving, then share what you found.",
-    powerDuo: ["maker", "doer", "spark"],
+    powerDuo: ["doer", "maker", "spark"],
     edge: { kind: "opposite", id: "peacemaker" },
-    profile: { O: 1.5, I: 1.2, D: -0.5, S: -1.5, E: 0.5, A: 0, C: 0, H: 0 },
+    profile: { O: 1.3, I: 1.5, D: 0, S: -1, E: 0, A: 0, C: 0, H: 0, V: -0.4 },
   }),
   creator: A({
     id: "creator",
@@ -206,9 +213,9 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     shineIn: ["Design & brand", "Storytelling", "Product craft"],
     growthEdge: "Ship it at 90% — the world needs to see your work.",
     thisWeek: "Share one thing you've made, unfinished, with someone you trust.",
-    powerDuo: ["doer"],
-    edge: { kind: "opposite", id: "maverick" },
-    profile: { O: 2, I: 0, D: 0.8, S: 0, E: 0.3, A: 0, C: 0.3, H: 0.3 },
+    powerDuo: ["doer", "maverick", "detective"],
+    edge: { kind: "opposite", id: "peacemaker" },
+    profile: { O: 1.6, I: 0, D: 1.2, S: 0, E: -0.3, A: 0, C: 0, H: 0, V: 0.4 },
   }),
   maverick: A({
     id: "maverick",
@@ -234,9 +241,9 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     shineIn: ["Strategy & positioning", "Turnarounds", "Rethinking how things are done"],
     growthEdge: "Pick your battles — your challenge lands hardest when it's rare.",
     thisWeek: "Write down the contrarian bet you believe in, and test it cheaply.",
-    powerDuo: ["doer", "maker", "explorer"],
+    powerDuo: ["doer", "explorer", "maker"],
     edge: { kind: "clash", id: "peacemaker" },
-    profile: { O: 0.5, I: 1, D: 0, S: -1, E: 0, A: 1, C: -0.5, H: -2 },
+    profile: { O: 0, I: 1.2, D: 0, S: -0.5, E: 0, A: 1, C: 0, H: -2, V: 0 },
   }),
   detective: A({
     id: "detective",
@@ -262,9 +269,9 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     shineIn: ["Analysis & research", "Diagnosing problems", "Due diligence"],
     growthEdge: "Decide at 80% sure — your instincts are better than you think.",
     thisWeek: "Give the question you can't stop thinking about one focused hour.",
-    powerDuo: ["doer", "explorer"],
+    powerDuo: ["doer", "peacemaker", "creator"],
     edge: { kind: "clash", id: "spark" },
-    profile: { O: 0, I: 2, D: 0.5, S: 0.5, E: -1, A: 0, C: 0, H: 0 },
+    profile: { O: 0, I: 2, D: 0, S: 0, E: -1.2, A: 0, C: 0, H: 0, V: 0 },
   }),
   strategist: A({
     id: "strategist",
@@ -290,9 +297,9 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     shineIn: ["Planning & operations", "Leading complex projects", "Long-term thinking"],
     growthEdge: "Leave room for surprises — the best plans bend.",
     thisWeek: "Map one goal three moves ahead, then make the first move today.",
-    powerDuo: ["explorer", "dreamer"],
+    powerDuo: ["explorer", "creator", "peacemaker"],
     edge: { kind: "clash", id: "maker" },
-    profile: { O: 0, I: 1, D: 1, S: 2, E: 0, A: 0.5, C: 0, H: 0 },
+    profile: { O: 0, I: 1, D: 0, S: 1.8, E: 0, A: 0.5, C: 0, H: 0, V: 0.8 },
   }),
   spark: A({
     id: "spark",
@@ -318,9 +325,9 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     shineIn: ["Launches & events", "Sales & partnerships", "Getting teams moving"],
     growthEdge: "Pair your spark with a finisher — together you're unstoppable.",
     thisWeek: "Start the thing you've been talking about, and invite one person to do it with you.",
-    powerDuo: ["explorer", "doer"],
-    edge: { kind: "clash", id: "detective" },
-    profile: { O: 0.5, I: -0.5, D: 0, S: -1, E: 2, A: 1, C: 0, H: 0 },
+    powerDuo: ["explorer", "doer", "dreamer"],
+    edge: { kind: "clash", id: "strategist" },
+    profile: { O: 0, I: 0, D: 0, S: -1, E: 1.6, A: 1.2, C: 0, H: 0, V: 0 },
   }),
   maker: A({
     id: "maker",
@@ -346,9 +353,9 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     shineIn: ["Prototyping", "Engineering & craft", "Hands-on problem solving"],
     growthEdge: "Ask “who is this for?” before the first build — it makes your work land.",
     thisWeek: "Build a tiny version of an idea in a single sitting.",
-    powerDuo: ["explorer", "maverick"],
+    powerDuo: ["explorer", "dreamer", "maverick"],
     edge: { kind: "clash", id: "strategist" },
-    profile: { O: 0.5, I: -0.5, D: 2, S: -1, E: 0, A: 0, C: 0, H: 0 },
+    profile: { O: 0.4, I: -0.6, D: 1.5, S: -1.2, E: 0, A: 0, C: 0, H: 0, V: 0 },
   }),
   doer: A({
     id: "doer",
@@ -374,9 +381,9 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     shineIn: ["Execution & delivery", "Operations", "Turning plans into results"],
     growthEdge: "Pause to ask “is this still the right thing?” — then finish it brilliantly.",
     thisWeek: "Finish one lingering thing, and celebrate it out loud.",
-    powerDuo: ["explorer", "detective", "dreamer"],
-    edge: { kind: "opposite", id: "maverick" },
-    profile: { O: -0.5, I: 0, D: 2, S: 1, E: 0, A: 0.5, C: 0, H: 0 },
+    powerDuo: ["maverick", "detective", "explorer"],
+    edge: { kind: "opposite", id: "dreamer" },
+    profile: { O: -0.5, I: 0, D: 1.8, S: 1.2, E: 0, A: 0, C: 0, H: 0, V: -0.2 },
   }),
   connector: A({
     id: "connector",
@@ -402,9 +409,9 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     shineIn: ["Community & partnerships", "Hiring", "Events & business development"],
     growthEdge: "Go deep with a few — your best connections deserve your time.",
     thisWeek: "Introduce two people who should know each other.",
-    powerDuo: ["explorer", "doer"],
+    powerDuo: ["explorer", "doer", "maverick"],
     edge: { kind: "clash", id: "detective" },
-    profile: { O: 0, I: 0, D: 0, S: 0, E: 2, A: 0, C: 1, H: 0.5 },
+    profile: { O: 0, I: 0, D: 0, S: 0, E: 1.8, A: 0, C: 1, H: 0, V: 0 },
   }),
   mentor: A({
     id: "mentor",
@@ -430,9 +437,9 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     shineIn: ["Coaching & leadership", "Teaching", "Growing people"],
     growthEdge: "Take your own advice — you deserve the care you give.",
     thisWeek: "Ask someone you're helping what they'd love to learn next.",
-    powerDuo: ["doer"],
-    edge: { kind: "opposite", id: "spark" },
-    profile: { O: 0, I: 1, D: 0, S: 0, E: -0.5, A: 0, C: 2, H: 0.5 },
+    powerDuo: ["doer", "peacemaker", "explorer"],
+    edge: { kind: "opposite", id: "dreamer" },
+    profile: { O: 0, I: 1, D: 0, S: 0, E: -0.6, A: 0, C: 2, H: 0, V: 0 },
   }),
   peacemaker: A({
     id: "peacemaker",
@@ -458,9 +465,9 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     shineIn: ["Leading teams", "Negotiation", "Culture & community"],
     growthEdge: "Say what you think — your view is part of the harmony.",
     thisWeek: "Share one honest opinion you've been holding back.",
-    powerDuo: ["explorer", "doer", "dreamer"],
+    powerDuo: ["explorer", "doer", "detective"],
     edge: { kind: "clash", id: "maverick" },
-    profile: { O: 0, I: 0, D: 0, S: 0.5, E: 0, A: -1, C: 1, H: 2 },
+    profile: { O: 0, I: 0, D: 0, S: 0, E: 0, A: -1, C: 0.8, H: 2, V: -0.3 },
   }),
 };
 
@@ -512,18 +519,18 @@ export type MatrixCode = "BM" | "PD" | "GC" | "FF" | "BC";
 const ORDER: ArchetypeId[] = ["dreamer", "explorer", "creator", "maverick", "detective", "strategist", "spark", "maker", "doer", "connector", "mentor", "peacemaker"];
 
 const ROWS = [
-  "BM BM BM GC GC PD GC BM PD GC BC PD",
-  "BM BM BM PD PD PD PD PD PD PD GC PD",
-  "BM BM BM BC BC GC GC GC PD GC GC GC",
-  "GC PD BC BM GC GC FF PD PD BC BC FF",
-  "GC PD BC GC BM BM FF GC PD GC BM GC",
-  "PD PD GC GC BM BM FF BM BM GC GC GC",
-  "GC PD GC FF FF FF BM BM PD BM BC BC",
-  "BM PD GC PD GC BM BM BM BM GC GC GC",
-  "PD PD PD PD PD BM PD BM BM PD PD PD",
-  "GC PD GC BC GC GC BM GC PD BM BM BM",
-  "BC GC GC BC BM GC BC GC PD BM BM BM",
-  "PD PD GC FF GC GC BC GC PD BM BM BM",
+  "BM BM BM BC BC GC GC PD PD BC BC BC",
+  "BM BM BM PD BM PD PD PD PD PD GC PD",
+  "BM BM BM PD PD GC GC BM PD GC BC BC",
+  "BC PD PD BM GC BM FF PD PD BC GC FF",
+  "BC BM PD GC BM BM GC GC PD GC BM PD",
+  "GC PD GC BM BM BM FF FF BM GC BM GC",
+  "GC PD GC FF GC FF BM BM PD BM GC GC",
+  "PD PD BM PD GC FF BM BM BM GC GC GC",
+  "PD PD PD PD PD BM PD BM BM GC GC PD",
+  "BC PD GC BC GC GC BM GC GC BM BM GC",
+  "BC GC BC GC BM BM GC GC GC BM BM GC",
+  "BC PD BC FF PD GC GC GC PD GC GC BM",
 ].map((r) => r.split(" ") as MatrixCode[]);
 
 export function matrixCode(a: ArchetypeId, b: ArchetypeId): MatrixCode {

@@ -2,25 +2,26 @@ import { ARCHETYPES, ARCHETYPE_IDS, TRAITS, TRAIT_INFO, type ArchetypeId, type T
 import { CALLS, CHECKS, ENERGY, RANKS, RATHER, SLIDERS, TENDENCIES, TENDENCY_VALUE, VALUES, type Loading } from "./rounds";
 
 /**
- * Brain-Mate v4 scoring: five answer formats → eight trait scores →
+ * Brain-Mate v5 scoring: five answer formats → nine trait scores →
  * nearest archetype, with double-checks where the formats disagree.
  *
  * Pure and deterministic. The server recomputes everything from the raw
  * answers; the game runs the same code live for the narrowing ring, the
  * constellation, the double-checks and each duel card.
  *
- * Constants fitted by simulation (scripts/brain-mate-sim: final4/export4).
+ * Constants fitted by simulation (scripts/brain-mate-sim: sim9 / export9.cjs,
+ * which runs this compiled file against synthetic players).
  * Refit NORM and BIAS from real answers once a few hundred people have
  * played — and use the optional "energy" answer to check no life stage is
  * being nudged toward particular archetypes.
  */
 
-export const VERSION = 4;
+export const VERSION = 5;
 
 export type DuelAnswer = { a: ArchetypeId; b: ArchetypeId; pick: ArchetypeId };
 
 export type Answers = {
-  v: 4;
+  v: 5;
   /** would-you-rather id → 1 if the high end was chosen */
   rather: Record<string, number>;
   /** tendency id → 0..3 (Rarely … Almost always) */
@@ -42,26 +43,26 @@ export type Answers = {
 
 export type Traits = Record<Trait, number>;
 
-const NORM = { mu: [-0.0009, -0.002, -0.0006, -0.002, 0.0051, 0.0004, 0.0016, -0.0069], sd: [0.7191, 0.6879, 0.6999, 0.8112, 0.7745, 0.7682, 0.7321, 0.7861] };
-const NORM_CHOICE = { mu: [0.0008, -0.0008, -0.002, 0.0002, 0.0071, 0.0018, -0.0003, -0.0057], sd: [0.6946, 0.6538, 0.6684, 0.789, 0.7635, 0.7422, 0.7014, 0.7553] };
-const NORM_LEVEL = { mu: [-0.0078, -0.0066, 0.0029, -0.0056, 0.0018, -0.0025, 0.0055, -0.0094], sd: [1.1315, 1.1371, 0.9576, 0.9981, 0.9584, 0.9796, 0.9609, 0.9998] };
+const NORM = { mu: [0.004, 0.007, -0.0028, -0.0033, 0.0015, -0.007, -0.0009, 0.0038, 0.0017], sd: [0.7843, 0.6945, 0.6715, 0.8046, 0.7751, 0.7699, 0.7347, 0.7773, 0.7622] };
+const NORM_CHOICE = { mu: [0.0047, 0.007, -0.0031, -0.0046, 0.0014, -0.008, -0.0006, 0.0021, -0.0004], sd: [0.7669, 0.6623, 0.6355, 0.7823, 0.7646, 0.7434, 0.7027, 0.7448, 0.7057] };
+const NORM_LEVEL = { mu: [0.0015, 0.0073, -0.0019, -0.0011, 0.0016, -0.005, -0.0015, 0.0073, 0.0045], sd: [1.1325, 1.1348, 0.9576, 0.993, 0.9586, 0.9864, 0.9641, 0.9967, 1.0091] };
 const BIAS: Record<ArchetypeId, number> = {
-  dreamer: 0.126,
-  explorer: -0.021,
-  creator: 0.139,
-  maverick: -0.069,
-  detective: -0.002,
-  strategist: -0.011,
-  spark: -0.027,
-  maker: 0.051,
-  doer: -0.094,
-  connector: 0.014,
-  mentor: 0.012,
-  peacemaker: -0.118,
+  dreamer: -0.013,
+  explorer: 0.031,
+  creator: 0.097,
+  maverick: -0.008,
+  detective: 0.063,
+  strategist: 0.008,
+  spark: -0.04,
+  maker: 0.053,
+  doer: -0.136,
+  connector: 0.04,
+  mentor: 0.041,
+  peacemaker: -0.136,
 };
 
-/** Choice-style vs strength-style disagreement that triggers double-checks (≈1 player in 4). */
-const CONTRADICTION = 1.7;
+/** Choice-style vs strength-style disagreement that triggers double-checks (≈1 player in 5). */
+const CONTRADICTION = 1.8;
 const MAX_CHECKED_TRAITS = 3;
 export const DUEL_COUNT = 3;
 const DUEL_STEP = 0.45;
@@ -77,6 +78,11 @@ const PROFILE: Record<ArchetypeId, number[]> = Object.fromEntries(
 type Part = "all" | "choice" | "level";
 
 function raw(a: Partial<Answers>, part: Part = "all"): (number | null)[] {
+  return rawScores(a, part);
+}
+
+/** Exported for the fitting script only (scripts/brain-mate-sim/export9.cjs). */
+export function rawScores(a: Partial<Answers>, part: Part = "all"): (number | null)[] {
   const sum = TRAITS.map(() => 0);
   const n = TRAITS.map(() => 0);
   const add = (load: Loading, value: number, w = 1) =>
@@ -201,7 +207,7 @@ export function cleanAnswers(input: unknown): Answers | null {
   if (!input || typeof input !== "object") return null;
   const r = input as Record<string, unknown>;
   const obj = (k: string) => (r[k] && typeof r[k] === "object" && !Array.isArray(r[k]) ? (r[k] as Record<string, unknown>) : {});
-  const out: Answers = { v: 4, rather: {}, tend: {}, calls: {}, ranks: {}, sliders: {}, values: [], checks: {}, duels: [] };
+  const out: Answers = { v: 5, rather: {}, tend: {}, calls: {}, ranks: {}, sliders: {}, values: [], checks: {}, duels: [] };
   const bit = (v: unknown) => (v === 0 || v === 1 ? v : null);
   for (const x of RATHER) {
     const v = bit(obj("rather")[x.id]);
@@ -302,8 +308,10 @@ export function showUp(t: Traits): { team: string; talk: string; pressure: strin
         ? "You're the one who makes the call when everyone's stuck."
         : t.D >= 0.6
           ? "You're the one who gets it over the line."
-          : t.O >= 0.6
-            ? "You bring the ideas nobody else thought of."
+          : t.V >= 0.8
+            ? "You set the bar higher than anyone thought it could go."
+            : t.O >= 0.6
+              ? "You bring the ideas nobody else thought of."
             : t.H >= 0.6
               ? "You're the glue — people work better with you around."
               : t.I >= 0.6
@@ -334,7 +342,9 @@ export function showUp(t: Traits): { team: string; talk: string; pressure: strin
           ? "You go back to the plan, and calm spreads from there."
           : t.D >= 0.6
             ? "You put your head down and get it done."
-            : t.O >= 0.6
+            : t.V >= 0.6
+              ? "You keep your eyes on the big goal while everyone else is lost in the weeds."
+              : t.O >= 0.6
               ? "You find another way round when the obvious one is blocked."
               : t.C >= 0.6
                 ? "You check everyone's okay before you check the deadline."
@@ -361,6 +371,7 @@ export const HIGH_PHRASE: Record<Trait, string> = {
   A: "a natural lead",
   C: "reading the room",
   H: "keeping the peace",
+  V: "dreaming big",
 };
 export const LOW_PHRASE: Record<Trait, string> = {
   O: "loyal to what works",
@@ -371,6 +382,7 @@ export const LOW_PHRASE: Record<Trait, string> = {
   A: "happy to back the lead",
   C: "problem first",
   H: "not afraid of the hard thing",
+  V: "goals you actually hit",
 };
 
 export const callLabel = (key: string) => {
@@ -433,13 +445,14 @@ export function montageWords(a: Partial<Answers>): string[] {
 // ------------------------------------------------------- constellation
 export const STAR_POS: Record<Trait, [number, number]> = {
   O: [50, 10],
-  I: [80, 22],
-  D: [90, 52],
-  S: [76, 82],
-  E: [48, 90],
-  A: [20, 80],
-  C: [10, 50],
-  H: [22, 20],
+  V: [76, 19],
+  I: [89, 43],
+  D: [85, 70],
+  S: [64, 88],
+  E: [36, 88],
+  A: [15, 70],
+  C: [11, 43],
+  H: [24, 19],
 };
 
 export const TRAIT_COLOR: Record<Trait, string> = {
@@ -451,6 +464,7 @@ export const TRAIT_COLOR: Record<Trait, string> = {
   A: "#FF6B4A",
   C: "#4E8F6B",
   H: "#1D5C45",
+  V: "#C026D3",
 };
 
 export function starLight(a: Partial<Answers>): Record<Trait, number> {

@@ -16,7 +16,7 @@ import { WavelengthCta } from "./Share";
  *   who you are → your top strengths → how you show up → your people →
  *   your growth edge → ONE action: today's Wavelength check
  *
- * Everything else (the mix, eight traits, how it knew, work with me, your
+ * Everything else (the mix, nine traits, how it knew, work with me, your
  * Wavelengths, sharing the image) folds away under "More about you".
  */
 

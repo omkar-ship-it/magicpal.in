@@ -1,7 +1,7 @@
 import type { Trait } from "./archetypes";
 
 /**
- * Brain-Mate v4 — the question bank.
+ * Brain-Mate v5 — the question bank.
  *
  * Built so the answer reflects the person, not their circumstances. A new
  * parent, a carer, a student in exam season and a founder in launch week
@@ -18,16 +18,20 @@ import type { Trait } from "./archetypes";
  *
  * Five ways of answering, each trait measured 6–8 times across them:
  *
- *   1. Would you rather   8 pairs — the two ends of ONE trait, both appealing
- *   2. Is this you?       8 tendencies — Rarely / Sometimes / Often / Almost always
- *   3. Tough calls        8 dilemmas — two traits pulled against each other
+ *   1. Would you rather   9 pairs — the two ends of ONE trait, both appealing
+ *   2. Is this you?       9 tendencies — Rarely / Sometimes / Often / Almost always
+ *   3. Tough calls        9 dilemmas — two traits pulled against each other
  *   4. Prioritise         3 rounds — push 5 cards up and down
- *   5. Where do you sit?  6 sliders
+ *   5. Where do you sit?  7 sliders
+ *
+ * v5 measures ambition (V, "how big you aim") apart from follow-through
+ * (D, "do you finish"). Every D item is about finishing; every V item is
+ * about the size of the goal, never about the work to reach it.
  *   + Pack your bag (values, similarity only), double-checks when answers
  *     contradict, and the adaptive final duel.
  *
  * Changing a loading changes what the scores mean: re-run
- * scripts/brain-mate-sim (final4 / export4) and refit score.ts.
+ * scripts/brain-mate-sim (sim9 / export9) and refit score.ts.
  */
 
 export type Loading = Partial<Record<Trait, number>>;
@@ -45,6 +49,7 @@ export const RATHER: Rather[] = [
   { id: "w6", trait: "A", hi: { emoji: "🧭", label: "Be the captain who makes the call" }, lo: { emoji: "🗺️", label: "Be the navigator who makes the captain look good" } },
   { id: "w7", trait: "C", hi: { emoji: "💛", label: "Be known as the kindest person in the room" }, lo: { emoji: "🔭", label: "Be known as the sharpest" } },
   { id: "w8", trait: "H", hi: { emoji: "🕊️", label: "Be in a group that never argues" }, lo: { emoji: "🥊", label: "Be in a group that argues well" } },
+  { id: "w9", trait: "V", hi: { emoji: "🏔️", label: "Go after a huge goal that might not work" }, lo: { emoji: "🎯", label: "Nail a smaller goal you know you'll hit" } },
 ];
 
 /** Is this you? Tendencies in settings everyone has. Agreeing scores high. */
@@ -59,6 +64,7 @@ export const TENDENCIES: Tendency[] = [
   { id: "t6", trait: "A", text: "When a group can't decide, I end up making the call." },
   { id: "t7", trait: "C", text: "I notice when someone close to me is off, before they say anything." },
   { id: "t8", trait: "H", text: "I let things go to keep the peace." },
+  { id: "t9", trait: "V", text: "I set goals bigger than what feels comfortable." },
 ];
 export const TENDENCY_SCALE = ["Rarely", "Sometimes", "Often", "Almost always"] as const;
 export const TENDENCY_VALUE = [-1.5, -0.5, 0.5, 1.5];
@@ -112,8 +118,14 @@ export const CALLS: Call[] = [
   {
     id: "c8",
     prompt: "Something new is starting. What pulls you in first?",
-    a: { trait: "O", emoji: "🔭", label: "Picturing where it could be in five years" },
+    a: { trait: "V", emoji: "🔭", label: "Picturing where it could be in five years" },
     b: { trait: "I", emoji: "⚙️", label: "Working out how it actually works" },
+  },
+  {
+    id: "c9",
+    prompt: "Two paths open up. You'd pick…",
+    a: { trait: "V", emoji: "🌋", label: "The bold one — huge if it works" },
+    b: { trait: "D", emoji: "🧱", label: "The solid one you know you'll see through" },
   },
 ];
 
@@ -167,6 +179,7 @@ export const SLIDERS: Slider[] = [
   { id: "l4", trait: "A", prompt: "In a group", left: "I follow a good lead", right: "I end up leading" },
   { id: "l5", trait: "E", prompt: "After a busy, people-heavy day", left: "I need quiet", right: "I want more" },
   { id: "l6", trait: "C", prompt: "When someone vents to you", left: "I offer solutions", right: "I offer comfort" },
+  { id: "l7", trait: "V", prompt: "Your goals", left: "Steady and doable", right: "Big and bold" },
 ];
 
 /** Double-check cards: two per trait, one each way. Agree / not me. */
@@ -189,6 +202,8 @@ export const CHECKS: CheckCard[] = [
   { id: "cC2", text: "I'd rather fix the problem than talk about feelings.", trait: "C", sign: -1 },
   { id: "cH1", text: "I let small things go to keep the peace.", trait: "H", sign: 1 },
   { id: "cH2", text: "I say what I think, even if it stings.", trait: "H", sign: -1 },
+  { id: "cV1", text: "I'd rather aim too high than too low.", trait: "V", sign: 1 },
+  { id: "cV2", text: "Small, steady wins suit me better than big bets.", trait: "V", sign: -1 },
 ];
 
 /** Schwartz's values, in plain words. Pick two. */
@@ -229,7 +244,7 @@ export const FREE_DAY_ACTIVITY: Record<string, string> = {
   s: "Plan something together — one of you books, one of you improvises.",
 };
 
-/** The friend's view: eight quick sliders about the other person. */
+/** The friend's view: nine quick sliders about the other person. */
 export const VIEW_SLIDERS: { trait: Trait; left: string; right: string }[] = [
   { trait: "O", left: "Sticks with what works", right: "Always trying new things" },
   { trait: "I", left: "Just gets on with it", right: "Always asks why" },
@@ -239,4 +254,5 @@ export const VIEW_SLIDERS: { trait: Trait; left: string; right: string }[] = [
   { trait: "A", left: "Backs the lead", right: "Takes the lead" },
   { trait: "C", left: "Problem-solver", right: "Big-hearted" },
   { trait: "H", left: "Says it straight", right: "Keeps the peace" },
+  { trait: "V", left: "Keeps goals steady", right: "Dreams big" },
 ];
