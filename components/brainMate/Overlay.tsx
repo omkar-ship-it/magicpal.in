@@ -105,7 +105,7 @@ export default function Overlay({ mode, onClose, onSection }: { mode: OverlayMod
         >
           ✕
         </button>
-        <div className="relative z-0 h-full overflow-y-auto overscroll-contain">
+        <div className="bm-scroll relative z-0 h-full overflow-y-auto overscroll-contain">
           {view.v === "loading" && <div className="grid h-full place-items-center text-[15px] font-semibold text-[var(--bm-soft)]">One moment…</div>}
 
           {view.v === "auth" && (

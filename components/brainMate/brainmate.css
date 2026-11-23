@@ -703,3 +703,40 @@
 @media (prefers-reduced-motion: reduce) {
   .bm-map-card, .bm-map-face, .bm-map-chip { animation: none; }
 }
+
+/* ----------------------------------------- a quiet scrollbar in the window */
+.bm-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--bm-ink) 22%, transparent) transparent;
+  scrollbar-gutter: stable;
+}
+.bm-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.bm-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.bm-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--bm-ink) 20%, transparent);
+  border-radius: 999px;
+}
+.bm-scroll::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--bm-ink) 35%, transparent);
+}
+
+/* --------------------------------------------------- prioritise arrows */
+.bm-rank-arrow {
+  background: color-mix(in srgb, var(--bm-ink) 7%, transparent);
+  color: var(--bm-ink);
+  transition: transform 0.25s var(--bm-spring), background 0.2s, color 0.2s, opacity 0.2s;
+}
+.bm-rank-arrow:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--bm-brand) 16%, transparent);
+  color: var(--bm-brand);
+}
+.bm-rank-arrow:active:not(:disabled) {
+  transform: scale(0.88);
+}
+.bm-rank-arrow:disabled {
+  opacity: 0.22;
+}

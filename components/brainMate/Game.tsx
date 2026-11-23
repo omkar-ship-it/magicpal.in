@@ -916,23 +916,26 @@ function RankView({
                 {c.emoji}
               </span>
               <span className="flex-1 text-[14.5px] font-bold leading-tight">{c.label}</span>
-              <span className="flex flex-col">
-                <button
-                  className="grid h-6 w-9 place-items-center rounded-t-lg bg-[var(--bm-line)] text-[13px] font-extrabold disabled:opacity-30"
-                  disabled={pos === 0}
-                  onClick={() => move(c.id, -1)}
-                  aria-label={`Push ${c.label} up`}
-                >
-                  ▲
-                </button>
-                <button
-                  className="mt-0.5 grid h-6 w-9 place-items-center rounded-b-lg bg-[var(--bm-line)] text-[13px] font-extrabold disabled:opacity-30"
-                  disabled={pos === order.length - 1}
-                  onClick={() => move(c.id, 1)}
-                  aria-label={`Push ${c.label} down`}
-                >
-                  ▼
-                </button>
+              {/* Two separate, thumb-sized arrows — up and down are different
+                  actions, so they get different buttons. */}
+              <span className="flex flex-none items-center gap-1.5">
+                {([-1, 1] as const).map((dir) => {
+                  const off = dir < 0 ? pos === 0 : pos === order.length - 1;
+                  return (
+                    <button
+                      key={dir}
+                      type="button"
+                      className="bm-rank-arrow grid h-9 w-9 place-items-center rounded-full"
+                      disabled={off}
+                      onClick={() => move(c.id, dir)}
+                      aria-label={`Push ${c.label} ${dir < 0 ? "up" : "down"}`}
+                    >
+                      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" style={{ transform: dir > 0 ? "rotate(180deg)" : undefined }}>
+                        <path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                  );
+                })}
               </span>
             </div>
           );
