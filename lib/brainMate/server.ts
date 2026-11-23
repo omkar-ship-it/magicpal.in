@@ -279,16 +279,19 @@ export async function viewsOf(userId: string): Promise<{ by: string; traits: Tra
     .select()
     .from(brainMateLinks)
     .where(or(eq(brainMateLinks.senderId, userId), eq(brainMateLinks.recipientId, userId)));
-  const out: { by: string; traits: Traits; raw: Record<string, number> }[] = [];
-  for (const l of rows) {
+  const given = rows.flatMap((l) => {
     const isSender = l.senderId === userId;
     const v = (isSender ? l.viewOfSender : l.viewOfRecipient) as Record<string, number> | null;
     const raterId = isSender ? l.recipientId : l.senderId;
-    if (!v || !raterId) continue;
-    const rater = await getBrainMate(raterId);
-    out.push({ by: (rater?.displayName ?? "A friend").split(" ")[0], traits: viewToTraits(v), raw: v });
-  }
-  return out;
+    return v && raterId ? [{ v, raterId }] : [];
+  });
+  // In parallel — see myLinks.
+  return Promise.all(
+    given.map(async ({ v, raterId }) => {
+      const rater = await getBrainMate(raterId);
+      return { by: (rater?.displayName ?? "A friend").split(" ")[0], traits: viewToTraits(v), raw: v };
+    })
+  );
 }
 
 /** A player of a finished link rates the other one. Once each. */
@@ -344,35 +347,39 @@ export async function myLinks(userId: string, tz: string): Promise<MyLink[]> {
     .orderBy(desc(brainMateLinks.createdAt))
     .limit(60);
   const { day } = localDay(tz);
-  const out: MyLink[] = [];
-  for (const l of rows) {
-    const sent = l.senderId === userId;
-    const state = stateOf(l);
-    let otherName = l.recipientName;
-    let extra: Partial<MyLink> = {};
-    if (state === "done") {
-      const c = await comparisonFor(l);
-      if (c) {
-        otherName = sent ? c.b.name : c.a.name;
-        extra = { otherArchetype: sent ? c.b.archetype : c.a.archetype, outcome: c.outcome, similarity: c.similarity };
+  // Every row's lookups at once, not one after another: on the production
+  // database each one is a network round trip, and a member with a dozen
+  // Wavelengths was waiting for them in series.
+  const out: MyLink[] = await Promise.all(
+    rows.map(async (l) => {
+      const sent = l.senderId === userId;
+      const state = stateOf(l);
+      let otherName = l.recipientName;
+      let extra: Partial<MyLink> = {};
+      if (state === "done") {
+        const c = await comparisonFor(l);
+        if (c) {
+          otherName = sent ? c.b.name : c.a.name;
+          extra = { otherArchetype: sent ? c.b.archetype : c.a.archetype, outcome: c.outcome, similarity: c.similarity };
+        }
+      } else if (!sent) {
+        const s = await getBrainMate(l.senderId);
+        otherName = s?.displayName ?? "Someone";
       }
-    } else if (!sent) {
-      const s = await getBrainMate(l.senderId);
-      otherName = s?.displayName ?? "Someone";
-    }
-    out.push({
-      slug: l.slug,
-      direction: sent ? "sent" : "received",
-      otherName: otherName.split(" ")[0],
-      relation: l.relation as "friend" | "colleague",
-      state,
-      expiresAt: l.expiresAt.toISOString(),
-      nudged: Boolean(l.nudgedAt),
-      createdAt: l.createdAt.toISOString(),
-      sentToday: sent && l.senderDay === day,
-      ...extra,
-    });
-  }
+      return {
+        slug: l.slug,
+        direction: sent ? "sent" : "received",
+        otherName: otherName.split(" ")[0],
+        relation: l.relation as "friend" | "colleague",
+        state,
+        expiresAt: l.expiresAt.toISOString(),
+        nudged: Boolean(l.nudgedAt),
+        createdAt: l.createdAt.toISOString(),
+        sentToday: sent && l.senderDay === day,
+        ...extra,
+      } as MyLink;
+    })
+  );
   return out;
 }
 

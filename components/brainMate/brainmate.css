@@ -760,3 +760,25 @@
   font-weight: 600;
   letter-spacing: -0.005em;
 }
+
+/* --------------------------------------- inside a map window (desktop) */
+/* The window draws its own title bar, close, minimise and maximise, so the
+   sheet's room for a floating close button goes, and the scroller fills
+   whatever size the window is dragged to. */
+.bm-windowed > .bm-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+}
+.bm-windowed .bm-shell {
+  padding-top: 18px;
+}
+.bm-windowed .bm-card-page {
+  padding-top: 1rem;
+}
+/* Maximised, the window is the whole screen; the content keeps a readable column. */
+.bm-windowed > .bm-scroll > * {
+  width: 100%;
+  max-width: 34rem;
+  margin-inline: auto;
+}

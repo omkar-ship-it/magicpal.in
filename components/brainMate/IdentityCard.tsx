@@ -125,7 +125,7 @@ export default function IdentityCard({
   }, [focusWavelength]);
 
   return (
-    <div className="flex flex-col gap-3 px-4 pb-8 pt-14">
+    <div className="bm-card-page flex flex-col gap-3 px-4 pb-8 pt-14">
       {/* ------------------------------------------------------- the card */}
       <section className="bm-card relative overflow-hidden text-center">
         <div

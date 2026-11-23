@@ -39,8 +39,37 @@ type View =
   | { v: "challenge" }
   | { v: "link"; slug: string; reveal: boolean };
 
-export default function Overlay({ mode, onClose, onSection }: { mode: OverlayMode; onClose: () => void; onSection?: (i: number) => void }) {
-  const [me, setMe] = useState<MeState | null>(null);
+/**
+ * The card, fetched ahead of time. The map warms it once it has loaded, so
+ * opening "Your Archetype" shows the card at once and refreshes it quietly
+ * behind — rather than a "One moment…" every time.
+ */
+let warm: { me: MeState; at: number } | null = null;
+const WARM_MS = 5 * 60_000;
+
+export function prefetchBrainMate() {
+  if (warm && Date.now() - warm.at < WARM_MS) return;
+  void fetch("/api/brain-mate/me", { cache: "no-store" })
+    .then((r) => (r.ok ? (r.json() as Promise<MeState>) : null))
+    .then((me) => {
+      if (me) warm = { me, at: Date.now() };
+    })
+    .catch(() => {});
+}
+
+export default function Overlay({
+  mode,
+  onClose,
+  onSection,
+  windowed = false,
+}: {
+  mode: OverlayMode;
+  onClose: () => void;
+  onSection?: (i: number) => void;
+  /** Inside a map window (desktop): no backdrop and no close button of its own — the window has them. */
+  windowed?: boolean;
+}) {
+  const [me, setMe] = useState<MeState | null>(() => warm?.me ?? null);
   const [view, setView] = useState<View>({ v: "loading" });
   const [link, setLink] = useState<LinkPayload | null>(null);
   const [linkError, setLinkError] = useState("");
@@ -48,6 +77,7 @@ export default function Overlay({ mode, onClose, onSection }: { mode: OverlayMod
   const loadMe = useCallback(async () => {
     const res = await fetch("/api/brain-mate/me", { cache: "no-store" });
     const data = (await res.json()) as MeState;
+    warm = { me: data, at: Date.now() };
     setMe(data);
     return data;
   }, []);
@@ -66,7 +96,10 @@ export default function Overlay({ mode, onClose, onSection }: { mode: OverlayMod
   /** Decide what to show from the mode and who's looking. */
   const route = useCallback(
     async (m: OverlayMode) => {
-      const state = await loadMe();
+      // Show the warm copy at once and refresh behind it; fetch only when there isn't one.
+      const cached = warm?.me.signedIn ? warm.me : null;
+      const state = cached ?? (await loadMe());
+      if (cached) void loadMe();
       if (!state.signedIn) return setView({ v: "auth" });
       if (m.kind === "link") {
         await loadLink(m.slug);
@@ -85,20 +118,116 @@ export default function Overlay({ mode, onClose, onSection }: { mode: OverlayMod
     void Promise.resolve().then(() => route(mode));
   }, [mode, route]);
 
-  // Escape closes it, like every other window.
+  // Escape closes it, like every other window (the map window handles its own).
   useEffect(() => {
+    if (windowed) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, windowed]);
 
   const signedIn = me?.signedIn ? me : null;
+
+  const body = (
+    <>
+      <TzCookie />
+        <div className="bm-scroll relative z-0 h-full overflow-y-auto overscroll-contain">
+        {view.v === "loading" && <div className="grid h-full place-items-center text-[15px] font-semibold text-[var(--bm-soft)]">One moment…</div>}
+
+        {view.v === "auth" && (
+          <div className="bm-shell justify-center gap-5">
+            <p className="text-[13px] font-extrabold tracking-[0.14em] text-[var(--bm-brand)]">READY FOR A SMALL GAME? 🎲</p>
+            <h2 className="bm-display text-[2.2rem]">Which of 12 minds are you?</h2>
+            <p className="text-[15px] text-[var(--bm-soft)]">3 minutes, no right answers. Sign in with your email to play — it&apos;s how your card and your Wavelengths are saved.</p>
+            <AuthGate cta="Let's play" onDone={() => void route(mode)} />
+          </div>
+        )}
+
+        {view.v === "game" && signedIn && (
+          <Game
+            defaultName={signedIn.defaultName}
+            needsTerms={signedIn.needsTerms}
+            link={view.link}
+            stats={signedIn.stats}
+            previous={signedIn.previous}
+            onSection={onSection}
+            onDone={async ({ linkSlug, then }) => {
+              if (linkSlug) {
+                await loadLink(linkSlug);
+                await loadMe();
+                setView({ v: "link", slug: linkSlug, reveal: true });
+              } else {
+                await loadMe();
+                setView(then === "card" ? { v: "card" } : { v: "challenge" });
+              }
+            }}
+          />
+        )}
+
+        {view.v === "card" && signedIn?.card && (
+          <IdentityCard
+            card={signedIn.card}
+            focusWavelength={Boolean(view.wavelength)}
+            onReplay={() => setView({ v: "game", link: null })}
+            onOpenLink={async (slug) => {
+              await loadLink(slug);
+              setView({ v: "link", slug, reveal: false });
+            }}
+          />
+        )}
+
+        {view.v === "challenge" && signedIn?.card && (
+          <ChallengeView
+            name={signedIn.card.name}
+            origin={signedIn.card.origin}
+            today={signedIn.card.today}
+            onCard={() => setView({ v: "card" })}
+            onOpenLink={async (slug) => {
+              await loadLink(slug);
+              setView({ v: "link", slug, reveal: false });
+            }}
+          />
+        )}
+
+        {view.v === "link" &&
+          (linkError ? (
+            <div className="bm-shell items-center justify-center gap-4 text-center">
+              <span className="text-[3rem]">🤷</span>
+              <p className="text-[17px] font-bold">{linkError}</p>
+              <button className="bm-btn bm-btn-brand" onClick={() => setView({ v: "game", link: null })}>
+                Play Brain-Mate
+              </button>
+            </div>
+          ) : link ? (
+            <LinkView
+              link={link}
+              reveal={view.reveal}
+              onPlay={() => setView({ v: "game", link: { slug: link.slug, sender: link.senderName } })}
+              onRetake={() => setView({ v: "game", link: null })}
+              onMyCard={() => setView(signedIn?.card ? { v: "card" } : { v: "game", link: null })}
+              onMyCardWavelength={() => setView(signedIn?.card ? { v: "card", wavelength: true } : { v: "game", link: null })}
+              onClaimed={async () => {
+                await loadLink(link.slug);
+                setView({ v: "link", slug: link.slug, reveal: true });
+              }}
+            />
+          ) : null)}
+      </div>
+    </>
+  );
+
+  if (windowed) {
+    return (
+      <div className="bm-root bm-embedded bm-windowed relative -m-3 flex min-h-0 flex-1 flex-col overflow-hidden" role="region" aria-label="Brain-Mate">
+        {body}
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-[80]" role="dialog" aria-modal="true" aria-label="Brain-Mate">
       <button type="button" aria-label="Close Brain-Mate" className="absolute inset-0 bg-black/35 backdrop-blur-[2px]" onClick={onClose} />
       <div className="bm-root bm-embedded absolute inset-0 overflow-hidden sm:inset-auto sm:left-1/2 sm:top-1/2 sm:h-[min(880px,94dvh)] sm:w-[30rem] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[28px] sm:shadow-[0_40px_90px_-30px_rgba(0,0,0,0.6)]">
-        <TzCookie />
         <button
           type="button"
           onClick={onClose}
@@ -107,88 +236,7 @@ export default function Overlay({ mode, onClose, onSection }: { mode: OverlayMod
         >
           ✕
         </button>
-        <div className="bm-scroll relative z-0 h-full overflow-y-auto overscroll-contain">
-          {view.v === "loading" && <div className="grid h-full place-items-center text-[15px] font-semibold text-[var(--bm-soft)]">One moment…</div>}
-
-          {view.v === "auth" && (
-            <div className="bm-shell justify-center gap-5">
-              <p className="text-[13px] font-extrabold tracking-[0.14em] text-[var(--bm-brand)]">READY FOR A SMALL GAME? 🎲</p>
-              <h2 className="bm-display text-[2.2rem]">Which of 12 minds are you?</h2>
-              <p className="text-[15px] text-[var(--bm-soft)]">3 minutes, no right answers. Sign in with your email to play — it&apos;s how your card and your Wavelengths are saved.</p>
-              <AuthGate cta="Let's play" onDone={() => void route(mode)} />
-            </div>
-          )}
-
-          {view.v === "game" && signedIn && (
-            <Game
-              defaultName={signedIn.defaultName}
-              needsTerms={signedIn.needsTerms}
-              link={view.link}
-              stats={signedIn.stats}
-              previous={signedIn.previous}
-              onSection={onSection}
-              onDone={async ({ linkSlug, then }) => {
-                if (linkSlug) {
-                  await loadLink(linkSlug);
-                  await loadMe();
-                  setView({ v: "link", slug: linkSlug, reveal: true });
-                } else {
-                  await loadMe();
-                  setView(then === "card" ? { v: "card" } : { v: "challenge" });
-                }
-              }}
-            />
-          )}
-
-          {view.v === "card" && signedIn?.card && (
-            <IdentityCard
-              card={signedIn.card}
-              focusWavelength={Boolean(view.wavelength)}
-              onReplay={() => setView({ v: "game", link: null })}
-              onOpenLink={async (slug) => {
-                await loadLink(slug);
-                setView({ v: "link", slug, reveal: false });
-              }}
-            />
-          )}
-
-          {view.v === "challenge" && signedIn?.card && (
-            <ChallengeView
-              name={signedIn.card.name}
-              origin={signedIn.card.origin}
-              today={signedIn.card.today}
-              onCard={() => setView({ v: "card" })}
-              onOpenLink={async (slug) => {
-                await loadLink(slug);
-                setView({ v: "link", slug, reveal: false });
-              }}
-            />
-          )}
-
-          {view.v === "link" &&
-            (linkError ? (
-              <div className="bm-shell items-center justify-center gap-4 text-center">
-                <span className="text-[3rem]">🤷</span>
-                <p className="text-[17px] font-bold">{linkError}</p>
-                <button className="bm-btn bm-btn-brand" onClick={() => setView({ v: "game", link: null })}>
-                  Play Brain-Mate
-                </button>
-              </div>
-            ) : link ? (
-              <LinkView
-                link={link}
-                reveal={view.reveal}
-                onPlay={() => setView({ v: "game", link: { slug: link.slug, sender: link.senderName } })}
-                onRetake={() => setView({ v: "game", link: null })}
-                onMyCard={() => setView(signedIn?.card ? { v: "card" } : { v: "game", link: null })}
-                onMyCardWavelength={() => setView(signedIn?.card ? { v: "card", wavelength: true } : { v: "game", link: null })}
-                onClaimed={async () => {
-                  await loadLink(link.slug);
-                  setView({ v: "link", slug: link.slug, reveal: true });
-                }}
-              />
-            ) : null)}
-        </div>
+        {body}
       </div>
     </div>
   );

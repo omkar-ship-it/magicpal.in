@@ -42,7 +42,7 @@ import SignInPanel from "./SignInPanel";
 import ProfilePanel from "./ProfilePanel";
 import PublicOptIn from "./PublicOptIn";
 import HomeInvite, { ProfileBrainMate, type BrainMateStatus } from "./brainMate/HomeInvite";
-import BrainMateOverlay, { type OverlayMode } from "./brainMate/Overlay";
+import BrainMateOverlay, { prefetchBrainMate, type OverlayMode } from "./brainMate/Overlay";
 import LinkedInPrompt from "./LinkedInPrompt";
 import ForYouPanel from "./ForYouPanel";
 import { IconChat, IconHidden, IconX } from "./Icons";
@@ -124,6 +124,13 @@ export default function MapShell({
   // While the Brain-Mate invitation card is up, the off-map nudge waits its turn.
   const [bmFull, setBmFull] = useState(false);
   const [liOpen, setLiOpen] = useState(false);
+  // Warm the archetype card in the background so opening it is instant.
+  const played = signedIn && onboarded && brainMate?.state === "played";
+  useEffect(() => {
+    if (!played) return;
+    const id = window.setTimeout(prefetchBrainMate, 1500);
+    return () => window.clearTimeout(id);
+  }, [played]);
   const bmRouter = useRouter();
   const closeBrainMate = useCallback(() => {
     setBmMode(null);
@@ -232,6 +239,9 @@ export default function MapShell({
     // swapping the list out from under them to show the switches hid the
     // very thing they were reacting to.
     alertSettings: { ...DEFAULT_WINDOW, x: 470, y: 140, w: 400, z: 4 },
+    // Brain-Mate on a desktop: a window like the others (drag, minimise,
+    // maximise, resize), tall enough for the game from the start.
+    brainMate: { ...DEFAULT_WINDOW, x: 472, y: 56, w: 480, h: 700, z: 5 },
     person: { ...DEFAULT_WINDOW, x: 60, y: 120 },
     // Back to the step they stopped on, not to a checklist about it.
     profile: {
@@ -1208,7 +1218,28 @@ export default function MapShell({
         onProfile={() => openWin(signedIn ? "profile" : "signin")}
       />
 
-      {bmMode && (
+      {bmMode && !narrow && (
+        <FloatWindow
+          title="Brain-Mate"
+          state={{ ...wins.brainMate, open: true }}
+          onChange={(n) => win("brainMate", n)}
+          onClose={closeBrainMate}
+          onFocus={() => focus("brainMate")}
+          width={480}
+        >
+          <BrainMateOverlay
+            windowed
+            mode={bmMode}
+            onClose={closeBrainMate}
+            onSection={(i) => {
+              const c = data.centre ?? initial.centre ?? { lat: 17.4065, lng: 78.4772 };
+              setGoTo({ lat: c.lat + 0.018 * Math.sin(i * 1.7), lng: c.lng + 0.022 * Math.cos(i * 1.7), at: Date.now() });
+            }}
+          />
+        </FloatWindow>
+      )}
+
+      {bmMode && narrow && (
         <BrainMateOverlay
           mode={bmMode}
           onClose={closeBrainMate}
