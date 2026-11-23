@@ -98,7 +98,9 @@
 }
 /* The app's primary button. */
 .bm-btn-brand {
-  background: linear-gradient(120deg, var(--brand), var(--brand-deep));
+  /* Coral to a deeper coral in both themes — the app's --brand-deep is a
+     pale peach in dark mode, which left white text unreadable. */
+  background: linear-gradient(120deg, color-mix(in srgb, var(--brand) 92%, #000), color-mix(in srgb, var(--brand) 70%, #000));
   color: #fff;
   box-shadow: 0 10px 22px -12px var(--brand);
 }

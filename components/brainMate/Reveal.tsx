@@ -7,6 +7,7 @@ import { HIGH_PHRASE, LOW_PHRASE, MIN_CROWD, STAR_POS, TRAIT_COLOR, montageWords
 import { ArchetypeMark } from "@/lib/brainMate/symbols";
 import { buzz, tone } from "./feel";
 import { QuickShare } from "./Share";
+import { ENERGY } from "@/lib/brainMate/rounds";
 
 export type RevealData = {
   name: string;
@@ -337,11 +338,42 @@ export default function Reveal({ data }: { data: RevealData }) {
                     See my full archetype card
                   </button>
                 )}
+                {!data.pending && !data.error && <EnergyAsk />}
               </div>
             )}
           </div>
         )}
       </div>
     </main>
+  );
+}
+
+/**
+ * Optional, asked once and quietly: what's taking most of your energy.
+ * Never scored — it lets us check no life stage is nudged toward any
+ * archetype.
+ */
+function EnergyAsk() {
+  const [done, setDone] = useState(false);
+  if (done) return <p className="text-[12px] text-[var(--bm-soft)]">Thanks — noted.</p>;
+  return (
+    <div className="mt-2 border-t border-[var(--bm-line)] pt-4 text-center">
+      <p className="text-[12.5px] text-[var(--bm-soft)]">Optional: what&apos;s taking most of your energy these days?</p>
+      <div className="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1.5 text-[12.5px] font-medium">
+        {ENERGY.map((e) => (
+          <button
+            key={e.id}
+            type="button"
+            className="underline-offset-4 hover:underline"
+            onClick={() => {
+              setDone(true);
+              void fetch("/api/brain-mate/energy", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ energy: e.id }) }).catch(() => {});
+            }}
+          >
+            {e.label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

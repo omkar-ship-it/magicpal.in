@@ -153,7 +153,16 @@ export default function Overlay({ mode, onClose, onSection }: { mode: OverlayMod
           )}
 
           {view.v === "challenge" && signedIn?.card && (
-            <ChallengeView name={signedIn.card.name} origin={signedIn.card.origin} today={signedIn.card.today} onCard={() => setView({ v: "card" })} />
+            <ChallengeView
+              name={signedIn.card.name}
+              origin={signedIn.card.origin}
+              today={signedIn.card.today}
+              onCard={() => setView({ v: "card" })}
+              onOpenLink={async (slug) => {
+                await loadLink(slug);
+                setView({ v: "link", slug, reveal: false });
+              }}
+            />
           )}
 
           {view.v === "link" &&
@@ -371,11 +380,13 @@ function ChallengeView({
   origin,
   today,
   onCard,
+  onOpenLink,
 }: {
   name: string;
   origin: string;
   today: { slug: string; recipient: string; state: "waiting" | "done" | "expired" } | null;
   onCard: () => void;
+  onOpenLink: (slug: string) => void;
 }) {
   return (
     <div className="bm-shell justify-center">
@@ -392,7 +403,7 @@ function ChallengeView({
             Send one person the challenge. When they play, you&apos;ll both see how you click.
           </p>
           <div className="mt-5 text-left">
-            <DailyLink myName={name} origin={origin} today={today} bare />
+            <DailyLink myName={name} origin={origin} today={today} bare onOpenLink={onOpenLink} />
           </div>
         </div>
       </section>

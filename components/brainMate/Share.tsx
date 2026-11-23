@@ -151,6 +151,7 @@ export function DailyLink({
   today,
   origin,
   bare = false,
+  onOpenLink,
 }: {
   myName: string;
   origin: string;
@@ -158,6 +159,8 @@ export function DailyLink({
   today: { slug: string; recipient: string; state: "waiting" | "done" | "expired" } | null;
   /** Inside a screen that already says what this is: no heading of its own. */
   bare?: boolean;
+  /** Open a finished Wavelength in place (the overlay); otherwise it's a link. */
+  onOpenLink?: (slug: string) => void;
 }) {
   const router = useRouter();
   const [name, setName] = useState("");
@@ -168,25 +171,34 @@ export function DailyLink({
   const sent = made ?? today;
   if (sent) {
     const url = `${origin}/brain-mate/${sent.slug}`;
+    const state = made ? "waiting" : (today?.state ?? "waiting");
     return (
-      <div className="flex flex-col gap-3">
-        <div className="rounded-[1.2rem] bg-[var(--sunk)] p-4">
-          <p className="text-[12px] font-extrabold tracking-[0.14em] text-[var(--bm-brand)]">TODAY&apos;S BRAIN-MATE CHECK</p>
-          <p className="mt-1 text-[1.15rem] font-extrabold">
-            {sent.recipient}
-            {today?.state === "done" ? " played ✓" : today?.state === "expired" ? " missed it" : ""}
+      <div className="flex flex-col gap-3 text-center">
+        <div>
+          <p className="text-[11px] font-medium tracking-[0.12em] text-[var(--bm-soft)]">TODAY&apos;S CHALLENGE</p>
+          <p className="mt-1 text-[1.15rem] font-semibold">
+            {state === "done" ? `${sent.recipient} played ✓` : state === "expired" ? `${sent.recipient} missed it` : `Waiting for ${sent.recipient}`}
           </p>
-          <p className="mt-0.5 break-all text-[13px] text-[var(--bm-soft)]">{url.replace(/^https?:\/\//, "")}</p>
         </div>
-        {(made || today?.state === "waiting") && (
+        {state === "done" ? (
+          onOpenLink ? (
+            <button type="button" className="bm-btn bm-btn-brand w-full" onClick={() => onOpenLink(sent.slug)}>
+              See your Wavelength →
+            </button>
+          ) : (
+            <a className="bm-btn bm-btn-brand w-full" href={`/?wl=${sent.slug}`}>
+              See your Wavelength →
+            </a>
+          )
+        ) : state === "waiting" ? (
           <QuickShare
             label={`Send it to ${sent.recipient}`}
             url={url}
             text={`${sent.recipient}, ${myName.split(" ")[0]} wants to find your Wavelength on Brain-Mate. About 3 minutes, then we see how we click:`}
           />
-        )}
-        <p className="text-center text-[13px] font-semibold text-[var(--bm-soft)]">
-          <Countdown to="midnight" prefix="Your next one in " done="A new one is ready — refresh" />
+        ) : null}
+        <p className="text-[12.5px] text-[var(--bm-soft)]">
+          <Countdown to="midnight" prefix="Your next challenge in " done="A new one is ready — refresh" />
         </p>
       </div>
     );
@@ -305,14 +317,16 @@ export function WavelengthCta({
   origin,
   today,
   autoOpen = false,
+  onOpenLink,
 }: {
   myName: string;
   origin: string;
   today: { slug: string; recipient: string; state: "waiting" | "done" | "expired" } | null;
   autoOpen?: boolean;
+  onOpenLink?: (slug: string) => void;
 }) {
   const [open, setOpen] = useState(autoOpen);
-  if (today || open) return <DailyLink myName={myName} origin={origin} today={today} />;
+  if (today || open) return <DailyLink myName={myName} origin={origin} today={today} onOpenLink={onOpenLink} />;
   return (
     <div className="flex flex-col gap-4 text-center">
       <div className="mx-auto flex items-center gap-1.5 rounded-full bg-[var(--bm-card)] px-3 py-1 text-[11.5px] font-bold tracking-[0.12em] text-[var(--bm-brand)]">
