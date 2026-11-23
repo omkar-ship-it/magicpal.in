@@ -12,7 +12,7 @@ import ViewForm from "./ViewForm";
  *
  *   the pair + Share → what you'll love about each other → where you click
  *   → working together (roles, ritual, watch out) → do this together
- *   → how you see each other → (side by side, answer replay)
+ *   → how you see each other → (side by side)
  *
  * Anyone who isn't one of the two gets the pair, the warm lines, and a way
  * to find their own Brain-Mate.
@@ -190,28 +190,6 @@ export default function CompareCard({
                   </div>
                 ))}
               </div>
-              {c.replay.length > 0 && (
-                <div>
-                  <p className="mb-1 text-[11.5px] font-bold tracking-[0.16em] text-[var(--bm-brand)]">ANSWER REPLAY</p>
-                  <div className="flex flex-col divide-y divide-[var(--bm-line)]">
-                    {c.replay.map((r, i) => (
-                      <div key={i} className="py-2.5">
-                        <p className="text-[12px] font-semibold text-[var(--bm-soft)]">
-                          {r.title} {r.same ? "· same 🤝" : ""}
-                        </p>
-                        <div className="mt-1 grid grid-cols-2 gap-3 text-[13.5px]">
-                          <p>
-                            <b style={{ color: A.color }}>{c.a.name}:</b> {r.a}
-                          </p>
-                          <p>
-                            <b style={{ color: B.color }}>{c.b.name}:</b> {r.b}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           </details>
         </>
