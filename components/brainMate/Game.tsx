@@ -931,7 +931,7 @@ function RankView({
                       aria-label={`Push ${c.label} ${dir < 0 ? "up" : "down"}`}
                     >
                       <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" style={{ transform: dir > 0 ? "rotate(180deg)" : undefined }}>
-                        <path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     </button>
                   );
