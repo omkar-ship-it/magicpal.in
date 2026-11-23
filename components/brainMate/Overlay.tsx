@@ -206,6 +206,7 @@ export default function Overlay({
               onRetake={() => setView({ v: "game", link: null })}
               onMyCard={() => setView(signedIn?.card ? { v: "card" } : { v: "game", link: null })}
               onMyCardWavelength={() => setView(signedIn?.card ? { v: "card", wavelength: true } : { v: "game", link: null })}
+              onChallenge={() => setView(signedIn?.card ? { v: "challenge" } : { v: "game", link: null })}
               onClaimed={async () => {
                 await loadLink(link.slug);
                 setView({ v: "link", slug: link.slug, reveal: true });
@@ -249,6 +250,7 @@ function LinkView({
   onRetake,
   onMyCard,
   onMyCardWavelength,
+  onChallenge,
   onClaimed,
 }: {
   link: LinkPayload;
@@ -257,6 +259,7 @@ function LinkView({
   onRetake: () => void;
   onMyCard: () => void;
   onMyCardWavelength: () => void;
+  onChallenge: () => void;
   onClaimed: () => void;
 }) {
   const url = `${link.origin}/brain-mate/${link.slug}`;
@@ -274,6 +277,7 @@ function LinkView({
         relation={link.relation}
         viewGiven={link.viewGiven}
         onPlay={player ? undefined : link.viewerPlayed ? onMyCardWavelength : onRetake}
+        onChallenge={player ? onChallenge : undefined}
       />
     );
     return (

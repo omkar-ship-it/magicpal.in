@@ -43,7 +43,8 @@ export type Outcome = "mind_twins" | "power_duo" | "missing_piece" | "friendly_f
 
 export const OUTCOMES: Record<Outcome, { label: string; stamp: string; color: string }> = {
   mind_twins: { label: "Mind Twins", stamp: "Same brain, different body.", color: "#7B4DFF" },
-  power_duo: { label: "Power Duo", stamp: "Different strengths, one direction.", color: "#FF6B4A" },
+  // Not the app's coral: that colour means "tap this", and the result shouldn't compete with the Share button.
+  power_duo: { label: "Power Duo", stamp: "Different strengths, one direction.", color: "#0E8F73" },
   missing_piece: { label: "Missing Piece", stamp: "They have what you've been looking for.", color: "#0E7C93" },
   friendly_friction: { label: "Friendly Friction", stamp: "You'll argue — and both be better for it.", color: "#E07A00" },
   beautiful_chaos: { label: "Beautiful Chaos", stamp: "Makes no sense. Works anyway.", color: "#E0266B" },
@@ -153,7 +154,7 @@ const OPPOSITE: Record<Trait, (lo: string, hi: string) => string> = {
   A: (lo, hi) => `${hi} takes the lead; ${lo} backs it.`,
   C: (lo, hi) => `${hi} looks after the people; ${lo} looks after the problem.`,
   H: (lo, hi) => `${hi} keeps it together; ${lo} says the hard thing.`,
-  V: (lo, hi) => `${hi} aims for the moon; ${lo} makes sure you actually land somewhere.`,
+  V: (lo, hi) => `${hi} aims for the moon; ${lo} makes sure it lands.`,
 };
 
 export function compare(pa: Person, pb: Person, stats: CrowdStats | null = null): Comparison {
@@ -226,8 +227,15 @@ export function compare(pa: Person, pb: Person, stats: CrowdStats | null = null)
         ? OPPOSITE[widest.k](an, bn)
         : OPPOSITE[widest.k](bn, an);
 
-  const weakest = (Object.entries(p) as [keyof typeof p, number][]).sort((x, y) => x[1] - y[1])[0][0];
-  const bothLead = za.A + zb.A > 0;
+  // Lead is only a watch-out when it's genuinely shared or genuinely missing:
+  // with one clear leader, "you'll both want the wheel" contradicts the
+  // "Omkar leads" line right above it, so the next-weakest fit is used.
+  const clearLeader = Math.abs(za.A - zb.A) > 0.8;
+  const bothLead = Math.min(za.A, zb.A) > 0.2;
+  const weakest = (Object.entries(p) as [keyof typeof p, number][])
+    .sort((x, y) => x[1] - y[1])
+    .map(([k]) => k)
+    .find((k) => !(k === "lead" && (clearLeader || (!bothLead && Math.max(za.A, zb.A) > 0)))) ?? "role";
   const WATCH: Record<keyof typeof p, [string, string]> = {
     role: ["You see things the same way, so your blind spots stack up.", "Bring in a third opinion before big calls."],
     lead: bothLead
@@ -252,14 +260,15 @@ export function compare(pa: Person, pb: Person, stats: CrowdStats | null = null)
   const leadGap = za.A - zb.A;
   const orientA = (za.O + za.I) / 2 - (za.D + za.S) / 2;
   const orientB = (zb.O + zb.I) / 2 - (zb.D + zb.S) / 2;
-  const roleWord = (o: number) => (o > 0.3 ? "the ideas" : o < -0.3 ? "the execution" : "a bit of both");
+  // Said as a sentence, never as a formula.
+  const roleVerb = (o: number) => (o > 0.3 ? "brings the ideas" : o < -0.3 ? "makes things happen" : "does a bit of both");
+  const leader = leadGap > 0 ? an : bn;
   const roles =
     Math.abs(orientA - orientB) > 0.6
-      ? `In a team: ${an} = ${roleWord(orientA)} · ${bn} = ${roleWord(orientB)}` +
-        (Math.abs(leadGap) > 0.8 ? `. ${leadGap > 0 ? an : bn} leads.` : "")
+      ? `${an} ${roleVerb(orientA)}, ${bn} ${roleVerb(orientB)}.` + (Math.abs(leadGap) > 0.8 ? ` ${leader} tends to lead.` : "")
       : Math.abs(leadGap) > 0.8
-        ? `In a team: ${leadGap > 0 ? an : bn} leads, ${leadGap > 0 ? bn : an} sharpens.`
-        : `In a team: ${an} = ${A.role} · ${bn} = ${B.role}`;
+        ? `${leader} leads; ${leadGap > 0 ? bn : an} sharpens the plan.`
+        : `${an} is ${A.role}; ${bn} is ${B.role}.`;
 
   const dynamic =
     outcome === "mind_twins"

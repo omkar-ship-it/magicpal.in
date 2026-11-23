@@ -12,7 +12,7 @@ import { buzz, tone } from "./feel";
  * the gap between how you see yourself and how others see you is often
  * the most interesting line on the card.
  */
-export default function ViewForm({ slug, other }: { slug: string; other: string }) {
+export default function ViewForm({ slug, other, bare = false }: { slug: string; other: string; /** Inside a row that already asks the question. */ bare?: boolean }) {
   const router = useRouter();
   const [values, setValues] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState(false);
@@ -21,23 +21,27 @@ export default function ViewForm({ slug, other }: { slug: string; other: string 
   const all = VIEW_SLIDERS.every((s) => values[s.trait] !== undefined);
   if (done)
     return (
-      <p className="text-center text-[15px] font-bold">
+      <p className="text-center text-[14px]">
         Thanks — {other} will see how they come across to you (only as part of everyone&apos;s view).
       </p>
     );
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <p className="text-[12px] font-extrabold tracking-[0.14em] text-[var(--bm-brand)]">HOW DOES {other.toUpperCase()} COME ACROSS?</p>
-        <p className="mt-1 text-[14px] text-[var(--bm-soft)]">
-          Nine quick slides, 20 seconds. It sharpens {other}&apos;s profile — people are often seen differently than they see themselves.
-        </p>
-      </div>
+      {bare ? (
+        <p className="text-[13px] text-[var(--bm-soft)]">People are often seen differently than they see themselves — your view sharpens {other}&apos;s card.</p>
+      ) : (
+        <div>
+          <p className="text-[12px] font-extrabold tracking-[0.14em] text-[var(--bm-brand)]">HOW DOES {other.toUpperCase()} COME ACROSS?</p>
+          <p className="mt-1 text-[14px] text-[var(--bm-soft)]">
+            Nine quick slides, 20 seconds. It sharpens {other}&apos;s profile — people are often seen differently than they see themselves.
+          </p>
+        </div>
+      )}
       {VIEW_SLIDERS.map((s) => {
         const v = values[s.trait];
         return (
           <div key={s.trait}>
-            <div className="flex justify-between text-[13px] font-bold">
+            <div className="flex justify-between text-[12.5px] font-medium">
               <span>{s.left}</span>
               <span className="text-right">{s.right}</span>
             </div>
