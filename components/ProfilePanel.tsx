@@ -195,6 +195,7 @@ export default function ProfilePanel({
           headline: d.headline,
           company: d.company,
           workingOn: d.workingOn,
+          linkedinUrl: d.linkedinUrl ?? "",
           photoUrl: d.photoUrl,
           avatarStyle: d.avatarStyle,
           lookingFor: d.lookingFor,
@@ -472,7 +473,7 @@ export default function ProfilePanel({
             </div>
             <div>
               <label className="label" htmlFor="p-linkedin">
-                LinkedIn
+                LinkedIn <span className="font-normal text-[var(--ink-soft)]">— required, shown on your profile</span>
               </label>
               <input
                 id="p-linkedin"

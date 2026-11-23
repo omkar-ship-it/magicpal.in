@@ -277,6 +277,21 @@ async function main() {
     assert(badView.status === 400, "a view needs all nine sliders, in range");
     const privateCard = await fetch(`${BASE}/api/brain-mate/card`);
     assert(privateCard.status === 401, "your identity image is only ever yours");
+
+    console.log("\nLinkedIn + one-tap signals");
+    const badLi = await api("/api/profile/linkedin", { method: "POST", jar: bmD.jar, body: { linkedinUrl: "linkedin.com/company/acme" } });
+    assert(badLi.status === 400, "a company page isn't a LinkedIn profile");
+    const goodLi = await api("/api/profile/linkedin", { method: "POST", jar: bmD.jar, body: { linkedinUrl: "in.linkedin.com/in/dee-test?utm_source=share" } });
+    assert(goodLi.status === 200 && goodLi.data.linkedinUrl === "https://www.linkedin.com/in/dee-test", "a pasted LinkedIn link is stored in one clean form");
+    const me1 = await api("/api/profile", { jar: bmD.jar });
+    const keepLi = await api("/api/profile", { method: "POST", jar: bmD.jar, body: { name: "Dee", headline: "Tester", visibility: me1.data.profile.visibility } });
+    const me2 = await api("/api/profile", { jar: bmD.jar });
+    assert(keepLi.status === 200 && me2.data.profile.linkedinUrl === "https://www.linkedin.com/in/dee-test", "a form that doesn't show LinkedIn leaves it alone");
+    const blankLi = await api("/api/profile", { method: "POST", jar: bmD.jar, body: { name: "Dee", headline: "Tester", visibility: me1.data.profile.visibility, linkedinUrl: "" } });
+    assert(blankLi.status === 400, "a form that shows LinkedIn can't save without it");
+    const sig = await api("/api/profile/signals", { method: "POST", jar: bmD.jar, body: { canHelpWith: ["product", "nope"] } });
+    const me3 = await api("/api/profile", { jar: bmD.jar });
+    assert(sig.status === 200 && JSON.stringify(me3.data.profile.canHelpWith) === '["product"]' && me3.data.profile.linkedinUrl === "https://www.linkedin.com/in/dee-test", "a one-tap answer saves just that list, cleaned");
     }
 
     console.log("\nAuth + onboarding");

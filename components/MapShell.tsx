@@ -43,6 +43,7 @@ import ProfilePanel from "./ProfilePanel";
 import PublicOptIn from "./PublicOptIn";
 import HomeInvite, { ProfileBrainMate, type BrainMateStatus } from "./brainMate/HomeInvite";
 import BrainMateOverlay, { type OverlayMode } from "./brainMate/Overlay";
+import LinkedInPrompt from "./LinkedInPrompt";
 import ForYouPanel from "./ForYouPanel";
 import { IconChat, IconHidden, IconX } from "./Icons";
 import { BRAND_NAME } from "@/lib/brand";
@@ -122,6 +123,7 @@ export default function MapShell({
   const [bmMode, setBmMode] = useState<OverlayMode | null>(brainMateOpen);
   // While the Brain-Mate invitation card is up, the off-map nudge waits its turn.
   const [bmFull, setBmFull] = useState(false);
+  const [liOpen, setLiOpen] = useState(false);
   const bmRouter = useRouter();
   const closeBrainMate = useCallback(() => {
     setBmMode(null);
@@ -779,6 +781,7 @@ export default function MapShell({
           onOpenPerson={showPerson}
           onSignIn={() => openWin("signin")}
           onProfile={() => openWin("profile")}
+          onSignalsSaved={() => void load({})}
         />
       </FloatWindow>
 
@@ -1227,8 +1230,13 @@ export default function MapShell({
         <OffMapNudge needsPin={myVisibility === "off"} onProfile={() => openWin("profile")} />
       )}
 
+      {/* Members who joined before LinkedIn was required: asked once a day, one field. */}
+      {/* Neither prompt shows while the profile panel is open — that is where
+          onboarding happens, and a chip over steps 2 and 3 is a distraction. */}
+      {signedIn && onboarded && !bmMode && !wins.profile.open && <LinkedInPrompt onOpenChange={setLiOpen} />}
+
       {/* Brain-Mate on the map, for every signed-in member once onboarding is done. */}
-      {signedIn && onboarded && brainMate && !bmMode && (
+      {signedIn && onboarded && brainMate && !bmMode && !liOpen && !wins.profile.open && (
         <HomeInvite
           status={brainMate}
           // A panel covering the map: on a phone the invitation becomes the chip above it.

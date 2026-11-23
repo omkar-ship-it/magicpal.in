@@ -6,6 +6,7 @@ import { MAX_INTERESTS, reachLabel, type Reach } from "@/lib/rules";
 import { SECTORS, TOPICS } from "@/lib/intents";
 import Avatar from "./Avatar";
 import PanelNote from "./PanelNote";
+import QuickSignals from "./QuickSignals";
 import OwnWords from "./OwnWords";
 import VerifiedBadge from "./VerifiedBadge";
 import { Row, Section } from "./Panel";
@@ -33,6 +34,7 @@ export default function ForYouPanel({
   onOpenPerson,
   onSignIn,
   onProfile,
+  onSignalsSaved,
 }: {
   /**
    * The board, as query params. Scope is never the run's to choose — the
@@ -58,6 +60,8 @@ export default function ForYouPanel({
   onOpenPerson: (id: string) => void;
   onSignIn: () => void;
   onProfile: () => void;
+  /** A one-tap answer was saved: the shell refreshes, so "has signals" catches up. */
+  onSignalsSaved?: () => void;
 }) {
   const [run, setRun] = useState<RunResult | null>(null);
   const [error, setError] = useState(false);
@@ -165,6 +169,11 @@ export default function ForYouPanel({
     if (next) onCount?.(next.total);
   }
 
+  const afterSignals = () => {
+    setEdits((e) => ({ ...e }));
+    onSignalsSaved?.();
+  };
+
   if (!signedIn) {
     return (
       <PanelNote title="Sign in to get recommendations">
@@ -190,14 +199,15 @@ export default function ForYouPanel({
   // room for a blank in your own profile.
   if (!hasSignals) {
     return (
-      <PanelNote title="Tell us what you're looking for">
-        Recommendations are built from what you need, what you can offer and what you&rsquo;re into — and so is
-        everyone else&rsquo;s view of you. Until you&rsquo;ve said yours, the map shows you where people are but
-        not who they are.
-        <button type="button" className="btn btn-primary btn-sm mt-3" onClick={onProfile}>
-          Add your signals
-        </button>
-      </PanelNote>
+      <div className="scroll-clean flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+        <QuickSignals onSaved={afterSignals} standalone />
+        <p className="text-[12px] leading-[1.5] text-[var(--ink-soft)]">
+          Recommendations are built from what you&rsquo;re after, what you offer and what you&rsquo;re into.{" "}
+          <button type="button" className="font-semibold text-[var(--brand)] underline" onClick={onProfile}>
+            Edit your full profile
+          </button>
+        </p>
+      </div>
     );
   }
   if (error) return <PanelNote title="Couldn't run that">Try again in a moment.</PanelNote>;
@@ -213,6 +223,9 @@ export default function ForYouPanel({
           : "scroll-clean flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto"
       }
     >
+      {/* Whatever the profile is still missing, one tap at a time. */}
+      <QuickSignals onSaved={afterSignals} />
+
       {/* The query, said out loud. If it can't be a sentence, it shouldn't
           be a control. */}
       <div className="flex items-start gap-2">

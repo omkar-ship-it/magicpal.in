@@ -202,7 +202,7 @@ export default function ProfileEditor({
 
           <div>
             <label className="label" htmlFor="linkedinUrl">
-              LinkedIn
+              LinkedIn <span className="font-normal text-[var(--ink-soft)]">— required</span>
             </label>
             <input
               id="linkedinUrl"

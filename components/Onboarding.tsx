@@ -5,13 +5,13 @@ import Link from "next/link";
 import { LEGAL } from "@/lib/legal";
 import AvatarPicker from "./AvatarPicker";
 import PlaceSearch, { type Place } from "./PlaceSearch";
-import TopicPicker from "./TopicPicker";
-import IntentField from "./IntentField";
 import VisibilityPicker, { type Visibility } from "./VisibilityPicker";
 import Avatar from "./Avatar";
 import { IconCheck, IconGlobe, IconPin, IconSparkle, IconUser } from "./Icons";
 import { SECTORS, TOPICS } from "@/lib/intents";
 import { MAX_INTERESTS, MAX_TOPICS } from "@/lib/rules";
+import { GOALS, MAX_GOALS, fromGoals, goalsFrom, suggestFor } from "@/lib/goals";
+import { LINKEDIN_HELP, normalizeLinkedin } from "@/lib/linkedinProfile";
 
 /**
  * Getting somebody onto the map, one answer at a time.
@@ -45,6 +45,8 @@ export type Draft = {
   headline: string;
   company: string;
   workingOn: string;
+  /** Required: a real linkedin.com/in/… profile, shown on their profile. */
+  linkedinUrl: string;
   photoUrl: string | null;
   avatarStyle: string;
   lookingFor: string[];
@@ -64,13 +66,12 @@ export type Draft = {
 };
 
 const STEPS = [
-  { id: "you", title: "Who you are", blurb: "Your name and one line. This is what a stranger reads first." },
+  { id: "you", title: "Who you are", blurb: "Your name, one line, and your LinkedIn — so people know who they're meeting." },
   { id: "where", title: "Where you are", blurb: "A city is enough. It is what puts you on the map." },
   {
     id: "what",
-    title: "What you're after",
-    blurb:
-      "The three answers every introduction here is made of. Nothing fits? Type your own — a phrase in your words matches better than a box you ticked.",
+    title: "What brings you here?",
+    blurb: "Tap one or two — that's all we need to start introducing you.",
   },
 ] as const;
 
@@ -78,7 +79,7 @@ type StepId = (typeof STEPS)[number]["id"];
 
 /** Where to resume. The first question they haven't answered. */
 export function firstUnanswered(d: Draft): number {
-  if (d.name.trim().length < 2 || d.headline.trim().length < 2) return 0;
+  if (d.name.trim().length < 2 || d.headline.trim().length < 2 || !normalizeLinkedin(d.linkedinUrl)) return 0;
   if (!onTheMap(d)) return 1;
   return 2;
 }
@@ -136,6 +137,9 @@ export default function Onboarding({
   const [done, setDone] = useState(false);
   const consentRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
+  const linkedinRef = useRef<HTMLInputElement>(null);
+  const [goals, setGoals] = useState<string[]>(() => goalsFrom(draft.lookingFor, draft.canHelpWith));
+  const [showAll, setShowAll] = useState(false);
 
   const step = STEPS[i];
   /**
@@ -172,6 +176,27 @@ export default function Onboarding({
   const sending: Visibility =
     visibility === "exact" ? (hasExact ? "exact" : "off") : hasBase ? visibility : "off";
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => ({ ...d, [k]: v }));
+  const suggestions = suggestFor(draft.headline, draft.company, goals);
+
+  /** One tap on a goal: it sets what they're looking for, and what that obviously means they can help with. */
+  function pickGoal(id: string) {
+    const next = goals.includes(id) ? goals.filter((g) => g !== id) : [...goals, id].slice(-MAX_GOALS);
+    const before = fromGoals(goals);
+    const after = fromGoals(next);
+    setGoals(next);
+    setDraft((d) => ({
+      ...d,
+      lookingFor: after.lookingFor,
+      canHelpWith: [...new Set([...d.canHelpWith.filter((t) => !before.canHelpWith.includes(t)), ...after.canHelpWith])].slice(0, MAX_TOPICS),
+    }));
+  }
+  function toggle(key: "canHelpWith" | "interests", id: string, max: number) {
+    setDraft((d) => {
+      const cur = d[key];
+      const next = cur.includes(id) ? cur.filter((x) => x !== id) : cur.length >= max ? cur : [...cur, id];
+      return { ...d, [key]: next };
+    });
+  }
 
   /**
    * What is wrong with this step, in the words the person needs.
@@ -186,6 +211,9 @@ export default function Onboarding({
         return { message: "Tell us your name.", focus: () => nameRef.current?.focus() };
       }
       if (draft.headline.trim().length < 2) return { message: "Add a one-line headline." };
+      if (!normalizeLinkedin(draft.linkedinUrl)) {
+        return { message: LINKEDIN_HELP, focus: () => linkedinRef.current?.focus() };
+      }
       if (needsConsent && !agreed) {
         return {
           message: "Please accept the Terms & Conditions and Privacy Policy to continue.",
@@ -196,6 +224,7 @@ export default function Onboarding({
         };
       }
     }
+    if (id === "what" && goals.length === 0) return { message: "Tap at least one — it's how we find people for you." };
     if (id === "where") {
       if (visibility === "exact" && !hasExact) return { message: "Pick your location from the list." };
       if (visibility !== "exact" && !hasBase) return { message: "Pick your city from the list." };
@@ -331,6 +360,24 @@ export default function Onboarding({
               />
             </div>
 
+            <div>
+              <label className="label" htmlFor="o-linkedin">
+                Your LinkedIn
+              </label>
+              <input
+                ref={linkedinRef}
+                id="o-linkedin"
+                className="input"
+                inputMode="url"
+                autoCapitalize="none"
+                autoCorrect="off"
+                value={draft.linkedinUrl}
+                onChange={(e) => set("linkedinUrl", e.target.value)}
+                placeholder="linkedin.com/in/your-name"
+              />
+              <p className="mt-1 text-[11.5px] text-[var(--ink-soft)]">Shown on your profile, so people can check who they&rsquo;re meeting.</p>
+            </div>
+
             {needsConsent && (
               <label
                 className="tap flex cursor-pointer items-start gap-3 rounded-xl border p-3"
@@ -433,59 +480,67 @@ export default function Onboarding({
 
         {step.id === "what" && (
           <>
-            <IntentField
-              label="I'm looking for"
-              hint="In your own words. This is what people search, and what the matcher reads — be specific about the thing you actually want."
-              placeholder="A co-founder who has shipped hardware"
-              custom={draft.customLookingFor}
-              onCustom={(v) => set("customLookingFor", v)}
-              options={TOPICS.map((t) => ({ id: t.id, label: t.need }))}
-              selected={draft.lookingFor}
-              onSelected={(v) => set("lookingFor", v)}
-              max={MAX_TOPICS}
-            />
-            <IntentField
-              label="I can help with"
-              hint="The thing you'd actually be glad to be asked about."
-              placeholder="Getting a first enterprise customer"
-              custom={draft.customCanHelpWith}
-              onCustom={(v) => set("customCanHelpWith", v)}
-              options={TOPICS.map((t) => ({ id: t.id, label: t.offer }))}
-              selected={draft.canHelpWith}
-              onSelected={(v) => set("canHelpWith", v)}
-              max={MAX_TOPICS}
-            />
-            {/*
-              * The third signal, and the only symmetric one.
-              *
-              * Two people deep in climate are worth introducing even when
-              * neither wants what the other offers, and without this the
-              * answer for them is "no match".
-              */}
-            <IntentField
-              label="I'm interested in"
-              hint="Subjects you'd talk about for an hour, whether or not you need anything."
-              placeholder="Second-hand lab equipment"
-              custom={draft.customInterests}
-              onCustom={(v) => set("customInterests", v)}
-              options={SECTORS.map((sec) => ({ id: sec.id, label: sec.label }))}
-              selected={draft.interests}
-              onSelected={(v) => set("interests", v)}
-              max={MAX_INTERESTS}
-            />
-
-            <div>
-              <label className="label" htmlFor="o-working">
-                What you&rsquo;re working on <span className="font-normal text-[var(--ink-soft)]">— optional</span>
-              </label>
-              <input
-                id="o-working"
-                className="input"
-                value={draft.workingOn}
-                onChange={(e) => set("workingOn", e.target.value)}
-                placeholder="A marketplace for second-hand lab equipment"
-              />
+            <div className="grid grid-cols-2 gap-2">
+              {GOALS.map((g) => {
+                const on = goals.includes(g.id);
+                return (
+                  <button
+                    key={g.id}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => pickGoal(g.id)}
+                    className="tap flex min-h-[64px] items-center gap-2.5 rounded-2xl border px-3 py-2.5 text-left text-[13.5px] font-semibold leading-tight transition-colors"
+                    style={{
+                      borderColor: on ? "var(--brand)" : "var(--line)",
+                      background: on ? "color-mix(in srgb, var(--brand) 9%, var(--card))" : "var(--card)",
+                    }}
+                  >
+                    <span className="text-[22px] leading-none" aria-hidden="true">
+                      {g.emoji}
+                    </span>
+                    <span className="min-w-0 flex-1">{g.label}</span>
+                    {on && (
+                      <span className="flex-none text-[var(--brand)]">
+                        <IconCheck size={14} />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
+
+            {goals.length > 0 && (
+              <>
+                <ChipGroup
+                  label="You can probably help with"
+                  hint="We guessed from what you do — tap to keep."
+                  options={(showAll ? TOPICS.map((t) => t.id) : [...new Set([...suggestions.help, ...draft.canHelpWith])]).map((id) => ({
+                    id,
+                    label: TOPICS.find((t) => t.id === id)?.offer ?? id,
+                  }))}
+                  selected={draft.canHelpWith}
+                  max={MAX_TOPICS}
+                  onToggle={(id) => toggle("canHelpWith", id, MAX_TOPICS)}
+                />
+                <ChipGroup
+                  label="You're into"
+                  hint={suggestions.interests.length || showAll ? "Tap any that fit." : "Optional — tap any that fit."}
+                  options={(showAll || suggestions.interests.length === 0
+                    ? SECTORS.map((x) => x.id)
+                    : [...new Set([...suggestions.interests, ...draft.interests])]
+                  ).map((id) => ({ id, label: SECTORS.find((x) => x.id === id)?.label ?? id }))}
+                  selected={draft.interests}
+                  max={MAX_INTERESTS}
+                  onToggle={(id) => toggle("interests", id, MAX_INTERESTS)}
+                />
+                {!showAll && (
+                  <button type="button" className="self-start text-[12.5px] font-semibold text-[var(--brand)]" onClick={() => setShowAll(true)}>
+                    Show more options
+                  </button>
+                )}
+                <p className="text-[11.5px] text-[var(--ink-soft)]">Both optional — you can add these later from For you.</p>
+              </>
+            )}
           </>
         )}
       </div>
@@ -594,6 +649,55 @@ function Finished({
       <p className="mt-2.5 text-[11.5px] leading-[1.45] text-[var(--ink-soft)]">
         You can add more to your profile any time — the more it says, the better the introductions get.
       </p>
+    </div>
+  );
+}
+
+/** A labelled row of tap-to-keep chips. */
+function ChipGroup({
+  label,
+  hint,
+  options,
+  selected,
+  max,
+  onToggle,
+}: {
+  label: string;
+  hint: string;
+  options: { id: string; label: string }[];
+  selected: string[];
+  max: number;
+  onToggle: (id: string) => void;
+}) {
+  if (!options.length) return null;
+  return (
+    <div>
+      <p className="label">{label}</p>
+      <p className="-mt-0.5 mb-2 text-[11.5px] text-[var(--ink-soft)]">{hint}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((o) => {
+          const on = selected.includes(o.id);
+          const full = !on && selected.length >= max;
+          return (
+            <button
+              key={o.id}
+              type="button"
+              aria-pressed={on}
+              disabled={full}
+              onClick={() => onToggle(o.id)}
+              className="tap flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12.5px] font-medium transition-colors disabled:opacity-40"
+              style={{
+                borderColor: on ? "var(--brand)" : "var(--line)",
+                background: on ? "color-mix(in srgb, var(--brand) 10%, var(--card))" : "var(--card)",
+                color: on ? "var(--brand-deep)" : "var(--ink)",
+              }}
+            >
+              {on ? <IconCheck size={12} /> : <span aria-hidden="true">+</span>}
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { LINKEDIN_HELP, normalizeLinkedin } from "@/lib/linkedinProfile";
 import { eq } from "drizzle-orm";
 import { db, hasDb } from "@/lib/db";
 import { consents, users } from "@/lib/db/schema";
@@ -137,7 +138,15 @@ export async function POST(req: Request) {
    */
   const phoneSent = "phone" in (body ?? {});
   const phone = phoneSent ? str(body.phone, 32) : null;
-  const linkedinUrl = normalizeUrl(body?.linkedinUrl);
+  /**
+   * LinkedIn is required of every member (it is how people check who they
+   * are about to meet), so a form that shows the field can't save without a
+   * real profile link. A form that doesn't show it sends nothing, and that
+   * leaves the stored link alone — it used to wipe it.
+   */
+  const linkedinSent = "linkedinUrl" in (body ?? {});
+  const linkedinUrl = linkedinSent ? normalizeLinkedin(body.linkedinUrl) : null;
+  if (linkedinSent && !linkedinUrl) return NextResponse.json({ error: LINKEDIN_HELP }, { status: 400 });
   const instagramUrl = normalizeUrl(body?.instagramUrl);
   const websiteUrl = normalizeUrl(body?.websiteUrl);
 
@@ -260,7 +269,7 @@ export async function POST(req: Request) {
       ...(body?.phoneVisibility === "private" || body?.phoneVisibility === "connections"
         ? { phoneVisibility: body.phoneVisibility }
         : {}),
-      linkedinUrl: linkedinUrl || null,
+      ...(linkedinSent ? { linkedinUrl } : {}),
       instagramUrl: instagramUrl || null,
       websiteUrl: websiteUrl || null,
       skills,
