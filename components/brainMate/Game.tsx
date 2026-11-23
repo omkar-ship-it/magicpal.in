@@ -62,7 +62,7 @@ type Props = {
   /** Called when a new section starts — the overlay drifts the map behind. */
   onSection?: (index: number) => void;
   /** The reveal's final button. */
-  onDone: (result: { archetype: ArchetypeId; linkSlug: string | null }) => void;
+  onDone: (result: { archetype: ArchetypeId; linkSlug: string | null; then?: "card" | "challenge" }) => void;
 };
 
 type Section = "rather" | "tend" | "calls" | "ranks" | "sliders" | "values" | "checks" | "duel";
@@ -129,6 +129,7 @@ export default function Game({ defaultName, needsTerms, link, stats, previous, o
   const [checkIds, setCheckIds] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [reveal, setReveal] = useState<RevealData | null>(null);
+  const saving = useRef<Promise<{ archetype: ArchetypeId; linkSlug: string | null } | null>>(Promise.resolve(null));
   const [seed, setSeed] = useState(() => saved?.seed ?? Math.random().toString(36).slice(2));
   const started = useRef(0);
   const skyRef = useRef<HTMLDivElement>(null);
@@ -225,6 +226,8 @@ export default function Game({ defaultName, needsTerms, link, stats, previous, o
   function save(final: Answers) {
     setError("");
     const local = resultFor(final);
+    saving.current = persist(final);
+    const origin = window.location.origin.replace("://www.", "://");
     setReveal({
       name,
       answers: final,
@@ -235,16 +238,29 @@ export default function Game({ defaultName, needsTerms, link, stats, previous, o
       rarity: 0,
       players: 0,
       know: "",
-      next: { label: "Saving…", onClick: () => {} },
+      // Ready the moment the reveal ends; a tap before the save lands waits for it.
+      next: { label: link ? `See your Wavelength with ${link.sender}` : "Find your Brain-Mate", onClick: () => void go("next") },
+      onCard: () => void go("card"),
+      share: {
+        url: origin,
+        text: `I'm ${ARCHETYPES[local.archetype].name} on Brain-Mate — "${ARCHETYPES[local.archetype].tagline}" What are you?`,
+        image: "/api/brain-mate/card",
+      },
       note: null,
       pending: true,
     });
     setStage("reveal");
-    void persist(final);
   }
 
-  async function persist(final: Answers) {
-    setReveal((r) => (r ? { ...r, pending: true, error: undefined, next: { label: "Saving…", onClick: () => {} } } : r));
+  /** Where to go once the result is safely saved. */
+  async function go(where: "next" | "card") {
+    const r = await saving.current;
+    if (!r) return;
+    onDone({ archetype: r.archetype, linkSlug: r.linkSlug, then: where === "card" ? "card" : "challenge" });
+  }
+
+  async function persist(final: Answers): Promise<{ archetype: ArchetypeId; linkSlug: string | null } | null> {
+    setReveal((r) => (r ? { ...r, pending: true, error: undefined } : r));
     try {
       const res = await fetch("/api/brain-mate/result", {
         method: "POST",
@@ -258,27 +274,44 @@ export default function Game({ defaultName, needsTerms, link, stats, previous, o
       } catch {
         /* ignore */
       }
-      const linkSlug = link && !data.linkError ? link.slug : null;
-      setReveal({
-        name,
-        answers: final,
-        archetype: data.archetype,
-        streak: data.streak,
-        cusp: data.cusp,
-        mix: data.mix,
-        rarity: data.rarity,
-        players: data.players,
-        know: data.know,
-        next: {
-          label: linkSlug ? `Now: your Wavelength with ${link!.sender}` : "See your archetype card",
-          onClick: () => onDone({ archetype: data.archetype, linkSlug }),
-        },
-        note: data.linkError ?? null,
-        pending: false,
-      });
+      const linkSlug: string | null = link && !data.linkError ? link.slug : null;
+      setReveal((r) =>
+        r
+          ? {
+              ...r,
+              archetype: data.archetype,
+              streak: data.streak,
+              cusp: data.cusp,
+              mix: data.mix,
+              rarity: data.rarity,
+              players: data.players,
+              know: data.know,
+              note: data.linkError ?? null,
+              next: { label: linkSlug ? `See your Wavelength with ${link!.sender}` : "Find your Brain-Mate", onClick: () => void go("next") },
+              pending: false,
+            }
+          : r
+      );
+      return { archetype: data.archetype, linkSlug };
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Couldn't save that.";
-      setReveal((r) => (r ? { ...r, pending: false, error: msg, next: { label: "Try saving again", onClick: () => void persist(final) } } : r));
+      setReveal((r) =>
+        r
+          ? {
+              ...r,
+              pending: false,
+              error: msg,
+              next: {
+                label: "Try saving again",
+                onClick: () => {
+                  saving.current = persist(final);
+                  void go("next");
+                },
+              },
+            }
+          : r
+      );
+      return null;
     }
   }
 
@@ -289,7 +322,7 @@ export default function Game({ defaultName, needsTerms, link, stats, previous, o
       <main className="bm-shell">
         <div className="flex flex-1 flex-col justify-center gap-5 py-6">
           <div className="bm-fade-up">
-            <p className="text-[13px] font-bold tracking-[0.18em] text-[var(--bm-brand)]">
+            <p className="text-[13px] font-bold tracking-[0.14em] text-[var(--bm-brand)]">
               {link ? `${link.sender.toUpperCase()} IS WAITING` : previous ? "READY FOR A REMATCH?" : "READY FOR A SMALL GAME? 🎲"}
             </p>
             <h1 className="bm-display mt-2 text-[2.3rem]">{previous ? "Brain-Mate got sharper." : "Which of 12 minds are you?"}</h1>
@@ -686,11 +719,11 @@ function Undo({ onClick }: { onClick: (() => void) | null }) {
 function Head({ kicker, prompt, meta }: { kicker: string; prompt: string; meta?: string }) {
   return (
     <div className="bm-fade-up mb-4">
-      <p className="flex justify-between text-[12px] font-extrabold tracking-[0.2em] text-[var(--bm-brand)]">
+      <p className="flex justify-between text-[11px] font-semibold tracking-[0.14em] text-[var(--bm-brand)]">
         <span>{kicker.toUpperCase()}</span>
-        {meta && <span className="opacity-60">{meta}</span>}
+        {meta && <span className="text-[var(--bm-soft)]">{meta}</span>}
       </p>
-      <h2 className="bm-display mt-1 text-[1.65rem]">{prompt}</h2>
+      <h2 className="bm-display mt-2 text-[1.5rem]">{prompt}</h2>
     </div>
   );
 }
@@ -717,7 +750,7 @@ function RatherView({
   const second = flip ? { ...q.hi, hi: true } : { ...q.lo, hi: false };
   const card = (slot: "a" | "b", o: typeof first, cls: string) => (
     <button
-      className={`bm-option ${cls} flex items-center gap-4 !p-5 text-left !text-[1.15rem]`}
+      className={`bm-option ${cls} flex items-center gap-3.5 !px-4 !py-4 text-left`}
       style={{ color: "var(--bm-ink)" }}
       data-state={picked ? (picked === slot ? "chosen" : "gone") : "idle"}
       onClick={(e) => {
@@ -730,10 +763,10 @@ function RatherView({
         }, 300);
       }}
     >
-      <span className="text-[2.2rem]" aria-hidden="true">
+      <span className="grid h-10 w-10 flex-none place-items-center rounded-xl bg-[var(--sunk)] text-[1.3rem]" aria-hidden="true">
         {o.emoji}
       </span>
-      <span className="font-extrabold leading-snug">{o.label}</span>
+      <span className="leading-snug">{o.label}</span>
     </button>
   );
   return (
@@ -741,7 +774,7 @@ function RatherView({
       <Head kicker="Would you rather…" prompt="Pick the real you." meta={`${done + 1} / ${RATHER.length}`} />
       <div className="flex flex-col gap-3">
         {card("a", first, "bm-duel-left")}
-        <div className="text-center text-[13px] font-extrabold tracking-[0.25em] text-[var(--bm-soft)]">OR</div>
+        <div className="text-center text-[11px] font-medium tracking-[0.14em] text-[var(--bm-soft)]">OR</div>
         {card("b", second, "bm-duel-right")}
       </div>
       <div className="mt-auto flex items-center justify-between pt-4 text-[13px]">
@@ -769,7 +802,13 @@ function TendView({
   const t = order[done];
   const [chosen, setChosen] = useState<number | null>(null);
   if (!t) return <div className="flex flex-1 items-center justify-center text-[1.4rem] font-extrabold">✔ Got it.</div>;
-  const colours = ["#3B82F6", "#93C5FD", "#FDBA74", "#FF6B4A"];
+  // One coral scale, light to strong — a scale, not four different things.
+  const colours = [
+    "color-mix(in srgb, var(--brand) 10%, var(--bm-card))",
+    "color-mix(in srgb, var(--brand) 26%, var(--bm-card))",
+    "color-mix(in srgb, var(--brand) 60%, var(--bm-card))",
+    "var(--brand)",
+  ];
   return (
     <section key={t.id} className="flex flex-1 flex-col">
       <Head kicker="Is this you?" prompt="How often is this you?" meta={`${done + 1} / ${TENDENCIES.length}`} />
@@ -786,8 +825,8 @@ function TendView({
           {TENDENCY_SCALE.map((label, v) => (
             <button
               key={label}
-              className="flex min-h-[60px] items-center justify-center rounded-[1rem] px-1 text-center text-[13px] font-extrabold leading-tight transition-transform active:scale-90"
-              style={{ background: colours[v], color: v === 1 || v === 2 ? "#17110e" : "#fff", outline: chosen === v ? "3px solid var(--bm-ink)" : "none" }}
+              className="flex min-h-[56px] items-center justify-center rounded-[1rem] px-1 text-center text-[13px] font-medium leading-tight transition-transform active:scale-90"
+              style={{ background: colours[v], color: v === 3 ? "#fff" : "var(--bm-ink)", outline: chosen === v ? "2px solid var(--bm-ink)" : "none", outlineOffset: 2 }}
               onClick={(e) => {
                 if (chosen !== null) return;
                 setChosen(v);
@@ -839,7 +878,7 @@ function CallView({
           return (
             <button
               key={side}
-              className={`bm-option ${i ? "bm-duel-right" : "bm-duel-left"} flex items-center gap-3 !p-4 text-left`}
+              className={`bm-option ${i ? "bm-duel-right" : "bm-duel-left"} flex items-center gap-3.5 !px-4 !py-4 text-left`}
               style={{ color: "var(--bm-ink)" }}
               data-state={chosen ? (chosen === side ? "chosen" : "gone") : "idle"}
               onClick={(e) => {
@@ -851,10 +890,10 @@ function CallView({
                 window.setTimeout(() => onChoose(side, o.trait, ev), share !== undefined ? 1000 : 520);
               }}
             >
-              <span className="text-[1.8rem]" aria-hidden="true">
+              <span className="grid h-10 w-10 flex-none place-items-center rounded-xl bg-[var(--sunk)] text-[1.3rem]" aria-hidden="true">
                 {o.emoji}
               </span>
-              <span className="font-extrabold leading-snug">{o.label}</span>
+              <span className="leading-snug">{o.label}</span>
             </button>
           );
         })}
@@ -886,7 +925,6 @@ function RankView({
   const [order, setOrder] = useState(() => shuffle(round.cards, `${seed}:${round.id}`).map((c) => c.id));
   const [moved, setMoved] = useState(false);
   const ROW = 64;
-  const medals = ["🥇", "🥈", "🥉", "4", "5"];
   function move(id: string, dir: -1 | 1) {
     const i = order.indexOf(id);
     const j = i + dir;
@@ -901,21 +939,28 @@ function RankView({
   return (
     <section className="flex flex-1 flex-col">
       <Head kicker={`Prioritise · round ${index + 1} of ${RANKS.length}`} prompt={round.prompt} />
-      <p className="-mt-2 mb-3 text-[13px] text-[var(--bm-soft)]">Push the most “you” to the top.</p>
+      <p className="-mt-2 mb-4 text-[13px] text-[var(--bm-soft)]">Move what matters most to the top.</p>
       <div className="relative" style={{ height: order.length * ROW }}>
         {round.cards.map((c) => {
           const pos = order.indexOf(c.id);
           return (
             <div
               key={c.id}
-              className="absolute inset-x-0 flex items-center gap-3 rounded-[1.1rem] border border-[var(--bm-line)] bg-[var(--bm-card)] px-3 text-[var(--bm-ink)] shadow-[var(--shadow)]"
-              style={{ top: pos * ROW, height: ROW - 8, transition: "top 0.35s cubic-bezier(0.34,1.56,0.64,1)", border: pos === 0 ? "2px solid #FFB800" : "2px solid transparent" }}
+              className="absolute inset-x-0 flex items-center gap-3 rounded-[1rem] bg-[var(--bm-card)] pl-3 pr-2 text-[var(--bm-ink)]"
+              style={{
+                top: pos * ROW,
+                height: ROW - 8,
+                transition: "top 0.35s cubic-bezier(0.34,1.56,0.64,1), border-color 0.2s",
+                border: `1.5px solid ${pos === 0 ? "var(--bm-brand)" : "var(--bm-line)"}`,
+              }}
             >
-              <span className="w-7 text-center text-[1.15rem] font-extrabold">{medals[pos]}</span>
-              <span className="text-[1.35rem]" aria-hidden="true">
-                {c.emoji}
+              <span
+                className="grid h-7 w-7 flex-none place-items-center rounded-full text-[12.5px] font-semibold"
+                style={pos === 0 ? { background: "var(--bm-brand)", color: "#fff" } : { background: "var(--sunk)", color: "var(--bm-soft)" }}
+              >
+                {pos + 1}
               </span>
-              <span className="flex-1 text-[14.5px] font-bold leading-tight">{c.label}</span>
+              <span className="min-w-0 flex-1 text-[14.5px] font-medium leading-snug">{c.label}</span>
               {/* Two separate, thumb-sized arrows — up and down are different
                   actions, so they get different buttons. */}
               <span className="flex flex-none items-center gap-1.5">
@@ -1185,7 +1230,7 @@ function DuelStage({
   return (
     <section key={round} className="flex flex-1 flex-col">
       <div className="bm-fade-up mb-5 text-center">
-        <p className="text-[12px] font-extrabold tracking-[0.2em] text-[var(--bm-brand)]">
+        <p className="text-[12px] font-extrabold tracking-[0.14em] text-[var(--bm-brand)]">
           THE FINAL DUEL · {round} / {DUEL_COUNT}
         </p>
         <h2 className="bm-display bm-heartbeat mt-1 text-[1.8rem]">{round === DUEL_COUNT ? "Last one. Which is more you?" : "Which is more you?"}</h2>
@@ -1193,7 +1238,7 @@ function DuelStage({
       </div>
       <div className="flex flex-col gap-3">
         {side(card.a, card.lineA, "bm-duel-left")}
-        <div className="text-center text-[13px] font-extrabold tracking-[0.2em] text-[var(--bm-soft)]">OR</div>
+        <div className="text-center text-[11px] font-medium tracking-[0.14em] text-[var(--bm-soft)]">OR</div>
         {side(card.b, card.lineB, "bm-duel-right")}
       </div>
 

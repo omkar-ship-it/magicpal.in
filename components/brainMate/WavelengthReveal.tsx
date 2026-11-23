@@ -77,7 +77,7 @@ export default function WavelengthReveal({ a, b, similarity, outcome, children }
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center py-6 text-center">
-      <p className="text-[12px] font-extrabold tracking-[0.22em] text-[var(--bm-brand)]">
+      <p className="text-[12px] font-extrabold tracking-[0.14em] text-[var(--bm-brand)]">
         {a.name.toUpperCase()} × {b.name.toUpperCase()}
       </p>
       <div className="relative mt-6 w-full overflow-hidden">

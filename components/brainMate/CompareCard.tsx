@@ -74,7 +74,7 @@ export default function CompareCard({
       <section className="bm-card overflow-hidden text-center">
         <div className="h-1.5" style={{ background: `linear-gradient(90deg, ${A.color}, ${B.color})` }} />
         <div className="px-5 pb-6 pt-5">
-          <p className="text-[11.5px] font-bold tracking-[0.2em] text-[var(--bm-soft)]">YOUR WAVELENGTH</p>
+          <p className="text-[11.5px] font-bold tracking-[0.14em] text-[var(--bm-soft)]">YOUR WAVELENGTH</p>
           <div className="mt-4 flex items-start">
             {person(c.a.name, A.id, "l")}
             <span className="mt-7 text-[1.4rem] font-light text-[var(--bm-soft)]">×</span>

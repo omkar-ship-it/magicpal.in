@@ -75,7 +75,7 @@ export default function IdentityCard({
           style={{ background: `radial-gradient(120% 100% at 50% 0%, color-mix(in srgb, ${a.color} 12%, transparent), transparent 70%)` }}
         />
         <div className="relative px-6 pb-6 pt-8">
-          <p className="text-[11px] font-semibold tracking-[0.2em] text-[var(--bm-soft)]">{first.toUpperCase()} · YOUR ARCHETYPE</p>
+          <p className="text-[11px] font-semibold tracking-[0.14em] text-[var(--bm-soft)]">{first.toUpperCase()} · YOUR ARCHETYPE</p>
           <span
             className="mx-auto mt-5 grid h-[92px] w-[92px] place-items-center rounded-full"
             style={{ background: a.color, boxShadow: `0 0 0 8px color-mix(in srgb, ${a.color} 12%, var(--bm-card)), 0 18px 36px -18px ${a.color}` }}

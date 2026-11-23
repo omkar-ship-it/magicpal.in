@@ -1056,7 +1056,7 @@ export default function MapShell({
           // already played still see their own card here.
           brainMate={
             signedIn && onboarded && brainMate?.state === "played" ? (
-              <ProfileBrainMate status={brainMate} onOpen={() => setBmMode({ kind: "card" })} onFindMate={() => setBmMode({ kind: "card", wavelength: true })} />
+              <ProfileBrainMate status={brainMate} onOpen={() => setBmMode({ kind: "card" })} onFindMate={() => setBmMode({ kind: "challenge" })} />
             ) : null
           }
           networks={data.networks}
@@ -1243,7 +1243,7 @@ export default function MapShell({
           compact={Object.values(wins).some((w) => w.open && !w.min)}
           onFullChange={setBmFull}
           onPlay={() => setBmMode({ kind: "play" })}
-          onFindMate={() => setBmMode({ kind: "card", wavelength: true })}
+          onFindMate={() => setBmMode({ kind: "challenge" })}
         />
       )}
     </div>

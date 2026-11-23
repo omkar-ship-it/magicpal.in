@@ -101,7 +101,7 @@ export default function HomeInvite({
           ))}
           <span className="grid h-8 w-8 place-items-center rounded-full bg-white/25 text-[11px] font-extrabold ring-2 ring-white/70">+6</span>
         </div>
-        <p className="mt-3 text-[11px] font-extrabold tracking-[0.18em] text-white/80">
+        <p className="mt-3 text-[11px] font-extrabold tracking-[0.14em] text-white/80">
           {status.state === "retake" ? "BRAIN-MATE GOT SHARPER" : "NEW · BRAIN-MATE 🧠"}
         </p>
         <p className="mt-0.5 text-[21px] font-extrabold leading-tight tracking-[-0.01em]">

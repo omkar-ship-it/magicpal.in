@@ -11,7 +11,7 @@ import TzCookie from "./TzCookie";
 import WavelengthReveal from "./WavelengthReveal";
 import { ARCHETYPES, type ArchetypeId } from "@/lib/brainMate/archetypes";
 import { ArchetypeMark } from "@/lib/brainMate/symbols";
-import { ClaimButton, Countdown, NudgeButton, QuickShare } from "./Share";
+import { ClaimButton, Countdown, DailyLink, NudgeButton, QuickShare } from "./Share";
 
 /**
  * Brain-Mate, as a window over the map — never a new page or tab.
@@ -29,13 +29,14 @@ import { ClaimButton, Countdown, NudgeButton, QuickShare } from "./Share";
  */
 
 /** `wavelength`: open the card straight at "Find your Brain-Mate". */
-export type OverlayMode = { kind: "play" } | { kind: "card"; wavelength?: boolean } | { kind: "link"; slug: string };
+export type OverlayMode = { kind: "play" } | { kind: "card"; wavelength?: boolean } | { kind: "challenge" } | { kind: "link"; slug: string };
 
 type View =
   | { v: "loading" }
   | { v: "auth" }
   | { v: "game"; link: { slug: string; sender: string } | null }
   | { v: "card"; wavelength?: boolean }
+  | { v: "challenge" }
   | { v: "link"; slug: string; reveal: boolean };
 
 export default function Overlay({ mode, onClose, onSection }: { mode: OverlayMode; onClose: () => void; onSection?: (i: number) => void }) {
@@ -72,6 +73,7 @@ export default function Overlay({ mode, onClose, onSection }: { mode: OverlayMod
         return setView({ v: "link", slug: m.slug, reveal: false });
       }
       if (m.kind === "card" && state.card) return setView({ v: "card", wavelength: m.wavelength });
+      if (m.kind === "challenge" && state.card) return setView({ v: "challenge" });
       return setView({ v: "game", link: null });
     },
     [loadLink, loadMe]
@@ -110,7 +112,7 @@ export default function Overlay({ mode, onClose, onSection }: { mode: OverlayMod
 
           {view.v === "auth" && (
             <div className="bm-shell justify-center gap-5">
-              <p className="text-[13px] font-extrabold tracking-[0.18em] text-[var(--bm-brand)]">READY FOR A SMALL GAME? 🎲</p>
+              <p className="text-[13px] font-extrabold tracking-[0.14em] text-[var(--bm-brand)]">READY FOR A SMALL GAME? 🎲</p>
               <h2 className="bm-display text-[2.2rem]">Which of 12 minds are you?</h2>
               <p className="text-[15px] text-[var(--bm-soft)]">3 minutes, no right answers. Sign in with your email to play — it&apos;s how your card and your Wavelengths are saved.</p>
               <AuthGate cta="Let's play" onDone={() => void route(mode)} />
@@ -125,14 +127,14 @@ export default function Overlay({ mode, onClose, onSection }: { mode: OverlayMod
               stats={signedIn.stats}
               previous={signedIn.previous}
               onSection={onSection}
-              onDone={async ({ linkSlug }) => {
+              onDone={async ({ linkSlug, then }) => {
                 if (linkSlug) {
                   await loadLink(linkSlug);
                   await loadMe();
                   setView({ v: "link", slug: linkSlug, reveal: true });
                 } else {
                   await loadMe();
-                  setView({ v: "card" });
+                  setView(then === "card" ? { v: "card" } : { v: "challenge" });
                 }
               }}
             />
@@ -148,6 +150,10 @@ export default function Overlay({ mode, onClose, onSection }: { mode: OverlayMod
                 setView({ v: "link", slug, reveal: false });
               }}
             />
+          )}
+
+          {view.v === "challenge" && signedIn?.card && (
+            <ChallengeView name={signedIn.card.name} origin={signedIn.card.origin} today={signedIn.card.today} onCard={() => setView({ v: "card" })} />
           )}
 
           {view.v === "link" &&
@@ -270,7 +276,7 @@ function LinkView({
       <div className="bm-shell justify-center gap-5">
         <section className="bm-card px-5 pb-6 pt-7 text-center">
           <WaveDuo a={link.senderName} b={link.recipientName} />
-          <p className="mt-6 text-[11.5px] font-semibold tracking-[0.2em] text-[var(--bm-soft)]">WAITING FOR {link.recipientName.toUpperCase()}</p>
+          <p className="mt-6 text-[11.5px] font-semibold tracking-[0.14em] text-[var(--bm-soft)]">WAITING FOR {link.recipientName.toUpperCase()}</p>
           <h2 className="bm-display mt-1.5 text-[1.85rem] leading-tight">Your waves are out</h2>
           <p className="mx-auto mt-2 max-w-[20rem] text-[14.5px] text-[var(--bm-soft)]">
             The moment {link.recipientName} plays, you&apos;ll both see how you click.
@@ -300,7 +306,7 @@ function LinkView({
         />
         <div className="relative">
           <WaveDuo a={link.senderName} b={link.recipientName} />
-          <p className="mt-7 text-[11.5px] font-semibold tracking-[0.2em] text-[var(--bm-brand)]">FOR {link.recipientName.toUpperCase()}</p>
+          <p className="mt-7 text-[11.5px] font-semibold tracking-[0.14em] text-[var(--bm-brand)]">FOR {link.recipientName.toUpperCase()}</p>
           <h2 className="bm-display mt-1.5 text-[2rem] leading-[1.08]">{link.senderName} wants to find your Wavelength</h2>
           <p className="mx-auto mt-3 max-w-[20rem] text-[14.5px] leading-snug text-[var(--bm-soft)]">
             Play for 3 minutes. {link.senderName}&apos;s archetype stays hidden until you do — then you both see how you click.
@@ -352,6 +358,47 @@ function WaveDuo({ a, b }: { a: string; b: string }) {
       <span className="sr-only">
         {a} and {b}
       </span>
+    </div>
+  );
+}
+
+/**
+ * Find your Brain-Mate: the challenge, on its own screen. What the map chip
+ * and the end of the reveal open — one name, one tap, sent.
+ */
+function ChallengeView({
+  name,
+  origin,
+  today,
+  onCard,
+}: {
+  name: string;
+  origin: string;
+  today: { slug: string; recipient: string; state: "waiting" | "done" | "expired" } | null;
+  onCard: () => void;
+}) {
+  return (
+    <div className="bm-shell justify-center">
+      <section className="bm-card relative overflow-hidden px-5 pb-6 pt-8 text-center">
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 h-40"
+          style={{ background: "radial-gradient(120% 100% at 50% 0%, color-mix(in srgb, var(--bm-brand) 14%, transparent), transparent 70%)" }}
+        />
+        <div className="relative">
+          <WaveDuo a={name} b="?" />
+          <p className="mt-6 text-[11px] font-semibold tracking-[0.14em] text-[var(--bm-brand)]">FIND YOUR BRAIN-MATE · ONE A DAY</p>
+          <h2 className="bm-display mt-1.5 text-[1.75rem]">Who&apos;s on your wavelength?</h2>
+          <p className="mx-auto mt-2 max-w-[20rem] text-[14px] leading-snug text-[var(--bm-soft)]">
+            Send one person the challenge. When they play, you&apos;ll both see how you click.
+          </p>
+          <div className="mt-5 text-left">
+            <DailyLink myName={name} origin={origin} today={today} bare />
+          </div>
+        </div>
+      </section>
+      <button type="button" className="mt-4 self-center text-[13px] font-medium text-[var(--bm-soft)] underline underline-offset-4" onClick={onCard}>
+        See my archetype card
+      </button>
     </div>
   );
 }

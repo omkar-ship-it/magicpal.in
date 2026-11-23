@@ -150,11 +150,14 @@ export function DailyLink({
   myName,
   today,
   origin,
+  bare = false,
 }: {
   myName: string;
   origin: string;
   /** Today's link if already sent. */
   today: { slug: string; recipient: string; state: "waiting" | "done" | "expired" } | null;
+  /** Inside a screen that already says what this is: no heading of its own. */
+  bare?: boolean;
 }) {
   const router = useRouter();
   const [name, setName] = useState("");
@@ -168,7 +171,7 @@ export function DailyLink({
     return (
       <div className="flex flex-col gap-3">
         <div className="rounded-[1.2rem] bg-[var(--sunk)] p-4">
-          <p className="text-[12px] font-extrabold tracking-[0.18em] text-[var(--bm-brand)]">TODAY&apos;S BRAIN-MATE CHECK</p>
+          <p className="text-[12px] font-extrabold tracking-[0.14em] text-[var(--bm-brand)]">TODAY&apos;S BRAIN-MATE CHECK</p>
           <p className="mt-1 text-[1.15rem] font-extrabold">
             {sent.recipient}
             {today?.state === "done" ? " played ✓" : today?.state === "expired" ? " missed it" : ""}
@@ -214,8 +217,8 @@ export function DailyLink({
         }
       }}
     >
-      <div>
-        <p className="text-[12px] font-extrabold tracking-[0.18em] text-[var(--bm-brand)]">FIND YOUR BRAIN-MATE · 1 TODAY</p>
+      <div hidden={bare}>
+        <p className="text-[12px] font-extrabold tracking-[0.14em] text-[var(--bm-brand)]">FIND YOUR BRAIN-MATE · 1 TODAY</p>
         <p className="mt-1 text-[15px] text-[var(--bm-soft)]">
           Who&apos;s on your wavelength? Send them the game — when they play, you both see how you click.
         </p>
@@ -230,7 +233,7 @@ export function DailyLink({
       />
       {error && <p className="text-[13px] font-semibold text-[var(--warn)]">{error}</p>}
       <button className="bm-btn bm-btn-brand" disabled={busy || name.trim().length < 2}>
-        {busy ? "Making your link…" : "Send the Wavelength check"}
+        {busy ? "Making your link…" : "Send the challenge"}
       </button>
     </form>
   );
@@ -354,7 +357,7 @@ export function QuickShare({
   filename?: string;
   label?: string;
   /** "light" sits on an archetype-coloured card. */
-  tone?: "brand" | "light";
+  tone?: "brand" | "light" | "ghost";
   /** Show "Copy link" under the button. */
   copy?: boolean;
 }) {
@@ -393,7 +396,7 @@ export function QuickShare({
       <button
         type="button"
         onClick={share}
-        className={light ? "bm-btn w-full !bg-white !text-[#241A16] !shadow-none" : "bm-btn bm-btn-brand w-full"}
+        className={light ? "bm-btn w-full !bg-white !text-[#241A16] !shadow-none" : look === "ghost" ? "bm-btn bm-btn-ghost w-full" : "bm-btn bm-btn-brand w-full"}
       >
         {label} ↗
       </button>

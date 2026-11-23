@@ -28,7 +28,7 @@ export default function ViewForm({ slug, other }: { slug: string; other: string 
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <p className="text-[12px] font-extrabold tracking-[0.18em] text-[var(--bm-brand)]">HOW DOES {other.toUpperCase()} COME ACROSS?</p>
+        <p className="text-[12px] font-extrabold tracking-[0.14em] text-[var(--bm-brand)]">HOW DOES {other.toUpperCase()} COME ACROSS?</p>
         <p className="mt-1 text-[14px] text-[var(--bm-soft)]">
           Nine quick slides, 20 seconds. It sharpens {other}&apos;s profile — people are often seen differently than they see themselves.
         </p>

@@ -6,6 +6,7 @@ import { TRAITS } from "@/lib/brainMate/archetypes";
 import { HIGH_PHRASE, LOW_PHRASE, MIN_CROWD, STAR_POS, TRAIT_COLOR, montageWords, starLight, strandsFor, traitVector, type Answers } from "@/lib/brainMate/score";
 import { ArchetypeMark } from "@/lib/brainMate/symbols";
 import { buzz, tone } from "./feel";
+import { QuickShare } from "./Share";
 
 export type RevealData = {
   name: string;
@@ -21,6 +22,10 @@ export type RevealData = {
   know: string;
   /** The final button: hands control back to whoever opened the game. */
   next: { label: string; onClick: () => void };
+  /** Share the archetype straight from the reveal (once it's saved). */
+  share?: { url: string; text: string; image: string };
+  /** Open the full archetype card instead. */
+  onCard?: () => void;
   note: string | null;
   /** The save is still on its way: rarity and "how did it know" fill in when it lands. */
   pending?: boolean;
@@ -42,7 +47,7 @@ export type RevealData = {
 /** Calibration first; everything after it is offset by CAL. */
 const CAL = 5600;
 const CAL_STEP = CAL / 6;
-const T = { montage: CAL, shatter: CAL + 1700, inhale: CAL + 2250, bloom: CAL + 2800, name: CAL + 3200, tagline: CAL + 4100, rarity: CAL + 4700, hand: CAL + 5300 };
+const T = { montage: CAL, shatter: CAL + 1700, inhale: CAL + 2250, bloom: CAL + 2800, name: CAL + 3200, tagline: CAL + 3900, rarity: CAL + 4400, hand: CAL + 4900, actions: CAL + 5600 };
 
 /** Six fleeting lines — generic where it must be, yours where it can be. */
 function calibrationLines(data: RevealData): string[] {
@@ -77,7 +82,7 @@ function seeded(i: number) {
 export default function Reveal({ data }: { data: RevealData }) {
   const a = ARCHETYPES[data.archetype];
   const [t, setT] = useState(0);
-  const [flipped, setFlipped] = useState<number[]>([]);
+  const [going, setGoing] = useState(false);
   const [confetti] = useState(() =>
     Array.from({ length: 16 }, (_, i) => ({
       dx: (seeded(i) - 0.5) * 520,
@@ -116,14 +121,6 @@ export default function Reveal({ data }: { data: RevealData }) {
   }, []);
 
   const bloomed = t >= T.bloom;
-  const cards = [
-    { k: "Trait", v: a.traits[0] },
-    { k: "Trait", v: a.traits[1] },
-    { k: "Trait", v: a.traits[2] },
-    { k: "Superpower", v: a.superpower },
-    { k: "Blind spot", v: a.roast },
-  ];
-  const allFlipped = flipped.length === cards.length;
   const rarityLine =
     data.players >= MIN_CROWD
       ? `1 in ${Math.max(2, Math.round(1 / Math.max(data.rarity, 0.01)))} people are ${a.name.replace("The ", "")}s`
@@ -156,7 +153,7 @@ export default function Reveal({ data }: { data: RevealData }) {
                   </svg>
                   <span className="h-10 w-10 rounded-full border-[3px] border-[var(--bm-line)] border-t-[var(--bm-brand)] bm-calib-spin" />
                 </div>
-                <p className="mt-6 text-[11.5px] font-bold tracking-[0.2em] text-[var(--bm-brand)]">CALIBRATING</p>
+                <p className="mt-6 text-[11.5px] font-bold tracking-[0.14em] text-[var(--bm-brand)]">CALIBRATING</p>
                 <p key={line} className="bm-calib-line mt-2 min-h-[1.6em] text-[1.15rem] font-bold" style={{ animationDuration: `${CAL_STEP}ms` }}>
                   {lines[line]}
                 </p>
@@ -217,7 +214,7 @@ export default function Reveal({ data }: { data: RevealData }) {
         {/* ---------------------------------------------- after the bloom */}
         {bloomed && (
           <div className="flex flex-1 flex-col items-center pt-6 text-center">
-            <p className="bm-fade-up text-[12px] font-extrabold tracking-[0.22em]" style={{ color: soft }}>
+            <p className="bm-fade-up text-[12px] font-extrabold tracking-[0.14em]" style={{ color: soft }}>
               {data.name.split(" ")[0].toUpperCase()}, YOU ARE
             </p>
             <div className="relative mt-4 grid h-[190px] w-[190px] place-items-center">
@@ -248,127 +245,98 @@ export default function Reveal({ data }: { data: RevealData }) {
             </div>
 
             {t >= T.name && (
-              <h1 className="bm-display mt-4 text-[clamp(2rem,10vw,2.7rem)]" aria-label={a.name}>
+              <h1 className="bm-display mt-5 text-[clamp(2rem,9vw,2.5rem)]" aria-label={a.name}>
                 {/* Letters animate one by one, but words never break mid-way. */}
-                {a.name
-                  .toUpperCase()
-                  .split(" ")
-                  .map((word, w, words) => {
-                    const offset = words.slice(0, w).join(" ").length + (w ? 1 : 0);
-                    return (
-                      <span key={w} className="inline-block whitespace-nowrap" aria-hidden="true">
-                        {word.split("").map((ch, k) => (
-                          <span key={k} className="bm-letter" style={{ animationDelay: `${(offset + k) * 45}ms` }}>
-                            {ch}
-                          </span>
-                        ))}
-                        {w < words.length - 1 ? "\u00A0" : ""}
-                      </span>
-                    );
-                  })}
+                {a.name.split(" ").map((word, w, words) => {
+                  const offset = words.slice(0, w).join(" ").length + (w ? 1 : 0);
+                  return (
+                    <span key={w} className="inline-block whitespace-nowrap" aria-hidden="true">
+                      {word.split("").map((ch, k) => (
+                        <span key={k} className="bm-letter" style={{ animationDelay: `${(offset + k) * 40}ms` }}>
+                          {ch}
+                        </span>
+                      ))}
+                      {w < words.length - 1 ? "\u00A0" : ""}
+                    </span>
+                  );
+                })}
               </h1>
             )}
             {t >= T.tagline && (
-              <p className="bm-fade-up mt-1 text-[1.15rem] font-semibold" style={{ color: soft }}>
+              <p className="bm-fade-up mt-1.5 text-[1.05rem]" style={{ color: soft }}>
                 {a.tagline}
               </p>
             )}
-            {t >= T.rarity && !data.pending && !data.error && (
-              <span className="bm-stamp mt-3 rounded-full px-4 py-1.5 text-[13px] font-extrabold" style={{ background: chip }}>
-                ◆ {rarityLine}
-              </span>
-            )}
             {t >= T.rarity && data.mix?.length > 0 && (
-              <div className="bm-fade-up mt-4 w-full max-w-[20rem]" style={{ animationDelay: "0.25s" }}>
+              <div className="bm-fade-up mt-5 w-full max-w-[18rem]">
                 {/* The blend is the honest claim — right far more often than any single label. */}
-                <div className="flex h-3 overflow-hidden rounded-full" style={{ background: chip }}>
+                <div className="flex h-1.5 overflow-hidden rounded-full" style={{ background: chip }}>
                   {data.mix.map((m, i) => (
-                    <span
-                      key={m.id}
-                      style={{ width: `${m.pct}%`, background: ARCHETYPES[m.id].color, opacity: i === 0 ? 1 : 0.75 }}
-                    />
+                    <span key={m.id} style={{ width: `${m.pct}%`, background: ARCHETYPES[m.id].color, opacity: i === 0 ? 1 : 0.6 }} />
                   ))}
                 </div>
-                <p className="mt-1.5 text-[13px] font-bold" style={{ color: soft }}>
-                  {data.mix.map((m) => `${m.pct}% ${ARCHETYPES[m.id].name.replace("The ", "")}`).join(" · ")}
+                <p className="mt-2 text-[12.5px]" style={{ color: soft }}>
+                  {data.mix.map((m) => `${m.pct}% ${ARCHETYPES[m.id].name.replace("The ", "")}`).join("  ·  ")}
                 </p>
               </div>
             )}
 
+            {/* One quiet card instead of a hand of flip cards: what you're like, your superpower, your blind spot. */}
             {t >= T.hand && (
-              <div className="mt-6 w-full">
-                {!allFlipped && (
-                  <p className="bm-fade-up mb-2 text-[13px] font-bold" style={{ color: soft }}>
-                    Tap to deal your hand ({flipped.length}/{cards.length})
+              <section className="bm-fade-up mt-6 w-full rounded-[1.25rem] border border-[var(--bm-line)] bg-[var(--bm-card)] p-5 text-left">
+                <div className="flex flex-wrap gap-1.5">
+                  {a.traits.map((tr) => (
+                    <span key={tr} className="rounded-full px-3 py-1 text-[12.5px] font-medium" style={{ background: chip }}>
+                      {tr}
+                    </span>
+                  ))}
+                </div>
+                <p className="mt-5 text-[11px] font-semibold tracking-[0.14em]" style={{ color: a.color }}>
+                  SUPERPOWER
+                </p>
+                <p className="mt-1 text-[1.02rem] font-semibold leading-snug">{a.superpower}</p>
+                <p className="mt-4 text-[11px] font-semibold tracking-[0.14em]" style={{ color: soft }}>
+                  BLIND SPOT
+                </p>
+                <p className="mt-1 text-[14px] leading-snug" style={{ color: soft }}>
+                  {a.roast}
+                </p>
+                {data.know && (
+                  <p className="mt-4 border-t border-[var(--bm-line)] pt-3 text-[13px] leading-snug" style={{ color: soft }}>
+                    {data.know}
                   </p>
                 )}
-                <div className="grid grid-cols-2 gap-2.5">
-                  {cards.map((c, i) => {
-                    const open = flipped.includes(i);
-                    const wide = i >= 3;
-                    return (
-                      <button
-                        key={i}
-                        className={`bm-flip bm-fade-up text-left ${wide ? "col-span-2" : i === 2 ? "col-span-2" : ""}`}
-                        style={{ animationDelay: `${i * 70}ms` }}
-                        data-open={open}
-                        onClick={() => {
-                          if (open) return;
-                          buzz(10);
-                          tone(i * 2, 0.1);
-                          setFlipped((f) => [...f, i]);
-                        }}
-                        aria-label={open ? `${c.k}: ${c.v}` : `Flip card ${i + 1}`}
-                      >
-                        <div className="bm-flip-inner">
-                          <div className="bm-flip-face items-center" style={{ background: chip, border: `1.5px solid var(--bm-line)` }}>
-                            <span className="opacity-70">
-                              <ArchetypeMark id={a.id} size={30} color={a.color} />
-                            </span>
-                          </div>
-                          <div className="bm-flip-back" style={{ background: "var(--bm-card)", color: "var(--bm-ink)", border: "1.5px solid var(--bm-line)" }}>
-                            <span className="text-[11px] font-extrabold tracking-[0.18em]" style={{ color: a.color }}>
-                              {c.k.toUpperCase()}
-                            </span>
-                            <span className="text-[1.05rem] font-extrabold leading-snug">{c.v}</span>
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-                {!allFlipped && (
-                  <button
-                    className="mt-3 text-[12px] font-semibold underline opacity-70"
-                    onClick={() => setFlipped(cards.map((_, i) => i))}
-                  >
-                    Flip them all
-                  </button>
-                )}
-              </div>
+                <p className="mt-3 text-[12.5px]" style={{ color: soft }}>
+                  {data.cusp ? `${a.name.replace("The ", "")}–${ARCHETYPES[data.streak].name.replace("The ", "")} cusp` : streakLine(data.streak)}
+                  {!data.pending && !data.error ? ` · ${rarityLine}` : ""}
+                </p>
+              </section>
             )}
 
-            {allFlipped && (
-              <div className="mt-6 flex w-full flex-col items-center gap-4">
-                {data.know && <p className="bm-fade-up max-w-[22rem] text-[1.1rem] font-bold leading-snug">{data.know}</p>}
-                <span
-                  className="bm-stamp flex items-center gap-2 rounded-full px-4 py-2 text-[14px] font-extrabold"
-                  style={{ background: ARCHETYPES[data.streak].color, color: ARCHETYPES[data.streak].ink, animationDelay: "0.3s" }}
-                >
-                  <ArchetypeMark id={data.streak} size={20} color={ARCHETYPES[data.streak].ink} stroke={8} />
-                  {data.cusp ? `${a.name.replace("The ", "")}–${ARCHETYPES[data.streak].name.replace("The ", "")} cusp` : streakLine(data.streak)}
-                </span>
-                {data.note && <p className="text-[13px] font-semibold opacity-80">{data.note}</p>}
-                {data.error && <p className="text-[13px] font-semibold text-[var(--warn)]">{data.error}</p>}
+            {/* What next: find your Brain-Mate, share it, or see the full card. Never blocked on the save. */}
+            {t >= T.actions && (
+              <div className="bm-fade-up mt-5 flex w-full flex-col items-stretch gap-3">
+                {data.note && <p className="text-[13px]" style={{ color: soft }}>{data.note}</p>}
+                {data.error && <p className="text-[13px] font-medium text-[var(--warn)]">{data.error}</p>}
                 <button
                   type="button"
-                  disabled={data.pending}
-                  onClick={data.next.onClick}
-                  className="bm-btn bm-btn-brand bm-fade-up mt-2 w-full"
-                  style={{ animationDelay: "0.5s" }}
+                  className="bm-btn bm-btn-brand w-full"
+                  disabled={going && Boolean(data.pending)}
+                  onClick={() => {
+                    setGoing(true);
+                    data.next.onClick();
+                  }}
                 >
-                  {data.next.label} →
+                  {going && data.pending ? "One moment…" : `${data.next.label} →`}
                 </button>
+                {!data.pending && !data.error && data.share && (
+                  <QuickShare tone="ghost" label="Share my archetype" copy={false} url={data.share.url} text={data.share.text} image={data.share.image} filename="my-archetype.png" />
+                )}
+                {data.onCard && (
+                  <button type="button" className="text-[13px] font-medium underline underline-offset-4" style={{ color: soft }} onClick={data.onCard}>
+                    See my full archetype card
+                  </button>
+                )}
               </div>
             )}
           </div>
