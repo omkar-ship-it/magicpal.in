@@ -4,15 +4,16 @@ import { useEffect, useState } from "react";
 import { ARCHETYPES, TRAITS, TRAIT_INFO, TRAIT_PRAISE, relationsOf, streakLine, type ArchetypeId } from "@/lib/brainMate/archetypes";
 import { OUTCOMES } from "@/lib/brainMate/compare";
 import { ENERGY } from "@/lib/brainMate/rounds";
-import { TRAIT_COLOR, showUp, strandsFor } from "@/lib/brainMate/score";
+import { TRAIT_COLOR, showUp } from "@/lib/brainMate/score";
 import { ArchetypeMark } from "@/lib/brainMate/symbols";
 import type { CardPayload } from "@/lib/brainMate/payload";
 import { QuickShare, WavelengthCta } from "./Share";
 
 /**
- * Your archetype card, inside the overlay. Four things, in order:
+ * Your archetype card, inside the overlay, in OpenNetworks' own look.
+ * Four things, in order:
  *
- *   the card itself (your colour, your mark, your superpower) + Share
+ *   the card itself (mark, name, tagline, superpower) + Share
  *   → your top strengths → FIND YOUR BRAIN-MATE (the one big action)
  *   → who you click with
  *
@@ -20,7 +21,6 @@ import { QuickShare, WavelengthCta } from "./Share";
  * it knew, work with me, your Wavelengths) folds away under "More about you".
  */
 
-const tintOf = (color: string) => `color-mix(in srgb, ${color} 13%, var(--bm-card))`;
 const short = (id: ArchetypeId) => ARCHETYPES[id].name.replace("The ", "");
 
 function Kicker({ children }: { children: React.ReactNode }) {
@@ -57,8 +57,6 @@ export default function IdentityCard({
     : null;
   const raters = [...new Set(card.views.map((v) => v.by))];
   const [energyDone, setEnergyDone] = useState(Boolean(card.energy));
-  const soft = a.ink === "#ffffff" ? "rgba(255,255,255,0.8)" : "rgba(36,26,22,0.72)";
-  const glass = a.ink === "#ffffff" ? "rgba(255,255,255,0.15)" : "rgba(36,26,22,0.08)";
 
   useEffect(() => {
     if (!focusWavelength) return;
@@ -69,47 +67,36 @@ export default function IdentityCard({
   return (
     <div className="flex flex-col gap-3 px-4 pb-8 pt-14">
       {/* ------------------------------------------------------- the card */}
-      <section
-        className="relative overflow-hidden rounded-[28px] px-6 pb-6 pt-7 text-center shadow-[0_24px_50px_-28px_rgba(0,0,0,0.55)]"
-        style={{ background: a.color, color: a.ink }}
-      >
-        <svg viewBox="0 0 400 400" className="pointer-events-none absolute -right-24 -top-24 h-[340px] w-[340px]" aria-hidden="true">
-          {strandsFor(card.answers, card.name).map((s, i) => (
-            <path key={i} d={s.d} stroke={a.ink} strokeWidth={s.width} strokeOpacity={0.16} fill="none" strokeLinecap="round" />
-          ))}
-        </svg>
-        <p className="relative text-[11.5px] font-bold tracking-[0.2em]" style={{ color: soft }}>
-          {first.toUpperCase()}, YOUR ARCHETYPE
-        </p>
-        <span className="relative mx-auto mt-4 grid h-[104px] w-[104px] place-items-center rounded-full" style={{ background: glass }}>
-          <span className={`bm-idle-${a.mode}`}>
-            <ArchetypeMark id={a.id} size={68} color={a.ink} />
-          </span>
-        </span>
-        <h2 className="bm-display relative mt-4 text-[2.3rem] leading-none">{a.name}</h2>
-        <p className="relative mt-1.5 text-[15.5px]" style={{ color: soft }}>
-          {a.tagline}
-        </p>
-        <p className="relative mt-5 text-[11px] font-bold tracking-[0.18em]" style={{ color: soft }}>
-          SUPERPOWER
-        </p>
-        <p className="relative mx-auto mt-1 max-w-[20rem] text-[1.1rem] font-bold leading-snug">{a.superpower}</p>
-        <div className="relative mt-4 flex flex-wrap justify-center gap-1.5">
-          {card.mix.map((m) => (
-            <span key={m.id} className="rounded-full px-2.5 py-1 text-[12px] font-semibold" style={{ background: glass }}>
-              {m.pct}% {short(m.id)}
+      {/* OpenNetworks' own look: a white card on the cream app, coral for
+          action; the archetype's colour lives only in its mark. */}
+      <section className="bm-card relative overflow-hidden text-center">
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 h-44"
+          style={{ background: `radial-gradient(120% 100% at 50% 0%, color-mix(in srgb, ${a.color} 12%, transparent), transparent 70%)` }}
+        />
+        <div className="relative px-6 pb-6 pt-8">
+          <p className="text-[11px] font-semibold tracking-[0.2em] text-[var(--bm-soft)]">{first.toUpperCase()} · YOUR ARCHETYPE</p>
+          <span
+            className="mx-auto mt-5 grid h-[92px] w-[92px] place-items-center rounded-full"
+            style={{ background: a.color, boxShadow: `0 0 0 8px color-mix(in srgb, ${a.color} 12%, var(--bm-card)), 0 18px 36px -18px ${a.color}` }}
+          >
+            <span className={`bm-idle-${a.mode}`}>
+              <ArchetypeMark id={a.id} size={54} color={a.ink} />
             </span>
-          ))}
-        </div>
-        <div className="relative mt-6">
-          <QuickShare
-            tone="light"
-            label="Share my archetype"
-            url={`${card.origin}/brain-mate`}
-            text={`I'm ${a.name} on Brain-Mate — "${a.tagline}" What are you?`}
-            image="/api/brain-mate/card"
-            filename="my-archetype.png"
-          />
+          </span>
+          <h2 className="bm-display mt-5 text-[2.25rem] leading-none">{a.name}</h2>
+          <p className="mt-2 text-[15px] text-[var(--bm-soft)]">{a.tagline}</p>
+          <span className="mx-auto my-5 block h-px w-10 bg-[var(--bm-brand)] opacity-60" />
+          <p className="mx-auto max-w-[19rem] text-[1.05rem] font-semibold leading-snug">“{a.superpower}”</p>
+          <div className="mt-6">
+            <QuickShare
+              label="Share my archetype"
+              url={`${card.origin}/brain-mate`}
+              text={`I'm ${a.name} on Brain-Mate — "${a.tagline}" What are you?`}
+              image="/api/brain-mate/card"
+              filename="my-archetype.png"
+            />
+          </div>
         </div>
       </section>
 
@@ -119,7 +106,7 @@ export default function IdentityCard({
         <div className="mt-3 flex flex-col gap-3">
           {top.map((t) => (
             <div key={t.k} className="flex items-center gap-3">
-              <span className="h-9 w-1.5 shrink-0 rounded-full" style={{ background: TRAIT_COLOR[t.k] }} />
+              <span className="mt-[0.45em] h-2 w-2 shrink-0 self-start rounded-full" style={{ background: TRAIT_COLOR[t.k] }} />
               <span>
                 <span className="block text-[15.5px] font-bold">{t.label}</span>
                 <span className="block text-[13.5px] text-[var(--bm-soft)]">{t.line}</span>
@@ -139,7 +126,7 @@ export default function IdentityCard({
         <Kicker>WHO YOU CLICK WITH</Kicker>
         <div className="mt-3 grid grid-cols-3 gap-2">
           {people.map((p) => (
-            <div key={p.kicker} className="flex flex-col items-center rounded-2xl p-2.5 text-center" style={{ background: tintOf(ARCHETYPES[p.id].color) }}>
+            <div key={p.kicker} className="flex flex-col items-center rounded-2xl bg-[var(--sunk)] p-2.5 text-center">
               <span className="grid h-10 w-10 place-items-center rounded-full" style={{ background: ARCHETYPES[p.id].color }}>
                 <ArchetypeMark id={p.id} size={24} color={ARCHETYPES[p.id].ink} stroke={7} />
               </span>
@@ -257,10 +244,30 @@ export default function IdentityCard({
               </div>
             </div>
           )}
+      {!energyDone && (
+            <div className="rounded-2xl bg-[var(--sunk)] p-4">
+              <p className="text-[13.5px] font-semibold">Optional: what&apos;s taking most of your energy these days?</p>
+              <p className="text-[12px] text-[var(--bm-soft)]">Never part of your result — it helps us keep the game fair to everyone.</p>
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {ENERGY.map((e) => (
+                  <button
+                    key={e.id}
+                    className="rounded-full border border-[var(--bm-line)] bg-[var(--bm-card)] px-3 py-1.5 text-[13px] font-medium"
+                    onClick={async () => {
+                      setEnergyDone(true);
+                      await fetch("/api/brain-mate/energy", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ energy: e.id }) }).catch(() => {});
+                    }}
+                  >
+                    {e.emoji} {e.label}
+                  </button>
+                ))}
+                <button className="px-2 text-[12.5px] text-[var(--bm-soft)] underline" onClick={() => setEnergyDone(true)}>
+                  Skip
+                </button>
+              </div>
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] font-semibold">
-            <a className="text-[var(--bm-brand)]" href="/api/brain-mate/card?v=colleague" target="_blank" rel="noopener noreferrer">
-              Work-safe image (no guilty habit)
-            </a>
             <button className="text-[var(--bm-soft)] underline" onClick={onReplay}>
               Play again
             </button>
@@ -268,29 +275,6 @@ export default function IdentityCard({
         </div>
       </details>
 
-      {!energyDone && (
-        <section className="rounded-[1.25rem] border border-dashed border-[var(--bm-line)] p-4">
-          <p className="text-[13.5px] font-semibold">Optional: what&apos;s taking most of your energy these days?</p>
-          <p className="text-[12px] text-[var(--bm-soft)]">Never part of your result — it helps us keep the game fair to everyone.</p>
-          <div className="mt-2.5 flex flex-wrap gap-1.5">
-            {ENERGY.map((e) => (
-              <button
-                key={e.id}
-                className="rounded-full border border-[var(--bm-line)] bg-[var(--bm-card)] px-3 py-1.5 text-[13px] font-medium"
-                onClick={async () => {
-                  setEnergyDone(true);
-                  await fetch("/api/brain-mate/energy", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ energy: e.id }) }).catch(() => {});
-                }}
-              >
-                {e.emoji} {e.label}
-              </button>
-            ))}
-            <button className="px-2 text-[12.5px] text-[var(--bm-soft)] underline" onClick={() => setEnergyDone(true)}>
-              Skip
-            </button>
-          </div>
-        </section>
-      )}
     </div>
   );
 }

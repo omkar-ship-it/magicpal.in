@@ -158,7 +158,6 @@ export function DailyLink({
 }) {
   const router = useRouter();
   const [name, setName] = useState("");
-  const [relation, setRelation] = useState<"friend" | "colleague">("friend");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [made, setMade] = useState<{ slug: string; recipient: string } | null>(null);
@@ -201,7 +200,7 @@ export function DailyLink({
           const res = await fetch("/api/brain-mate/links", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name, relation, tz: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+            body: JSON.stringify({ name, relation: "friend", tz: Intl.DateTimeFormat().resolvedOptions().timeZone }),
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error ?? "Couldn't make the link.");
@@ -229,20 +228,6 @@ export function DailyLink({
         onChange={(e) => setName(e.target.value)}
         aria-label="Their name"
       />
-      <div className="flex gap-2 rounded-full bg-[var(--bm-line)] p-1 text-[14px] font-bold">
-        {(["friend", "colleague"] as const).map((r) => (
-          <button
-            type="button"
-            key={r}
-            className="flex-1 rounded-full py-2.5 capitalize transition-colors"
-            style={{ background: relation === r ? "var(--card)" : "transparent" }}
-            onClick={() => setRelation(r)}
-            aria-pressed={relation === r}
-          >
-            {r}
-          </button>
-        ))}
-      </div>
       {error && <p className="text-[13px] font-semibold text-[var(--warn)]">{error}</p>}
       <button className="bm-btn bm-btn-brand" disabled={busy || name.trim().length < 2}>
         {busy ? "Making your link…" : "Send the Wavelength check"}

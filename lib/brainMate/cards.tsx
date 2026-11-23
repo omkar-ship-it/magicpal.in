@@ -1,9 +1,9 @@
 import "server-only";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { ARCHETYPES, streakLine, type ArchetypeId } from "./archetypes";
+import { ARCHETYPES, type ArchetypeId } from "./archetypes";
 import { OUTCOMES, type Comparison } from "./compare";
-import { strandsFor, type Answers } from "./score";
+import type { Answers } from "./score";
 import { ArchetypeMark } from "./symbols";
 
 /**
@@ -37,24 +37,6 @@ export async function cardFonts() {
 }
 
 const short = (id: ArchetypeId) => ARCHETYPES[id].name.replace("The ", "");
-
-function Strands({ answers, seed, size, color }: { answers: Answers; seed: string; size: number; color?: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
-      {strandsFor(answers, seed).map((s, i) => (
-        <path
-          key={i}
-          d={s.d}
-          stroke={color ?? s.color}
-          strokeWidth={s.width}
-          strokeOpacity={color ? 0.28 : s.opacity}
-          fill="none"
-          strokeLinecap="round"
-        />
-      ))}
-    </svg>
-  );
-}
 
 function Frame({ bg, children, label, right, ink = INK, edge = BRAND }: { bg: string; children: React.ReactNode; label: string; right?: string; ink?: string; edge?: string }) {
   return (
@@ -93,16 +75,16 @@ function Frame({ bg, children, label, right, ink = INK, edge = BRAND }: { bg: st
   );
 }
 
-/** Your Brain-Mate card. `colleague` swaps the roast for the work-safe blind spot. */
+/**
+ * Your archetype card, in OpenNetworks' own look: cream, a coral frame, the
+ * archetype's colour only on its mark. Name, tagline, three strengths, the
+ * superpower — nothing more. (`colleague`, `rarity`, `mix` and `answers`
+ * are accepted for older callers but no longer drawn: less is the point.)
+ */
 export function IdentityCard({
   name,
   archetype,
-  streak,
-  answers,
-  rarity,
   site,
-  colleague = false,
-  mix,
   strengths,
 }: {
   mix?: { id: ArchetypeId; pct: number }[];
@@ -110,60 +92,51 @@ export function IdentityCard({
   strengths?: string[];
   name: string;
   archetype: ArchetypeId;
-  streak: ArchetypeId;
-  answers: Answers;
-  rarity: number | null;
+  streak?: ArchetypeId;
+  answers?: Answers;
+  rarity?: number | null;
   site: string;
   colleague?: boolean;
 }) {
   const a = ARCHETYPES[archetype];
-  const ink = a.ink;
-  const soft = ink === "#ffffff" ? "rgba(255,255,255,0.78)" : "rgba(42,30,0,0.72)";
-  const chip = ink === "#ffffff" ? "rgba(255,255,255,0.16)" : "rgba(42,30,0,0.1)";
+  const SOFT = "#7A6B63";
   return (
-    <Frame bg={a.color} label="BRAIN-MATE" right={name.split(" ")[0].toUpperCase()} ink={a.ink} edge={chip}>
-      <div style={{ display: "flex", color: ink, flexDirection: "column", alignItems: "center", flex: 1 }}>
-        <div style={{ display: "flex", position: "relative", width: 560, height: 560, alignItems: "center", justifyContent: "center", marginTop: 10 }}>
-          <div style={{ display: "flex", position: "absolute", top: 0, left: 0 }}>
-            <Strands answers={answers} seed={name} size={560} color={ink} />
-          </div>
-          <div
-            style={{
-              display: "flex",
-              width: 300,
-              height: 300,
-              borderRadius: 999,
-              alignItems: "center",
-              justifyContent: "center",
-              background: chip,
-            }}
-          >
-            <ArchetypeMark id={archetype} color={ink} size={210} stroke={5} />
-          </div>
+    <Frame bg={CREAM} label="BRAIN-MATE" right={name.split(" ")[0].toUpperCase()}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: 1, color: INK }}>
+        <div style={{ display: "flex", flex: 1 }} />
+        <div
+          style={{
+            display: "flex",
+            width: 360,
+            height: 360,
+            borderRadius: 999,
+            background: a.color,
+            alignItems: "center",
+            justifyContent: "center",
+            border: `22px solid ${a.tint}`,
+          }}
+        >
+          <ArchetypeMark id={archetype} color={a.ink} size={200} stroke={5} />
         </div>
-        <div style={{ display: "flex", fontSize: 34, letterSpacing: 6, fontWeight: 800, color: soft, marginTop: 10 }}>{`${name.split(" ")[0].toUpperCase()} IS`}</div>
-        <div style={{ display: "flex", fontSize: 108, fontWeight: 800, letterSpacing: -3, marginTop: 4 }}>{a.name.toUpperCase()}</div>
-        <div style={{ display: "flex", fontSize: 46, marginTop: 6, color: soft }}>{a.tagline}</div>
-        <div style={{ display: "flex", marginTop: 56, gap: 16 }}>
+        <div style={{ display: "flex", fontSize: 34, letterSpacing: 6, fontWeight: 800, color: SOFT, marginTop: 70 }}>{`${name.split(" ")[0].toUpperCase()} IS`}</div>
+        <div style={{ display: "flex", fontSize: 118, fontWeight: 800, letterSpacing: -4, marginTop: 6 }}>{a.name}</div>
+        <div style={{ display: "flex", fontSize: 46, marginTop: 10, color: SOFT }}>{a.tagline}</div>
+        <div style={{ display: "flex", width: 90, height: 6, borderRadius: 3, background: BRAND, marginTop: 64 }} />
+        <div style={{ display: "flex", fontSize: 52, fontWeight: 800, marginTop: 56, textAlign: "center", maxWidth: 820, lineHeight: 1.25 }}>
+          {`“${a.superpower}”`}
+        </div>
+        <div style={{ display: "flex", marginTop: 60, gap: 18 }}>
           {(strengths?.length ? strengths : a.traits).map((t) => (
-            <div key={t} style={{ display: "flex", padding: "14px 28px", borderRadius: 999, background: chip, fontSize: 32, fontWeight: 800 }}>
+            <div key={t} style={{ display: "flex", padding: "14px 30px", borderRadius: 999, background: "#F1E9E4", fontSize: 32, fontWeight: 800 }}>
               {t}
             </div>
           ))}
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginTop: 64, maxWidth: 820 }}>
-          <div style={{ display: "flex", fontSize: 26, letterSpacing: 4, fontWeight: 800, color: soft }}>MY SUPERPOWER</div>
-          <div style={{ display: "flex", fontSize: 50, fontWeight: 800, marginTop: 10, textAlign: "center", lineHeight: 1.2 }}>{a.superpower}</div>
-          {colleague ? null : <div style={{ display: "flex", fontSize: 32, marginTop: 34, color: soft, textAlign: "center" }}>{`Guilty habit: ${a.roast}`}</div>}
-          {mix && mix.length > 1 ? (
-            <div style={{ display: "flex", fontSize: 30, marginTop: 18, color: soft }}>{`${streakLine(streak)}${rarity !== null ? `  ·  1 in ${Math.max(2, Math.round(1 / Math.max(rarity, 0.01)))}` : ""}`}</div>
-          ) : null}
         </div>
         <div style={{ display: "flex", flex: 1 }} />
         <div style={{ display: "flex", alignSelf: "stretch", justifyContent: "space-between", alignItems: "flex-end" }}>
           <div style={{ display: "flex", flexDirection: "column" }}>
             <div style={{ display: "flex", fontSize: 44, fontWeight: 800 }}>What are you? Find your Brain-Mate</div>
-            <div style={{ display: "flex", fontSize: 30, color: soft, marginTop: 6 }}>{`${site}/brain-mate  ·  by OpenNetworks`}</div>
+            <div style={{ display: "flex", fontSize: 30, color: SOFT, marginTop: 6 }}>{`${site}/brain-mate  ·  by OpenNetworks`}</div>
           </div>
         </div>
       </div>
