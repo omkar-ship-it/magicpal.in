@@ -26,6 +26,7 @@ import {
   nextDuel,
   starLight,
   stillInPlay,
+  strandsFor,
   type Answers,
   type CrowdStats,
 } from "@/lib/brainMate/score";
@@ -132,6 +133,7 @@ export default function Game({ defaultName, needsTerms, link, stats, previous, o
   const skyRef = useRef<HTMLDivElement>(null);
   const [sparks, setSparks] = useState<{ id: number; x: number; y: number; dx: number; dy: number; color: string }[]>([]);
   const sparkId = useRef(0);
+  const [ping, setPing] = useState<{ k: Trait | null; n: number }>({ k: null, n: 0 });
 
   // Save as you go; clear once the result is in.
   useEffect(() => {
@@ -151,7 +153,9 @@ export default function Game({ defaultName, needsTerms, link, stats, previous, o
     Object.keys(answers.sliders).length +
     (answers.values.length ? 1 : 0);
   const fraction = stage === "duel" || stage === "saving" || next === "duel" ? 1 : answered / TOTAL_STEPS;
-  const alive = new Set(stillInPlay(answers, fraction));
+  const inPlay = stillInPlay(answers, fraction);
+  const alive = new Set(inPlay);
+  const leader = inPlay[0];
   const savedCount = saved
     ? Object.keys(saved.answers.rather).length + Object.keys(saved.answers.tend).length + Object.keys(saved.answers.calls).length
     : 0;
@@ -162,8 +166,14 @@ export default function Game({ defaultName, needsTerms, link, stats, previous, o
     const id = ++sparkId.current;
     const x = e.clientX - 7;
     const y = e.clientY - 7;
-    setSparks((s) => [...s, { id, x, y, dx: target.left + target.width / 2 - x - 7, dy: target.top + target.height / 2 - y - 7, color }]);
+    // Aim at the star of the trait this answer feeds, not just the middle.
+    const trait = TRAITS.find((k) => TRAIT_COLOR[k] === color);
+    const [px, py] = trait ? STAR_POS[trait] : [50, 50];
+    const tx = target.left + (px / 100) * target.width;
+    const ty = target.top + (py / 100) * target.height;
+    setSparks((s) => [...s, { id, x, y, dx: tx - x - 7, dy: ty - y - 7, color }]);
     window.setTimeout(() => setSparks((s) => s.filter((p) => p.id !== id)), 650);
+    if (trait) window.setTimeout(() => setPing((p) => ({ k: trait, n: p.n + 1 })), 560);
   }
 
   function goTo(section: Section) {
@@ -329,8 +339,8 @@ export default function Game({ defaultName, needsTerms, link, stats, previous, o
   return (
     <main className="bm-full">
       <div className="bm-shell">
-        <Ring alive={alive} />
-        <Constellation innerRef={skyRef} answers={answers} />
+        <Ring alive={alive} lead={leader} />
+        <Sketch innerRef={skyRef} answers={answers} seed={name || seed} leader={leader} progress={fraction} ping={ping} />
 
         <div className="flex flex-1 flex-col">
           {stage === "title" && <TitleCard key={next} section={next} onDone={() => setStage(next)} />}
@@ -522,11 +532,11 @@ export default function Game({ defaultName, needsTerms, link, stats, previous, o
 }
 
 // ------------------------------------------------------------- chrome
-function Ring({ alive }: { alive: Set<ArchetypeId> }) {
+function Ring({ alive, lead }: { alive: Set<ArchetypeId>; lead: ArchetypeId }) {
   return (
     <div className="flex items-center justify-between gap-1 pt-1" aria-label={`${alive.size} of 12 archetypes still possible`}>
       {ARCHETYPE_IDS.map((id) => (
-        <span key={id} className="bm-ring-dot grid aspect-square w-full max-w-[26px] place-items-center rounded-full" data-alive={alive.has(id)}>
+        <span key={id} className="bm-ring-dot grid aspect-square w-full max-w-[26px] place-items-center rounded-full" data-alive={alive.has(id)} data-lead={alive.size < 12 && id === lead}>
           <ArchetypeMark id={id} size={20} stroke={7} color="currentColor" />
         </span>
       ))}
@@ -534,27 +544,81 @@ function Ring({ alive }: { alive: Set<ArchetypeId> }) {
   );
 }
 
-function Constellation({ innerRef, answers }: { innerRef: React.RefObject<HTMLDivElement | null>; answers: Answers }) {
+/**
+ * The live sketch. Every answer draws one more line in its trait's colour,
+ * the trait's star lights up and joins the others, and the archetype the
+ * answers lean toward surfaces in the middle — faint at first, clearer as
+ * the sketch fills in, swapping with a little spin when the lead changes.
+ */
+function Sketch({
+  innerRef,
+  answers,
+  seed,
+  leader,
+  progress,
+  ping,
+}: {
+  innerRef: React.RefObject<HTMLDivElement | null>;
+  answers: Answers;
+  seed: string;
+  leader: ArchetypeId;
+  progress: number;
+  ping: { k: Trait | null; n: number };
+}) {
   const light = starLight(answers);
   const lit = TRAITS.filter((k) => light[k] > 0.15);
+  const strands = strandsFor(answers, seed);
+  const L = ARCHETYPES[leader];
   return (
-    <div className="flex justify-center py-2">
-      <div ref={innerRef} className="relative h-[84px] w-[84px]">
-        <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full overflow-visible">
+    <div className="flex justify-center pb-1 pt-2">
+      <div ref={innerRef} className="relative h-[136px] w-[136px]">
+        {/* soft halo in the leading archetype's colour */}
+        <div
+          className="absolute inset-3 rounded-full transition-[background,opacity] duration-700"
+          style={{ background: `radial-gradient(circle, color-mix(in srgb, ${L.color} 22%, transparent), transparent 70%)`, opacity: 0.35 + progress * 0.65 }}
+        />
+        {/* the sketch: one line per answer, each drawn as it arrives */}
+        <svg viewBox="0 0 400 400" className="bm-sketch-orbit absolute inset-0 h-full w-full overflow-visible" aria-hidden="true">
+          {strands.map((st) => (
+            <path key={st.key} d={st.d} stroke={st.color} strokeWidth={st.width * 0.9} strokeOpacity={0.42} fill="none" strokeLinecap="round" pathLength={1} className="bm-sketch-line" />
+          ))}
+        </svg>
+        {/* the archetype, surfacing */}
+        <span key={leader} className="bm-sketch-mark absolute inset-0 grid place-items-center" style={{ opacity: 0.1 + 0.6 * progress, color: L.color }}>
+          <ArchetypeMark id={leader} size={58} stroke={6} color="currentColor" />
+        </span>
+        {/* the stars, joining up */}
+        <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full overflow-visible" aria-hidden="true">
           {lit.length > 1 &&
             lit.map((k, i) => {
               const nextK = lit[(i + 1) % lit.length];
+              if (lit.length === 2 && i === 1) return null;
               const [x1, y1] = STAR_POS[k];
               const [x2, y2] = STAR_POS[nextK];
-              return <line key={k} x1={x1} y1={y1} x2={x2} y2={y2} stroke="currentColor" strokeOpacity={0.18} strokeWidth={0.8} />;
+              return (
+                <line key={`${k}-${nextK}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke={TRAIT_COLOR[k]} strokeOpacity={0.45} strokeWidth={0.9} strokeLinecap="round" pathLength={1} className="bm-sketch-line" />
+              );
             })}
+          {ping.k && (
+            <circle key={ping.n} cx={STAR_POS[ping.k][0]} cy={STAR_POS[ping.k][1]} r={4} fill="none" stroke={TRAIT_COLOR[ping.k]} strokeWidth={1.2} className="bm-sketch-ping" />
+          )}
           {TRAITS.map((k) => {
             const [x, y] = STAR_POS[k];
             const l = light[k];
+            const on = l > 0.15;
             return (
               <g key={k}>
-                <circle cx={x} cy={y} r={2 + l * 7} fill={TRAIT_COLOR[k]} opacity={0.18 * l} style={{ transition: "all 0.6s" }} />
-                <circle cx={x} cy={y} r={1.4 + l * 3} fill={l > 0.15 ? TRAIT_COLOR[k] : "currentColor"} opacity={0.25 + l * 0.75} style={{ transition: "all 0.6s" }} />
+                <circle cx={x} cy={y} r={2 + l * 7} fill={TRAIT_COLOR[k]} opacity={0.2 * l} style={{ transition: "all 0.6s" }} />
+                <circle
+                  key={ping.k === k ? `p${ping.n}` : k}
+                  cx={x}
+                  cy={y}
+                  r={1.5 + l * 3.2}
+                  fill={on ? TRAIT_COLOR[k] : "currentColor"}
+                  opacity={on ? 0.45 + l * 0.55 : 0.18}
+                  className="bm-sketch-star"
+                  data-pop={ping.k === k}
+                />
               </g>
             );
           })}

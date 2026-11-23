@@ -482,7 +482,7 @@ export function starLight(a: Partial<Answers>): Record<Trait, number> {
 }
 
 // ------------------------------------------------------------- the strands
-export type Strand = { d: string; color: string; width: number; opacity: number };
+export type Strand = { key: string; trait: Trait; d: string; color: string; width: number; opacity: number };
 
 function hash(s: string): number {
   let h = 2166136261;
@@ -509,7 +509,7 @@ export function strandsFor(a: Partial<Answers>, seed = ""): Strand[] {
         : shape === 1
           ? `M ${p(r1, angle)} A ${r1} ${r1} 0 0 1 ${p(r1, angle + sweep)}`
           : `M ${p(r1, angle)} C ${p(r2, angle + sweep / 3)} ${p(r1 * 0.6, angle + (sweep * 2) / 3)} ${p(r2, angle + sweep)}`;
-    out.push({ d, color: TRAIT_COLOR[trait], width: 2 + weight * 2.5, opacity: 0.35 + weight * 0.2 });
+    out.push({ key, trait, d, color: TRAIT_COLOR[trait], width: 2 + weight * 2.5, opacity: 0.35 + weight * 0.2 });
   };
   for (const x of RATHER) if (a.rather?.[x.id] !== undefined) push(`${x.id}:${a.rather[x.id]}`, x.trait, a.rather[x.id] ? 1 : 0.5);
   for (const t of TENDENCIES) {

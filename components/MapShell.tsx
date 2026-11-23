@@ -41,7 +41,7 @@ import PinsPanel from "./PinsPanel";
 import SignInPanel from "./SignInPanel";
 import ProfilePanel from "./ProfilePanel";
 import PublicOptIn from "./PublicOptIn";
-import { ProfileBrainMate, type BrainMateStatus } from "./brainMate/HomeInvite";
+import HomeInvite, { ProfileBrainMate, type BrainMateStatus } from "./brainMate/HomeInvite";
 import BrainMateOverlay, { type OverlayMode } from "./brainMate/Overlay";
 import ForYouPanel from "./ForYouPanel";
 import { IconChat, IconHidden, IconX } from "./Icons";
@@ -120,6 +120,8 @@ export default function MapShell({
 }) {
   // Brain-Mate plays in a window over the map, never a new page.
   const [bmMode, setBmMode] = useState<OverlayMode | null>(brainMateOpen);
+  // While the Brain-Mate invitation card is up, the off-map nudge waits its turn.
+  const [bmFull, setBmFull] = useState(false);
   const bmRouter = useRouter();
   const closeBrainMate = useCallback(() => {
     setBmMode(null);
@@ -1221,8 +1223,20 @@ export default function MapShell({
         <PublicOptIn networkName={data.scope.name} onDone={() => void load({})} />
       )}
 
-      {signedIn && onboarded && (myVisibility === "off" || !data.hasSignals) && isOpenNet && (
+      {signedIn && onboarded && (myVisibility === "off" || !data.hasSignals) && isOpenNet && !bmFull && (
         <OffMapNudge needsPin={myVisibility === "off"} onProfile={() => openWin("profile")} />
+      )}
+
+      {/* Brain-Mate on the map, for every signed-in member once onboarding is done. */}
+      {signedIn && onboarded && brainMate && !bmMode && (
+        <HomeInvite
+          status={brainMate}
+          // A panel covering the map: on a phone the invitation becomes the chip above it.
+          compact={Object.values(wins).some((w) => w.open && !w.min)}
+          onFullChange={setBmFull}
+          onPlay={() => setBmMode({ kind: "play" })}
+          onFindMate={() => setBmMode({ kind: "card", wavelength: true })}
+        />
       )}
     </div>
   );

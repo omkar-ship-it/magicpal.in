@@ -39,6 +39,17 @@
 .bm-embedded .bm-full {
   min-height: 100%;
 }
+/* Percent heights don't pass through min-height, so the window's full
+   surfaces are flex columns: the shell inside grows to fill the window,
+   and anything centred in it is centred in the window, not at the top. */
+.bm-embedded .bm-full {
+  display: flex;
+  flex-direction: column;
+}
+.bm-embedded .bm-full > .bm-shell {
+  flex: 1 1 auto;
+  width: 100%;
+}
 /* Room for the window's close button, so nothing sits under it. */
 .bm-embedded .bm-shell {
   padding-top: max(env(safe-area-inset-top, 0px), 56px);
@@ -598,4 +609,97 @@
 @media (prefers-reduced-motion: reduce) {
   .bm-calib-line, .bm-calib-star, .bm-calib-spin, .bm-calib-orb { animation-duration: 0.01ms; animation-iteration-count: 1; }
   .bm-calib-line { opacity: 1; }
+}
+
+/* ------------------------------------------------- the live sketch (game) */
+/* Every answer draws one more line; stars light and join up; the leading
+   archetype's mark surfaces in the middle as the sketch fills in. */
+.bm-sketch-line {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: bm-sketch-draw 1s var(--bm-ease) forwards;
+}
+@keyframes bm-sketch-draw {
+  to { stroke-dashoffset: 0; }
+}
+.bm-sketch-mark {
+  animation: bm-sketch-in 0.9s var(--bm-spring) both;
+  transition: opacity 0.8s var(--bm-ease);
+}
+@keyframes bm-sketch-in {
+  from { transform: scale(0.6) rotate(-12deg); filter: blur(6px); }
+  to { transform: none; filter: none; }
+}
+.bm-sketch-ping {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: bm-sketch-ping 0.9s var(--bm-ease) forwards;
+}
+@keyframes bm-sketch-ping {
+  from { transform: scale(0.6); opacity: 0.75; }
+  to { transform: scale(3.4); opacity: 0; }
+}
+.bm-sketch-star {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: r 0.6s var(--bm-spring), opacity 0.6s, fill 0.6s;
+}
+.bm-sketch-star[data-pop="true"] {
+  animation: bm-sketch-pop 0.55s var(--bm-spring);
+}
+@keyframes bm-sketch-pop {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.9); }
+  100% { transform: scale(1); }
+}
+.bm-sketch-orbit {
+  animation: bm-sketch-orbit 40s linear infinite;
+  transform-origin: 50% 50%;
+}
+@keyframes bm-sketch-orbit {
+  to { transform: rotate(360deg); }
+}
+.bm-ring-dot[data-lead="true"] {
+  color: var(--bm-brand);
+  transform: scale(1.22);
+}
+/* Livelier taps everywhere in the game. */
+.bm-option {
+  transition: transform 0.35s var(--bm-spring), border-color 0.2s, box-shadow 0.35s, opacity 0.35s;
+}
+.bm-option:active {
+  transform: scale(0.96);
+}
+@media (prefers-reduced-motion: reduce) {
+  .bm-sketch-line, .bm-sketch-mark, .bm-sketch-ping, .bm-sketch-star, .bm-sketch-orbit { animation: none; stroke-dashoffset: 0; }
+}
+
+/* ----------------------------------------------------- on the home map */
+.bm-map-card {
+  animation: bm-map-rise 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) 0.6s both;
+}
+@keyframes bm-map-rise {
+  from { opacity: 0; transform: translateY(24px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+.bm-map-face {
+  animation: bm-map-bob 2.8s ease-in-out infinite;
+}
+@keyframes bm-map-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+.bm-map-chip {
+  animation: bm-map-rise 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.5s both, bm-map-glow 3.2s ease-in-out 1.4s infinite;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.bm-map-chip:active {
+  transform: scale(0.95);
+}
+@keyframes bm-map-glow {
+  0%, 100% { box-shadow: 0 12px 26px -12px rgba(0, 0, 0, 0.45), 0 0 0 0 rgba(255, 107, 74, 0); }
+  50% { box-shadow: 0 12px 26px -12px rgba(0, 0, 0, 0.45), 0 0 0 6px rgba(255, 107, 74, 0.18); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bm-map-card, .bm-map-face, .bm-map-chip { animation: none; }
 }
