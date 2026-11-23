@@ -207,35 +207,81 @@ export function CompareCard({ c, site, slug }: { c: Comparison; site: string; sl
   );
 }
 
-/** Link preview while waiting: the sender's card face-down. */
+/**
+ * Link preview while waiting — what WhatsApp draws under the message. In
+ * OpenNetworks' own look: two initials joined by a wave, the invitation in
+ * big type, and the twelve minds along the bottom as the tease.
+ */
 export function InvitePreview({ sender, recipient }: { sender: string; recipient: string }) {
+  const SOFT = "#7A6B63";
+  const ids = Object.keys(ARCHETYPES) as ArchetypeId[];
+  const wave = (() => {
+    let d = "";
+    for (let x = 0; x <= 150; x += 3) d += `${x === 0 ? "M" : "L"} ${x} ${(40 + 18 * Math.sin((x / 150) * Math.PI * 3)).toFixed(1)} `;
+    return d;
+  })();
+  const initial = (name: string, filled: boolean) => (
+    <div
+      style={{
+        display: "flex",
+        width: 150,
+        height: 150,
+        borderRadius: 999,
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 72,
+        fontWeight: 800,
+        color: filled ? "#fff" : BRAND,
+        background: filled ? `linear-gradient(135deg, ${BRAND}, #E0266B)` : "#fff",
+        border: filled ? "none" : `6px dashed ${BRAND}`,
+      }}
+    >
+      {filled ? name.charAt(0).toUpperCase() : "?"}
+    </div>
+  );
   return (
-    <div style={{ width: "100%", height: "100%", display: "flex", background: INK, padding: 36, fontFamily: "Inter" }}>
-      <div style={{ flex: 1, display: "flex", borderRadius: 40, border: `5px solid ${BRAND}`, padding: 56, alignItems: "center", gap: 56 }}>
-        <div
-          style={{
-            display: "flex",
-            width: 300,
-            height: 300,
-            borderRadius: 999,
-            background: BRAND,
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 190,
-            fontWeight: 800,
-            color: "#fff",
-          }}
-        >
-          ?
+    <div style={{ width: "100%", height: "100%", display: "flex", background: CREAM, padding: 30, fontFamily: "Inter", color: INK }}>
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          borderRadius: 40,
+          background: "#fff",
+          border: `4px solid ${BRAND}`,
+          padding: "40px 54px 36px",
+        }}
+      >
+        <div style={{ display: "flex", flex: 1 }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 44 }}>
+          <div style={{ display: "flex", alignItems: "center" }}>
+            {initial(sender, true)}
+            <svg width="150" height="80" viewBox="0 0 150 80" xmlns="http://www.w3.org/2000/svg">
+              <path d={wave} stroke={BRAND} strokeWidth="6" fill="none" strokeLinecap="round" />
+            </svg>
+            {initial(recipient, false)}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+            <div style={{ display: "flex", fontSize: 26, fontWeight: 800, letterSpacing: 4, color: BRAND }}>{`BRAIN-MATE · FOR ${recipient.toUpperCase()}`}</div>
+            <div style={{ display: "flex", fontSize: 58, fontWeight: 800, marginTop: 12, lineHeight: 1.06, letterSpacing: -1.5 }}>
+              {`${sender} wants to find your Wavelength`}
+            </div>
+            <div style={{ display: "flex", fontSize: 28, marginTop: 16, color: SOFT }}>{`Play 3 minutes — then see how you two click.`}</div>
+          </div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", color: "#fff", flex: 1 }}>
-          <div style={{ display: "flex", fontSize: 30, fontWeight: 800, letterSpacing: 3, color: BRAND }}>BRAIN-MATE</div>
-          <div style={{ display: "flex", fontSize: 62, fontWeight: 800, marginTop: 14, lineHeight: 1.1 }}>
-            {`${sender} wants to find your Wavelength, ${recipient}.`}
+        <div style={{ display: "flex", flex: 1 }} />
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            {ids.map((id) => (
+              <div
+                key={id}
+                style={{ display: "flex", width: 44, height: 44, borderRadius: 999, background: ARCHETYPES[id].color, alignItems: "center", justifyContent: "center" }}
+              >
+                <ArchetypeMark id={id} color={ARCHETYPES[id].ink} size={26} stroke={8} />
+              </div>
+            ))}
           </div>
-          <div style={{ display: "flex", fontSize: 32, marginTop: 20, color: "rgba(255,255,255,0.7)" }}>
-            {`${sender}'s type stays hidden until you play. About 3 minutes.`}
-          </div>
+          <div style={{ display: "flex", fontSize: 24, fontWeight: 800, color: SOFT }}>Which of 12 minds are you?</div>
         </div>
       </div>
     </div>

@@ -9,7 +9,9 @@ import Game from "./Game";
 import IdentityCard from "./IdentityCard";
 import TzCookie from "./TzCookie";
 import WavelengthReveal from "./WavelengthReveal";
-import { ClaimButton, Countdown, NudgeButton, ShareButtons } from "./Share";
+import { ARCHETYPES, type ArchetypeId } from "@/lib/brainMate/archetypes";
+import { ArchetypeMark } from "@/lib/brainMate/symbols";
+import { ClaimButton, Countdown, NudgeButton, QuickShare } from "./Share";
 
 /**
  * Brain-Mate, as a window over the map — never a new page or tab.
@@ -266,15 +268,23 @@ function LinkView({
   if (link.role === "sender") {
     return (
       <div className="bm-shell justify-center gap-5">
-        <div className="text-center">
-          <span className="bm-heartbeat mx-auto grid h-20 w-20 place-items-center rounded-full bg-[var(--bm-brand)] text-[2.4rem] font-extrabold text-white">?</span>
-          <h2 className="bm-display mt-4 text-[2rem]">Waiting for {link.recipientName}</h2>
-          <p className="mt-1 text-[15px] font-semibold text-[var(--bm-soft)]">
-            <Countdown to={link.expiresAt} done="Expiring now" /> left to play
+        <section className="bm-card px-5 pb-6 pt-7 text-center">
+          <WaveDuo a={link.senderName} b={link.recipientName} />
+          <p className="mt-6 text-[11.5px] font-semibold tracking-[0.2em] text-[var(--bm-soft)]">WAITING FOR {link.recipientName.toUpperCase()}</p>
+          <h2 className="bm-display mt-1.5 text-[1.85rem] leading-tight">Your waves are out</h2>
+          <p className="mx-auto mt-2 max-w-[20rem] text-[14.5px] text-[var(--bm-soft)]">
+            The moment {link.recipientName} plays, you&apos;ll both see how you click.
           </p>
-        </div>
-        <section className="bm-card p-5">
-          <ShareButtons url={url} text={`${link.senderName} wants to find your Wavelength on Brain-Mate. 3 minutes, then we see how we click:`} />
+          <span className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[var(--sunk)] px-3 py-1 text-[12.5px] font-semibold text-[var(--bm-brand)]">
+            ⏳ <Countdown to={link.expiresAt} done="Expiring now" /> left
+          </span>
+          <div className="mt-6">
+            <QuickShare
+              label={`Send it to ${link.recipientName}`}
+              url={url}
+              text={`${link.recipientName}, ${link.senderName} wants to find your Wavelength on Brain-Mate. 3 minutes, then we see how we click:`}
+            />
+          </div>
         </section>
         {!link.nudged && <NudgeButton slug={link.slug} url={url} text={`${link.recipientName}! Still waiting on our Brain-Mate Wavelength 👀`} />}
       </div>
@@ -282,24 +292,66 @@ function LinkView({
   }
 
   return (
-    <div className="bm-shell justify-center gap-6">
-      <div className="text-center">
-        <span className="bm-heartbeat mx-auto grid h-[130px] w-[130px] place-items-center rounded-[2rem] bg-[var(--bm-ink)] text-[3.6rem] font-extrabold text-[var(--bm-brand)]">?</span>
-        <p className="mt-6 text-[13px] font-extrabold tracking-[0.2em] text-[var(--bm-brand)]">FOR {link.recipientName.toUpperCase()}</p>
-        <h2 className="bm-display mt-1 text-[2.2rem]">{link.senderName} wants to find your Wavelength</h2>
-        <p className="mt-2 text-[15px] text-[var(--bm-soft)]">{link.senderName}&apos;s type stays hidden until you play. Mind Twins, a Power Duo, or Beautiful Chaos?</p>
-        <p className="mt-2 text-[13px] font-bold text-[var(--bm-brand)]">
-          <Countdown to={link.expiresAt} done="Expiring now" /> left
-        </p>
-      </div>
-      {link.viewerPlayed ? (
-        <ClaimButton slug={link.slug} label={`I'm ${link.recipientName} — reveal our Wavelength`} onDone={onClaimed} />
-      ) : (
-        <button className="bm-btn bm-btn-brand" onClick={onPlay}>
-          Accept the challenge · 3 min
-        </button>
-      )}
-      <p className="text-center text-[12px] text-[var(--bm-soft)]">Not {link.recipientName}? You can still play your own once this is done.</p>
+    <div className="bm-shell justify-center">
+      <section className="bm-card relative overflow-hidden px-5 pb-6 pt-8 text-center">
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 h-40"
+          style={{ background: "radial-gradient(120% 100% at 50% 0%, color-mix(in srgb, var(--bm-brand) 14%, transparent), transparent 70%)" }}
+        />
+        <div className="relative">
+          <WaveDuo a={link.senderName} b={link.recipientName} />
+          <p className="mt-7 text-[11.5px] font-semibold tracking-[0.2em] text-[var(--bm-brand)]">FOR {link.recipientName.toUpperCase()}</p>
+          <h2 className="bm-display mt-1.5 text-[2rem] leading-[1.08]">{link.senderName} wants to find your Wavelength</h2>
+          <p className="mx-auto mt-3 max-w-[20rem] text-[14.5px] leading-snug text-[var(--bm-soft)]">
+            Play for 3 minutes. {link.senderName}&apos;s archetype stays hidden until you do — then you both see how you click.
+          </p>
+          <div className="mt-5 flex justify-center gap-1.5" aria-hidden="true">
+            {(Object.keys(ARCHETYPES) as ArchetypeId[]).map((id, i) => (
+              <span key={id} className="bm-map-face grid h-6 w-6 place-items-center rounded-full" style={{ background: ARCHETYPES[id].color, animationDelay: `${i * 0.12}s` }}>
+                <ArchetypeMark id={id} size={14} color={ARCHETYPES[id].ink} stroke={9} />
+              </span>
+            ))}
+          </div>
+          <p className="mt-2 text-[12.5px] font-semibold text-[var(--bm-soft)]">Mind Twins? Power Duo? Beautiful Chaos?</p>
+          <div className="mt-6">
+            {link.viewerPlayed ? (
+              <ClaimButton slug={link.slug} label={`I'm ${link.recipientName} — reveal our Wavelength`} onDone={onClaimed} />
+            ) : (
+              <button className="bm-btn bm-btn-brand w-full" onClick={onPlay}>
+                Accept the challenge · 3 min
+              </button>
+            )}
+          </div>
+          <p className="mt-3 text-[12.5px] font-semibold text-[var(--bm-brand)]">
+            ⏳ <Countdown to={link.expiresAt} done="Expiring now" /> left
+          </p>
+        </div>
+      </section>
+      <p className="mt-4 text-center text-[12px] text-[var(--bm-soft)]">Not {link.recipientName}? You can play your own once this is done.</p>
+    </div>
+  );
+}
+
+/** Two people as initials, joined by a moving wave — the invitation's picture. */
+function WaveDuo({ a, b }: { a: string; b: string }) {
+  let d = "";
+  for (let x = 0; x <= 400; x += 4) d += `${x === 0 ? "M" : "L"} ${x} ${(20 + 9 * Math.sin((x / 100) * Math.PI * 2)).toFixed(1)} `;
+  return (
+    <div className="flex items-center justify-center">
+      <span className="grid h-[76px] w-[76px] shrink-0 place-items-center rounded-full text-[2rem] font-bold text-white shadow-[0_14px_30px_-14px_var(--bm-brand)]" style={{ background: "linear-gradient(135deg, var(--brand), #E0266B)" }}>
+        {a.charAt(0).toUpperCase()}
+      </span>
+      <span className="relative mx-1 h-10 w-24 overflow-hidden" aria-hidden="true">
+        <svg viewBox="0 0 400 40" className="bm-wave absolute left-0 top-0 h-10 w-[400px]" preserveAspectRatio="none">
+          <path d={d} stroke="var(--bm-brand)" strokeWidth="3.5" fill="none" strokeLinecap="round" />
+        </svg>
+      </span>
+      <span className="bm-heartbeat grid h-[76px] w-[76px] shrink-0 place-items-center rounded-full border-[3px] border-dashed border-[var(--bm-brand)] bg-[var(--bm-card)] text-[2rem] font-bold text-[var(--bm-brand)]">
+        ?
+      </span>
+      <span className="sr-only">
+        {a} and {b}
+      </span>
     </div>
   );
 }

@@ -24,6 +24,7 @@ import {
   TRAIT_COLOR,
   checksNeeded,
   nextDuel,
+  resultFor,
   starLight,
   stillInPlay,
   strandsFor,
@@ -215,14 +216,40 @@ export default function Game({ defaultName, needsTerms, link, stats, previous, o
     }
   }
 
-  async function save(final: Answers) {
-    setStage("saving");
+  /**
+   * No wait after the last duel: the result is computed right here (the
+   * same pure scoring the server runs), so calibration starts the instant
+   * the last pick lands, while the save happens behind it. The server's
+   * answer fills in the rest (rarity, "how did it know", the next step).
+   */
+  function save(final: Answers) {
     setError("");
+    const local = resultFor(final);
+    setReveal({
+      name,
+      answers: final,
+      archetype: local.archetype,
+      streak: local.streak,
+      cusp: local.cusp,
+      mix: local.mix,
+      rarity: 0,
+      players: 0,
+      know: "",
+      next: { label: "Saving…", onClick: () => {} },
+      note: null,
+      pending: true,
+    });
+    setStage("reveal");
+    void persist(final);
+  }
+
+  async function persist(final: Answers) {
+    setReveal((r) => (r ? { ...r, pending: true, error: undefined, next: { label: "Saving…", onClick: () => {} } } : r));
     try {
       const res = await fetch("/api/brain-mate/result", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, answers: { ...final, ms: Math.round(performance.now() - started.current) }, acceptTerms: terms, link: link?.slug }),
+        body: JSON.stringify({ name, answers: final, acceptTerms: terms, link: link?.slug }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Couldn't save that.");
@@ -243,16 +270,15 @@ export default function Game({ defaultName, needsTerms, link, stats, previous, o
         players: data.players,
         know: data.know,
         next: {
-          label: linkSlug ? `Now: your Wavelength with ${link!.sender}` : "See your Brain-Mate card",
+          label: linkSlug ? `Now: your Wavelength with ${link!.sender}` : "See your archetype card",
           onClick: () => onDone({ archetype: data.archetype, linkSlug }),
         },
         note: data.linkError ?? null,
+        pending: false,
       });
-      setStage("reveal");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't save that.");
-      setAnswers({ ...final, duels: final.duels.slice(0, -1) });
-      setStage("duel");
+      const msg = err instanceof Error ? err.message : "Couldn't save that.";
+      setReveal((r) => (r ? { ...r, pending: false, error: msg, next: { label: "Try saving again", onClick: () => void persist(final) } } : r));
     }
   }
 
@@ -513,7 +539,7 @@ export default function Game({ defaultName, needsTerms, link, stats, previous, o
                 tone(19, 0.4);
                 const a = { ...answers, duels: [...answers.duels, { a: card.a, b: card.b, pick }] };
                 setAnswers(a);
-                if (a.duels.length === DUEL_COUNT) void save(a);
+                if (a.duels.length === DUEL_COUNT) save({ ...a, ms: Math.round(performance.now() - started.current) });
               }}
             />
           )}
@@ -1134,7 +1160,7 @@ function DuelStage({
   const card = nextDuel(answers);
   const round = answers.duels.length + 1;
   const [picked, setPicked] = useState<{ round: number; id: ArchetypeId } | null>(null);
-  if (!card) return <p className="mt-16 text-center text-[1.2rem] font-extrabold">Reading your mind…</p>;
+  if (!card) return null;
   const chosen = picked?.round === round ? picked.id : null;
   const side = (id: ArchetypeId, line: string, cls: string) => (
     <button
@@ -1167,7 +1193,7 @@ function DuelStage({
         <div className="text-center text-[13px] font-extrabold tracking-[0.2em] text-[var(--bm-soft)]">OR</div>
         {side(card.b, card.lineB, "bm-duel-right")}
       </div>
-      {saving && <p className="mt-6 text-center text-[15px] font-semibold text-[var(--bm-soft)]">Reading your mind…</p>}
+
       {error && <p className="mt-6 text-center text-[14px] font-semibold text-[#FF9C7A]">{error} Pick again to retry.</p>}
     </section>
   );

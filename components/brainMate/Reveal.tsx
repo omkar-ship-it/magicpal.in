@@ -22,6 +22,9 @@ export type RevealData = {
   /** The final button: hands control back to whoever opened the game. */
   next: { label: string; onClick: () => void };
   note: string | null;
+  /** The save is still on its way: rarity and "how did it know" fill in when it lands. */
+  pending?: boolean;
+  error?: string;
 };
 
 /**
@@ -270,7 +273,7 @@ export default function Reveal({ data }: { data: RevealData }) {
                 {a.tagline}
               </p>
             )}
-            {t >= T.rarity && (
+            {t >= T.rarity && !data.pending && !data.error && (
               <span className="bm-stamp mt-3 rounded-full px-4 py-1.5 text-[13px] font-extrabold" style={{ background: chip }}>
                 ◆ {rarityLine}
               </span>
@@ -347,7 +350,7 @@ export default function Reveal({ data }: { data: RevealData }) {
 
             {allFlipped && (
               <div className="mt-6 flex w-full flex-col items-center gap-4">
-                <p className="bm-fade-up max-w-[22rem] text-[1.1rem] font-bold leading-snug">{data.know}</p>
+                {data.know && <p className="bm-fade-up max-w-[22rem] text-[1.1rem] font-bold leading-snug">{data.know}</p>}
                 <span
                   className="bm-stamp flex items-center gap-2 rounded-full px-4 py-2 text-[14px] font-extrabold"
                   style={{ background: ARCHETYPES[data.streak].color, color: ARCHETYPES[data.streak].ink, animationDelay: "0.3s" }}
@@ -356,8 +359,10 @@ export default function Reveal({ data }: { data: RevealData }) {
                   {data.cusp ? `${a.name.replace("The ", "")}–${ARCHETYPES[data.streak].name.replace("The ", "")} cusp` : streakLine(data.streak)}
                 </span>
                 {data.note && <p className="text-[13px] font-semibold opacity-80">{data.note}</p>}
+                {data.error && <p className="text-[13px] font-semibold text-[var(--warn)]">{data.error}</p>}
                 <button
                   type="button"
+                  disabled={data.pending}
                   onClick={data.next.onClick}
                   className="bm-btn bm-btn-brand bm-fade-up mt-2 w-full"
                   style={{ animationDelay: "0.5s" }}
