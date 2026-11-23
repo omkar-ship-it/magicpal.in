@@ -556,3 +556,46 @@
     transition-duration: 0.12s !important;
   }
 }
+
+/* ----------------------------------------------- the engine, calibrating */
+.bm-calib-line {
+  animation: bm-calib-line ease-in-out both;
+}
+@keyframes bm-calib-line {
+  0% { opacity: 0; transform: translateY(8px); filter: blur(3px); }
+  18% { opacity: 1; transform: none; filter: none; }
+  82% { opacity: 1; transform: none; filter: none; }
+  100% { opacity: 0; transform: translateY(-8px); filter: blur(3px); }
+}
+.bm-calib-bar {
+  width: 0;
+  animation: bm-calib-bar linear forwards;
+}
+@keyframes bm-calib-bar {
+  0% { width: 0; }
+  60% { width: 70%; }
+  85% { width: 82%; }
+  100% { width: 100%; }
+}
+.bm-calib-star {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: bm-calib-star 1.3s ease-in-out infinite;
+}
+@keyframes bm-calib-star {
+  0%, 100% { opacity: 0.25; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.5); }
+}
+.bm-calib-spin {
+  animation: bm-calib-spin 0.9s linear infinite;
+}
+@keyframes bm-calib-spin {
+  to { transform: rotate(360deg); }
+}
+.bm-calib-orb {
+  animation: bm-breathe 2.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bm-calib-line, .bm-calib-star, .bm-calib-spin, .bm-calib-orb { animation-duration: 0.01ms; animation-iteration-count: 1; }
+  .bm-calib-line { opacity: 1; }
+}

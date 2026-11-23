@@ -56,7 +56,7 @@ function Strands({ answers, seed, size, color }: { answers: Answers; seed: strin
   );
 }
 
-function Frame({ bg, children, label, right, ink = INK }: { bg: string; children: React.ReactNode; label: string; right?: string; ink?: string }) {
+function Frame({ bg, children, label, right, ink = INK, edge = BRAND }: { bg: string; children: React.ReactNode; label: string; right?: string; ink?: string; edge?: string }) {
   return (
     <div style={{ width: "100%", height: "100%", display: "flex", background: bg, padding: 44, fontFamily: "Inter" }}>
       <div
@@ -65,7 +65,7 @@ function Frame({ bg, children, label, right, ink = INK }: { bg: string; children
           display: "flex",
           flexDirection: "column",
           borderRadius: 56,
-          border: `6px solid ${BRAND}`,
+          border: `6px solid ${edge}`,
           padding: "52px 60px",
           position: "relative",
         }}
@@ -121,7 +121,7 @@ export function IdentityCard({
   const soft = ink === "#ffffff" ? "rgba(255,255,255,0.78)" : "rgba(42,30,0,0.72)";
   const chip = ink === "#ffffff" ? "rgba(255,255,255,0.16)" : "rgba(42,30,0,0.1)";
   return (
-    <Frame bg={a.color} label="BRAIN-MATE" right={name.split(" ")[0].toUpperCase()} ink={a.ink}>
+    <Frame bg={a.color} label="BRAIN-MATE" right={name.split(" ")[0].toUpperCase()} ink={a.ink} edge={chip}>
       <div style={{ display: "flex", color: ink, flexDirection: "column", alignItems: "center", flex: 1 }}>
         <div style={{ display: "flex", position: "relative", width: 560, height: 560, alignItems: "center", justifyContent: "center", marginTop: 10 }}>
           <div style={{ display: "flex", position: "absolute", top: 0, left: 0 }}>
@@ -141,63 +141,33 @@ export function IdentityCard({
             <ArchetypeMark id={archetype} color={ink} size={210} stroke={5} />
           </div>
         </div>
-        <div style={{ display: "flex", fontSize: 104, fontWeight: 800, letterSpacing: -3, marginTop: 6 }}>{a.name.toUpperCase()}</div>
-        <div style={{ display: "flex", fontSize: 44, marginTop: 6, color: soft }}>{a.tagline}</div>
-        {mix ? (
-          <div style={{ display: "flex", fontSize: 30, marginTop: 10, color: soft, fontWeight: 800 }}>
-            {mix.map((m) => `${m.pct}% ${short(m.id)}`).join("  ·  ")}
-          </div>
-        ) : null}
-        <div style={{ display: "flex", fontSize: 34, marginTop: 18, alignItems: "center" }}>
-          {streakLine(streak)}
-          {rarity !== null ? (
-            <div style={{ display: "flex", marginLeft: 20, padding: "6px 18px", borderRadius: 999, background: chip, fontSize: 30, fontWeight: 800 }}>
-              {`1 in ${Math.max(2, Math.round(1 / Math.max(rarity, 0.01)))}`}
-            </div>
-          ) : null}
-        </div>
-        <div style={{ display: "flex", marginTop: 34, gap: 16 }}>
+        <div style={{ display: "flex", fontSize: 34, letterSpacing: 6, fontWeight: 800, color: soft, marginTop: 10 }}>{`${name.split(" ")[0].toUpperCase()} IS`}</div>
+        <div style={{ display: "flex", fontSize: 108, fontWeight: 800, letterSpacing: -3, marginTop: 4 }}>{a.name.toUpperCase()}</div>
+        <div style={{ display: "flex", fontSize: 46, marginTop: 6, color: soft }}>{a.tagline}</div>
+        <div style={{ display: "flex", marginTop: 56, gap: 16 }}>
           {(strengths?.length ? strengths : a.traits).map((t) => (
-            <div key={t} style={{ display: "flex", padding: "12px 24px", borderRadius: 999, background: chip, fontSize: 30, fontWeight: 800 }}>
+            <div key={t} style={{ display: "flex", padding: "14px 28px", borderRadius: 999, background: chip, fontSize: 32, fontWeight: 800 }}>
               {t}
             </div>
           ))}
         </div>
-        <div style={{ display: "flex", flexDirection: "column", alignSelf: "stretch", marginTop: 44, gap: 26 }}>
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            <div style={{ display: "flex", fontSize: 26, letterSpacing: 3, fontWeight: 800, color: soft }}>SUPERPOWER</div>
-            <div style={{ display: "flex", fontSize: 42, fontWeight: 800, marginTop: 6 }}>{a.superpower}</div>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            <div style={{ display: "flex", fontSize: 26, letterSpacing: 3, fontWeight: 800, color: soft }}>PEOPLE LOVE ME FOR</div>
-            <div style={{ display: "flex", fontSize: 40, fontWeight: 800, marginTop: 6 }}>{a.lovedFor}</div>
-          </div>
-          {colleague ? null : (
-            <div style={{ display: "flex", fontSize: 32, color: soft }}>{`Guilty habit 😅  ${a.roast}`}</div>
-          )}
-          <div style={{ display: "flex", fontSize: 34, color: soft }}>
-            {`My Power Duo: ${short(a.powerDuo[0])}  ·  ${a.edge.kind === "clash" ? "I clash with" : "My opposite"}: ${short(a.edge.id)}`}
-          </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginTop: 64, maxWidth: 820 }}>
+          <div style={{ display: "flex", fontSize: 26, letterSpacing: 4, fontWeight: 800, color: soft }}>MY SUPERPOWER</div>
+          <div style={{ display: "flex", fontSize: 50, fontWeight: 800, marginTop: 10, textAlign: "center", lineHeight: 1.2 }}>{a.superpower}</div>
+          {colleague ? null : <div style={{ display: "flex", fontSize: 32, marginTop: 34, color: soft, textAlign: "center" }}>{`Guilty habit: ${a.roast}`}</div>}
+          {mix && mix.length > 1 ? (
+            <div style={{ display: "flex", fontSize: 30, marginTop: 18, color: soft }}>{`${streakLine(streak)}${rarity !== null ? `  ·  1 in ${Math.max(2, Math.round(1 / Math.max(rarity, 0.01)))}` : ""}`}</div>
+          ) : null}
         </div>
         <div style={{ display: "flex", flex: 1 }} />
         <div style={{ display: "flex", alignSelf: "stretch", justifyContent: "space-between", alignItems: "flex-end" }}>
           <div style={{ display: "flex", flexDirection: "column" }}>
-            <div style={{ display: "flex", fontSize: 44, fontWeight: 800 }}>Find your Brain-Mates</div>
-            <div style={{ display: "flex", fontSize: 32, color: soft, marginTop: 4 }}>{`${site}/brain-mate`}</div>
+            <div style={{ display: "flex", fontSize: 44, fontWeight: 800 }}>What are you? Find your Brain-Mate</div>
+            <div style={{ display: "flex", fontSize: 30, color: soft, marginTop: 6 }}>{`${site}/brain-mate  ·  by OpenNetworks`}</div>
           </div>
-          <div style={{ display: "flex", fontSize: 26, color: soft }}>by OpenNetworks</div>
         </div>
       </div>
     </Frame>
-  );
-}
-
-function Score({ value, label, color, ink }: { value: number; label: string; color: string; ink: string }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-      <div style={{ display: "flex", fontSize: 150, fontWeight: 800, color, letterSpacing: -6, lineHeight: 1 }}>{String(value)}</div>
-      <div style={{ display: "flex", fontSize: 32, fontWeight: 800, color: ink, marginTop: 8 }}>{label}</div>
-    </div>
   );
 }
 
@@ -244,24 +214,20 @@ export function CompareCard({ c, site, slug }: { c: Comparison; site: string; sl
           {o.label.toUpperCase()}
         </div>
         <div style={{ display: "flex", fontSize: 38, marginTop: 22, color: "#7A6B63" }}>{o.stamp}</div>
-        <div style={{ display: "flex", marginTop: 70, gap: 120 }}>
-          <Score value={c.similarity} label="Same wavelength" color={INK} ink="#7A6B63" />
-          <Score value={c.compatibility} label="Compatibility" color={BRAND} ink="#7A6B63" />
-        </div>
-        <div style={{ display: "flex", fontSize: 48, fontWeight: 800, marginTop: 80, textAlign: "center", maxWidth: 860 }}>
+        <div style={{ display: "flex", fontSize: 52, fontWeight: 800, marginTop: 90, textAlign: "center", maxWidth: 860, lineHeight: 1.2 }}>
           {`“${c.dynamic}”`}
         </div>
-        <div style={{ display: "flex", flexDirection: "column", alignSelf: "stretch", marginTop: 50, gap: 14, fontSize: 32 }}>
-          <div style={{ display: "flex" }}>{`💛 ${c.loves.aSees}`}</div>
-          <div style={{ display: "flex" }}>{`💛 ${c.loves.bSees}`}</div>
+        <div style={{ display: "flex", flexDirection: "column", alignSelf: "stretch", marginTop: 80, gap: 22, fontSize: 34, color: "#5A4A42" }}>
+          <div style={{ display: "flex", fontSize: 26, letterSpacing: 4, fontWeight: 800, color: BRAND }}>WHAT WE LOVE ABOUT EACH OTHER</div>
+          <div style={{ display: "flex" }}>{c.loves.aSees}</div>
+          <div style={{ display: "flex" }}>{c.loves.bSees}</div>
         </div>
         <div style={{ display: "flex", flex: 1 }} />
         <div style={{ display: "flex", alignSelf: "stretch", justifyContent: "space-between", alignItems: "flex-end" }}>
           <div style={{ display: "flex", flexDirection: "column" }}>
-            <div style={{ display: "flex", fontSize: 44, fontWeight: 800 }}>Find your Brain-Mates</div>
-            <div style={{ display: "flex", fontSize: 30, color: "#7A6B63", marginTop: 4 }}>{`${site}/brain-mate/${slug}`}</div>
+            <div style={{ display: "flex", fontSize: 44, fontWeight: 800 }}>Find your Brain-Mate</div>
+            <div style={{ display: "flex", fontSize: 30, color: "#7A6B63", marginTop: 6 }}>{`${site}/brain-mate/${slug}  ·  by OpenNetworks`}</div>
           </div>
-          <div style={{ display: "flex", fontSize: 26, color: "#7A6B63" }}>by OpenNetworks</div>
         </div>
       </div>
     </Frame>
@@ -333,10 +299,8 @@ export function CompareWide({ c }: { c: Comparison }) {
             {`${c.a.name.toUpperCase()} × ${c.b.name.toUpperCase()}`}
           </div>
           <div style={{ display: "flex", fontSize: 76, fontWeight: 800, color: o.color, marginTop: 6 }}>{o.label}</div>
-          <div style={{ display: "flex", fontSize: 34, marginTop: 10 }}>
-            {`${c.similarity} same wavelength · ${c.compatibility} compatible`}
-          </div>
-          <div style={{ display: "flex", fontSize: 30, marginTop: 14, color: "#7A6B63" }}>{`“${c.dynamic}”`}</div>
+          <div style={{ display: "flex", fontSize: 30, marginTop: 6, color: "#7A6B63" }}>{o.stamp}</div>
+          <div style={{ display: "flex", fontSize: 34, fontWeight: 800, marginTop: 18 }}>{`“${c.dynamic}”`}</div>
         </div>
       </div>
     </div>
@@ -350,7 +314,7 @@ export function LandingWide() {
     <div style={{ width: "100%", height: "100%", display: "flex", background: CREAM, padding: 36, fontFamily: "Inter", color: INK }}>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", borderRadius: 40, border: `5px solid ${BRAND}`, padding: 56 }}>
         <div style={{ display: "flex", fontSize: 30, fontWeight: 800, letterSpacing: 3, color: BRAND }}>BRAIN-MATE</div>
-        <div style={{ display: "flex", fontSize: 92, fontWeight: 800, letterSpacing: -3, marginTop: 10 }}>Find your Brain-Mates</div>
+        <div style={{ display: "flex", fontSize: 92, fontWeight: 800, letterSpacing: -3, marginTop: 10 }}>Find your Brain-Mate</div>
         <div style={{ display: "flex", fontSize: 36, marginTop: 10, color: "#7A6B63" }}>12 kinds of minds. Which one is yours? About 3 minutes.</div>
         <div style={{ display: "flex", gap: 22, marginTop: 50 }}>
           {ids.map((id) => (

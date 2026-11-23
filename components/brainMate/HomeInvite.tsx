@@ -138,7 +138,7 @@ export function HomePanelBanner({ status }: { status: BrainMateStatus }) {
  * card in miniature; for everyone else, a quiet way in — the loud one is on
  * the home map.
  */
-export function ProfileBrainMate({ status, onOpen }: { status: BrainMateStatus; onOpen?: () => void }) {
+export function ProfileBrainMate({ status, onOpen, onFindMate }: { status: BrainMateStatus; onOpen?: () => void; onFindMate?: () => void }) {
   if (status.state !== "played") {
     return (
       <Link
@@ -161,23 +161,35 @@ export function ProfileBrainMate({ status, onOpen }: { status: BrainMateStatus; 
     );
   }
   const a = ARCHETYPES[status.archetype];
-  // One quiet row, in the same style as the profile header above it; the
-  // card itself opens as a window over the map.
+  // One quiet block in the profile's own style: your archetype on top, and
+  // the viral loop underneath — both open as windows over the map.
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="mb-4 flex w-full items-center gap-3 rounded-2xl border border-[var(--line)] bg-[var(--card)] p-3 text-left transition-colors hover:border-[var(--brand)]"
-    >
-      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full" style={{ background: a.color }}>
-        <ArchetypeMark id={a.id} size={26} color={a.ink} stroke={7} />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-[11.5px] text-[var(--ink-soft)]">Your Brain-Mate</span>
-        <span className="block truncate text-[14px] font-semibold">{a.name}</span>
-        <span className="block truncate text-[11.5px] text-[var(--ink-soft)]">{status.mix}</span>
-      </span>
-      <span className="text-[12.5px] font-semibold text-[var(--brand)]">Open ›</span>
-    </button>
+    <div className="mb-4 overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--card)]">
+      <button type="button" onClick={onOpen} className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-[var(--sunk)]">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full" style={{ background: a.color }}>
+          <ArchetypeMark id={a.id} size={26} color={a.ink} stroke={7} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[11.5px] text-[var(--ink-soft)]">Your Archetype</span>
+          <span className="block truncate text-[14px] font-semibold">{a.name}</span>
+          <span className="block truncate text-[11.5px] text-[var(--ink-soft)]">{status.mix}</span>
+        </span>
+        <span className="text-[12.5px] font-semibold text-[var(--brand)]">Open ›</span>
+      </button>
+      <button
+        type="button"
+        onClick={onFindMate ?? onOpen}
+        className="flex w-full items-center gap-3 border-t border-[var(--line)] px-3 py-2.5 text-left transition-colors hover:bg-[var(--sunk)]"
+      >
+        <span className="grid h-11 w-11 shrink-0 place-items-center text-[20px]" aria-hidden="true">
+          🌊
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[14px] font-semibold">Find your Brain-Mate</span>
+          <span className="block truncate text-[11.5px] text-[var(--ink-soft)]">Send a Wavelength check · one a day</span>
+        </span>
+        <span className="rounded-full bg-[var(--brand)] px-3 py-1 text-[12px] font-semibold text-white">Send</span>
+      </button>
+    </div>
   );
 }

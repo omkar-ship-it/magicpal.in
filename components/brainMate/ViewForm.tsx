@@ -6,7 +6,7 @@ import { VIEW_SLIDERS } from "@/lib/brainMate/rounds";
 import { buzz, tone } from "./feel";
 
 /**
- * "How does Eswari come across?" — eight quick sliders, given once per
+ * "How does Eswari come across?" — nine quick sliders, given once per
  * finished link. A second person's view is the one thing that makes a
  * profile more accurate than anyone's answers about themselves can, and
  * the gap between how you see yourself and how others see you is often
@@ -30,7 +30,7 @@ export default function ViewForm({ slug, other }: { slug: string; other: string 
       <div>
         <p className="text-[12px] font-extrabold tracking-[0.18em] text-[var(--bm-brand)]">HOW DOES {other.toUpperCase()} COME ACROSS?</p>
         <p className="mt-1 text-[14px] text-[var(--bm-soft)]">
-          Eight quick slides, 20 seconds. It sharpens {other}&apos;s profile — people are often seen differently than they see themselves.
+          Nine quick slides, 20 seconds. It sharpens {other}&apos;s profile — people are often seen differently than they see themselves.
         </p>
       </div>
       {VIEW_SLIDERS.map((s) => {
@@ -84,7 +84,7 @@ export default function ViewForm({ slug, other }: { slug: string; other: string 
           }
         }}
       >
-        {all ? `Share my view of ${other}` : `Move all eight (${Object.keys(values).length}/8)`}
+        {all ? `Share my view of ${other}` : `Move all ${VIEW_SLIDERS.length} (${Object.keys(values).length}/${VIEW_SLIDERS.length})`}
       </button>
     </div>
   );

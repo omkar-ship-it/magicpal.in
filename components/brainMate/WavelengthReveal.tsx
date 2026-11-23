@@ -7,18 +7,18 @@ import { ArchetypeMark } from "@/lib/brainMate/symbols";
 import { buzz, tone } from "./feel";
 
 /**
- * The second peak. Two waves, each moving to its owner's rhythm, slide in
- * from the edges and fall into phase exactly as far as the two of you are
- * alike, while the number counts up. Then the puzzle pieces click for
- * compatibility, and the stamp lands. Played once, for the two players,
- * the first time they open the finished link.
+ * The second peak. Two waves slide in and fall into rhythm — as far as the
+ * two of you are alike — while the lines underneath change as it works.
+ * Then the two pieces click together and the stamp lands. No numbers: the
+ * relationship is the story, not a score. Played once, for the two
+ * players, the first time they open the finished link.
  */
 
 type Props = {
   a: { name: string; archetype: ArchetypeId };
   b: { name: string; archetype: ArchetypeId };
+  /** Only shapes how far the waves fall into phase; never shown. */
   similarity: number;
-  compatibility: number;
   outcome: Outcome;
   children: React.ReactNode;
 };
@@ -32,7 +32,7 @@ function wave(phase: number, amp: number, freq: number) {
   return d;
 }
 
-export default function WavelengthReveal({ a, b, similarity, compatibility, outcome, children }: Props) {
+export default function WavelengthReveal({ a, b, similarity, outcome, children }: Props) {
   const [step, setStep] = useState(0);
   const [t, setT] = useState(0);
   const A = ARCHETYPES[a.archetype];
@@ -73,7 +73,7 @@ export default function WavelengthReveal({ a, b, similarity, compatibility, outc
   const ease = 1 - Math.pow(1 - t, 3);
   const finalOffset = ((100 - similarity) / 100) * Math.PI;
   const offset = Math.PI * 1.6 * (1 - ease) + finalOffset * ease;
-  const shown = Math.round(similarity * ease);
+  const line = t < 0.35 ? "Tuning into two minds…" : t < 0.7 ? "Lining up your waves…" : t < 1 ? "Finding the rhythm…" : "Locked in.";
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center py-6 text-center">
@@ -86,8 +86,9 @@ export default function WavelengthReveal({ a, b, similarity, compatibility, outc
           <path d={wave(offset, 34, 2.2)} stroke={B.color} strokeWidth="6" fill="none" strokeLinecap="round" opacity={step >= 1 ? 0.85 : 0} />
         </svg>
       </div>
-      <p className="bm-display mt-2 text-[4.5rem]">{shown}</p>
-      <p className="text-[14px] font-bold">on the same wavelength</p>
+      <p key={line} className="bm-fade-up mt-3 text-[15px] font-semibold text-[var(--bm-soft)]">
+        {line}
+      </p>
 
       {step >= 2 && (
         <div className="mt-8 flex flex-col items-center">
@@ -99,8 +100,6 @@ export default function WavelengthReveal({ a, b, similarity, compatibility, outc
               <ArchetypeMark id={B.id} size={36} color={B.ink} />
             </span>
           </div>
-          <p className="bm-display bm-fade-up mt-3 text-[2.6rem] text-[var(--bm-brand)]">{compatibility}</p>
-          <p className="text-[14px] font-bold">compatibility</p>
         </div>
       )}
 

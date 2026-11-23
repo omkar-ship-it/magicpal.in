@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { ARCHETYPES, streakLine, type ArchetypeId } from "@/lib/brainMate/archetypes";
 import { TRAITS } from "@/lib/brainMate/archetypes";
-import { MIN_CROWD, STAR_POS, TRAIT_COLOR, montageWords, starLight, strandsFor, type Answers } from "@/lib/brainMate/score";
+import { HIGH_PHRASE, LOW_PHRASE, MIN_CROWD, STAR_POS, TRAIT_COLOR, montageWords, starLight, strandsFor, traitVector, type Answers } from "@/lib/brainMate/score";
 import { ArchetypeMark } from "@/lib/brainMate/symbols";
 import { buzz, tone } from "./feel";
 
@@ -25,7 +25,10 @@ export type RevealData = {
 };
 
 /**
- * The peak. About five seconds play out on their own — your answers flash
+ * The peak. First the engine calibrates: about five seconds of fleeting
+ * status lines (some built from your own answers) over a slowly filling
+ * bar, so the result feels earned. Then about five seconds play out on
+ * their own — your answers flash
  * past, the losing silhouette shatters into your art, the art inhales to a
  * point, then blooms into your mark while your colour floods the screen and
  * the name lands letter by letter. After that the pace is yours: you deal
@@ -33,7 +36,35 @@ export type RevealData = {
  * a reason — it's the laugh.
  */
 
-const T = { shatter: 1700, inhale: 2250, bloom: 2800, name: 3200, tagline: 4100, rarity: 4700, hand: 5300 };
+/** Calibration first; everything after it is offset by CAL. */
+const CAL = 5600;
+const CAL_STEP = CAL / 6;
+const T = { montage: CAL, shatter: CAL + 1700, inhale: CAL + 2250, bloom: CAL + 2800, name: CAL + 3200, tagline: CAL + 4100, rarity: CAL + 4700, hand: CAL + 5300 };
+
+/** Six fleeting lines — generic where it must be, yours where it can be. */
+function calibrationLines(data: RevealData): string[] {
+  const a = data.answers;
+  const n =
+    Object.keys(a.rather ?? {}).length +
+    Object.keys(a.tend ?? {}).length +
+    Object.keys(a.calls ?? {}).length +
+    Object.keys(a.ranks ?? {}).length +
+    Object.keys(a.sliders ?? {}).length +
+    Object.keys(a.checks ?? {}).length +
+    (a.duels?.length ?? 0);
+  const z = traitVector(a);
+  const strongest = TRAITS.map((k, i) => ({ k, z: z[i] })).sort((x, y) => Math.abs(y.z) - Math.abs(x.z))[0];
+  const short = (id: ArchetypeId) => ARCHETYPES[id].name.replace("The ", "");
+  const second = data.mix[1];
+  return [
+    `Reading your ${n} answers…`,
+    "Calibrating nine traits…",
+    `Strong signal: ${strongest.z >= 0 ? HIGH_PHRASE[strongest.k] : LOW_PHRASE[strongest.k]}`,
+    Object.keys(a.checks ?? {}).length ? "Weighing the answers that pulled two ways…" : "Cross-checking every answer against the others…",
+    second && second.pct >= 15 ? `${short(data.archetype)} or ${short(second.id)}? Close call…` : "Ruling out 11 other minds…",
+    "Locking it in…",
+  ];
+}
 
 function seeded(i: number) {
   const x = Math.sin(i * 9301 + 49297) * 233280;
@@ -56,11 +87,19 @@ export default function Reveal({ data }: { data: RevealData }) {
 
   const words = montageWords(data.answers);
   const stars = starLight(data.answers);
+  const [lines] = useState(() => calibrationLines(data));
+  const [line, setLine] = useState(0);
 
   useEffect(() => {
     const timers: number[] = [];
     const at = (ms: number, fn: () => void) => timers.push(window.setTimeout(fn, ms));
-    words.forEach((_, i) => at(i * 190, () => tone(i % 2 ? 4 : 7, 0.06)));
+    lines.forEach((_, i) =>
+      at(i * CAL_STEP, () => {
+        setLine(i);
+        tone(i * 2, 0.05);
+      })
+    );
+    words.forEach((_, i) => at(CAL + i * 190, () => tone(i % 2 ? 4 : 7, 0.06)));
     for (const ms of Object.values(T)) at(ms, () => setT(ms));
     at(T.bloom, () => {
       buzz([30, 60, 90]);
@@ -102,7 +141,27 @@ export default function Reveal({ data }: { data: RevealData }) {
         {/* --------------------------------------------- before the bloom */}
         {!bloomed && (
           <div className="flex flex-1 flex-col items-center justify-center">
-            {t < T.shatter ? (
+            {t < CAL ? (
+              <div className="flex w-full flex-col items-center text-center">
+                {/* The engine, calibrating: your nine stars breathing, a bar filling, lines flickering past. */}
+                <div className="bm-calib-orb relative grid h-[150px] w-[150px] place-items-center">
+                  <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full overflow-visible">
+                    {TRAITS.map((k, i) => {
+                      const [x, y] = STAR_POS[k];
+                      return <circle key={k} cx={x} cy={y} r={2.6} fill={TRAIT_COLOR[k]} className="bm-calib-star" style={{ animationDelay: `${i * 140}ms` }} />;
+                    })}
+                  </svg>
+                  <span className="h-10 w-10 rounded-full border-[3px] border-[var(--bm-line)] border-t-[var(--bm-brand)] bm-calib-spin" />
+                </div>
+                <p className="mt-6 text-[11.5px] font-bold tracking-[0.2em] text-[var(--bm-brand)]">CALIBRATING</p>
+                <p key={line} className="bm-calib-line mt-2 min-h-[1.6em] text-[1.15rem] font-bold" style={{ animationDuration: `${CAL_STEP}ms` }}>
+                  {lines[line]}
+                </p>
+                <div className="mt-5 h-1 w-48 overflow-hidden rounded-full bg-[var(--bm-line)]">
+                  <span className="bm-calib-bar block h-full rounded-full bg-[var(--bm-brand)]" style={{ animationDuration: `${CAL}ms` }} />
+                </div>
+              </div>
+            ) : t < T.shatter ? (
               <div className="relative h-[120px] w-full text-center">
                 {words.map((w, i) => (
                   <span

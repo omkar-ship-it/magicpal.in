@@ -26,13 +26,14 @@ import { ClaimButton, Countdown, NudgeButton, ShareButtons } from "./Share";
  * leaves the window they were invited into.
  */
 
-export type OverlayMode = { kind: "play" } | { kind: "card" } | { kind: "link"; slug: string };
+/** `wavelength`: open the card straight at "Find your Brain-Mate". */
+export type OverlayMode = { kind: "play" } | { kind: "card"; wavelength?: boolean } | { kind: "link"; slug: string };
 
 type View =
   | { v: "loading" }
   | { v: "auth" }
   | { v: "game"; link: { slug: string; sender: string } | null }
-  | { v: "card" }
+  | { v: "card"; wavelength?: boolean }
   | { v: "link"; slug: string; reveal: boolean };
 
 export default function Overlay({ mode, onClose, onSection }: { mode: OverlayMode; onClose: () => void; onSection?: (i: number) => void }) {
@@ -68,7 +69,7 @@ export default function Overlay({ mode, onClose, onSection }: { mode: OverlayMod
         await loadLink(m.slug);
         return setView({ v: "link", slug: m.slug, reveal: false });
       }
-      if (m.kind === "card" && state.card) return setView({ v: "card" });
+      if (m.kind === "card" && state.card) return setView({ v: "card", wavelength: m.wavelength });
       return setView({ v: "game", link: null });
     },
     [loadLink, loadMe]
@@ -138,6 +139,7 @@ export default function Overlay({ mode, onClose, onSection }: { mode: OverlayMod
           {view.v === "card" && signedIn?.card && (
             <IdentityCard
               card={signedIn.card}
+              focusWavelength={Boolean(view.wavelength)}
               onReplay={() => setView({ v: "game", link: null })}
               onOpenLink={async (slug) => {
                 await loadLink(slug);
@@ -162,6 +164,7 @@ export default function Overlay({ mode, onClose, onSection }: { mode: OverlayMod
                 onPlay={() => setView({ v: "game", link: { slug: link.slug, sender: link.senderName } })}
                 onRetake={() => setView({ v: "game", link: null })}
                 onMyCard={() => setView(signedIn?.card ? { v: "card" } : { v: "game", link: null })}
+                onMyCardWavelength={() => setView(signedIn?.card ? { v: "card", wavelength: true } : { v: "game", link: null })}
                 onClaimed={async () => {
                   await loadLink(link.slug);
                   setView({ v: "link", slug: link.slug, reveal: true });
@@ -180,6 +183,7 @@ function LinkView({
   onPlay,
   onRetake,
   onMyCard,
+  onMyCardWavelength,
   onClaimed,
 }: {
   link: LinkPayload;
@@ -187,6 +191,7 @@ function LinkView({
   onPlay: () => void;
   onRetake: () => void;
   onMyCard: () => void;
+  onMyCardWavelength: () => void;
   onClaimed: () => void;
 }) {
   const url = `${link.origin}/brain-mate/${link.slug}`;
@@ -203,13 +208,14 @@ function LinkView({
         viewerIsA={link.role === "sender"}
         relation={link.relation}
         viewGiven={link.viewGiven}
+        onPlay={player ? undefined : link.viewerPlayed ? onMyCardWavelength : onRetake}
       />
     );
     return (
       <div className="pt-10">
         {reveal && player ? (
           <div className="bm-shell !min-h-0">
-            <WavelengthReveal a={{ name: c.a.name, archetype: c.a.archetype }} b={{ name: c.b.name, archetype: c.b.archetype }} similarity={c.similarity} compatibility={c.compatibility} outcome={c.outcome}>
+            <WavelengthReveal a={{ name: c.a.name, archetype: c.a.archetype }} b={{ name: c.b.name, archetype: c.b.archetype }} similarity={c.similarity} outcome={c.outcome}>
               {card}
             </WavelengthReveal>
           </div>
@@ -218,7 +224,7 @@ function LinkView({
         )}
         <div className="flex justify-center gap-5 pb-8 text-[13px] font-semibold text-[var(--bm-soft)]">
           <button className="underline" onClick={onMyCard}>
-            My Brain-Mate card
+            My archetype card
           </button>
         </div>
       </div>

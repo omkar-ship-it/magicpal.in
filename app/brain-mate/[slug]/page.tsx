@@ -24,7 +24,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     const o = OUTCOMES[c.outcome];
     return {
       title: `${c.a.name} × ${c.b.name}: ${o.label} — Brain-Mate`,
-      description: `${c.similarity} on the same wavelength, ${c.compatibility} compatible. “${c.dynamic}” Find your Brain-Mates.`,
+      description: `“${c.dynamic}” ${o.stamp} Find your Brain-Mate.`,
     };
   }
   const sender = await getBrainMate(link.senderId);
