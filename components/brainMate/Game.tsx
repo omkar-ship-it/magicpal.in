@@ -2,20 +2,20 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ARCHETYPE_IDS, TRAITS, type ArchetypeId, type Trait } from "@/lib/brainMate/archetypes";
+import { ARCHETYPES, ARCHETYPE_IDS, TRAITS, type ArchetypeId, type Trait } from "@/lib/brainMate/archetypes";
 import {
-  AGREES,
-  AGREE_ORDER,
+  CALLS,
   CHECKS,
-  PAIRS,
   RANKS,
+  RATHER,
   SLIDERS,
-  STORY,
+  TENDENCIES,
+  TENDENCY_SCALE,
   VALUES,
-  type AgreeCard,
+  type Call,
+  type CheckCard,
   type PickOption,
   type RankRound,
-  type StoryBeat,
 } from "@/lib/brainMate/rounds";
 import {
   DUEL_COUNT,
@@ -34,20 +34,20 @@ import { buzz, setSound, soundOn, tone } from "./feel";
 import Reveal, { type RevealData } from "./Reveal";
 
 /**
- * Brain-Mate v3 — "A Day in Your Mind".
+ * Brain-Mate v4. Seven sections, about three minutes, played in a window
+ * over the map:
  *
- *   1  A day in your mind   tap through seven moments, sunrise to midnight
- *   2  This or that         eight quick pairs, a timer ring and a streak
- *   3  Prioritise           push five cards up and down, three rounds
- *   4  Agree / don't        twelve cards, swipe or tap
- *   5  Where do you sit?    drag your dot along six lines
- *   6  Pack your bag        two values
- *   ✋ Double-check          only when your answers pulled two ways
- *   7  The final duel       three cards built live from your closest two
+ *   1  Would you rather   eight pairs — the two ends of one trait
+ *   2  Is this you?       eight tendencies on a four-step meter
+ *   3  Tough calls        six dilemmas — two traits pulled against each other
+ *   4  Prioritise         push five cards up and down, three rounds
+ *   5  Where do you sit?  drag your dot along six lines
+ *   6  Pack your bag      two values
+ *   ✋ Double-check        only when your answers pulled two ways
+ *   7  The final duel     three cards built live from your closest two
  *
- * A title card between sections; undo in every section; your constellation
- * of eight unlabelled stars brightening as you answer; the ring of twelve
- * silhouettes going dark as the scoring narrows you down.
+ * Progress is saved on the device as you go, so closing the window
+ * mid-game loses nothing: reopening offers to pick up where you left off.
  */
 
 type Props = {
@@ -55,38 +55,32 @@ type Props = {
   needsTerms: boolean;
   link: { slug: string; sender: string } | null;
   stats: CrowdStats | null;
-  retake: boolean;
+  /** Their archetype from an older version, when this is a retake. */
+  previous: ArchetypeId | null;
+  /** Called when a new section starts — the overlay drifts the map behind. */
+  onSection?: (index: number) => void;
+  /** The reveal's final button. */
+  onDone: (result: { archetype: ArchetypeId; linkSlug: string | null }) => void;
 };
 
-type Section = "story" | "pairs" | "ranks" | "agree" | "sliders" | "values" | "checks" | "duel";
+type Section = "rather" | "tend" | "calls" | "ranks" | "sliders" | "values" | "checks" | "duel";
 type Stage = "ready" | "title" | Section | "saving" | "reveal";
 
+const ORDER: Section[] = ["rather", "tend", "calls", "ranks", "sliders", "values"];
 const SECTION_TITLE: Record<Section, { n: string; title: string; hint: string }> = {
-  story: { n: "1", title: "A Day in Your Mind", hint: "Seven moments. Tap what you'd actually do." },
-  pairs: { n: "2", title: "This or That", hint: "Eight quick ones. Gut only." },
-  ranks: { n: "3", title: "Prioritise", hint: "Push what matters most to the top." },
-  agree: { n: "4", title: "Agree or Don't", hint: "Swipe right if it's you. Left if it isn't." },
+  rather: { n: "1", title: "Would You Rather", hint: "Both sides are good. Pick the real you." },
+  tend: { n: "2", title: "Is This You?", hint: "The real you, when life gives you a choice. A busy season doesn't count." },
+  calls: { n: "3", title: "Tough Calls", hint: "Six small dilemmas. No right answers — just yours." },
+  ranks: { n: "4", title: "Prioritise", hint: "Push what matters most to the top." },
   sliders: { n: "5", title: "Where Do You Sit?", hint: "Drag your dot to where you really are." },
   values: { n: "6", title: "Pack Your Bag", hint: "Room for two things. Choose well." },
   checks: { n: "✋", title: "Quick Double-Check", hint: "A couple of your answers pulled two ways. Two seconds each." },
   duel: { n: "7", title: "The Final Duel", hint: "Your two closest matches. Settle it." },
 };
-
-const ORDERED_AGREES = AGREE_ORDER.map((id) => AGREES.find((g) => g.id === id)!);
-const TOTAL_STEPS = STORY.length + PAIRS.length + RANKS.length + AGREES.length + SLIDERS.length + 1;
+const TOTAL_STEPS = RATHER.length + TENDENCIES.length + CALLS.length + RANKS.length + SLIDERS.length + 1;
 const STEP_TONE: Record<Trait, number> = { O: 0, I: 2, D: 4, S: 5, E: 7, A: 9, C: 11, H: 12 };
+const PROGRESS_KEY = "bm_progress_v4";
 
-const SKY: Record<string, string> = {
-  dawn: "linear-gradient(180deg,#FFD6C2 0%,#FFF1E6 100%)",
-  morning: "linear-gradient(180deg,#CFE8FF 0%,#F4FAFF 100%)",
-  noon: "linear-gradient(180deg,#FFF3B8 0%,#FFFBEA 100%)",
-  afternoon: "linear-gradient(180deg,#FFE0B2 0%,#FFF6EA 100%)",
-  dusk: "linear-gradient(180deg,#FFB38A 0%,#E9C7FF 100%)",
-  evening: "linear-gradient(180deg,#B9B4F5 0%,#E7E3FF 100%)",
-  night: "linear-gradient(180deg,#2B2A5E 0%,#4A3F7A 100%)",
-};
-
-/** Stable pseudo-random from a string, so shuffles don't change between renders. */
 function seeded(s: string) {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
@@ -99,35 +93,68 @@ function shuffle<T>(xs: T[], seed: string): T[] {
     .map((p) => p.x);
 }
 
-const emptyAnswers = (): Answers => ({ v: 3, story: {}, pairs: {}, ranks: {}, agree: {}, sliders: {}, values: [], checks: {}, duels: [] });
+const emptyAnswers = (): Answers => ({ v: 4, rather: {}, tend: {}, calls: {}, ranks: {}, sliders: {}, values: [], checks: {}, duels: [] });
 
-export default function Game({ defaultName, needsTerms, link, stats, retake }: Props) {
+type Saved = { answers: Answers; name: string; seed: string };
+function loadSaved(): Saved | null {
+  try {
+    const s = JSON.parse(localStorage.getItem(PROGRESS_KEY) ?? "null") as Saved | null;
+    return s && s.answers?.v === 4 ? s : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Where a saved game should resume. */
+function resumeSection(a: Answers): Section {
+  if (Object.keys(a.rather).length < RATHER.length) return "rather";
+  if (Object.keys(a.tend).length < TENDENCIES.length) return "tend";
+  if (Object.keys(a.calls).length < CALLS.length) return "calls";
+  if (Object.keys(a.ranks).length < RANKS.length) return "ranks";
+  if (Object.keys(a.sliders).length < SLIDERS.length) return "sliders";
+  if (a.values.length < 2) return "values";
+  return checksNeeded(a).some((id) => a.checks[id] === undefined) ? "checks" : "duel";
+}
+
+export default function Game({ defaultName, needsTerms, link, stats, previous, onSection, onDone }: Props) {
+  const [saved] = useState(loadSaved);
   const [stage, setStage] = useState<Stage>("ready");
-  const [next, setNext] = useState<Section>("story");
-  const [name, setName] = useState(defaultName);
+  const [next, setNext] = useState<Section>("rather");
+  const [name, setName] = useState(saved?.name || defaultName);
   const [terms, setTerms] = useState(!needsTerms);
   const [sound, setSoundState] = useState(false);
   const [answers, setAnswers] = useState<Answers>(emptyAnswers);
   const [checkIds, setCheckIds] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [reveal, setReveal] = useState<RevealData | null>(null);
-  const [seed] = useState(() => Math.random().toString(36).slice(2));
+  const [seed, setSeed] = useState(() => saved?.seed ?? Math.random().toString(36).slice(2));
   const started = useRef(0);
   const skyRef = useRef<HTMLDivElement>(null);
   const [sparks, setSparks] = useState<{ id: number; x: number; y: number; dx: number; dy: number; color: string }[]>([]);
   const sparkId = useRef(0);
 
+  // Save as you go; clear once the result is in.
+  useEffect(() => {
+    if (stage === "ready" || stage === "reveal") return;
+    try {
+      localStorage.setItem(PROGRESS_KEY, JSON.stringify({ answers, name, seed } satisfies Saved));
+    } catch {
+      /* private mode */
+    }
+  }, [answers, name, seed, stage]);
+
   const answered =
-    Object.keys(answers.story).length +
-    Object.keys(answers.pairs).length +
+    Object.keys(answers.rather).length +
+    Object.keys(answers.tend).length +
+    Object.keys(answers.calls).length +
     Object.keys(answers.ranks).length +
-    Object.keys(answers.agree).length +
     Object.keys(answers.sliders).length +
     (answers.values.length ? 1 : 0);
   const fraction = stage === "duel" || stage === "saving" || next === "duel" ? 1 : answered / TOTAL_STEPS;
   const alive = new Set(stillInPlay(answers, fraction));
-  // The day plays out in section 1; everything after it happens at night.
-  const night = stage !== "story" && stage !== "ready" && !(stage === "title" && next === "story");
+  const savedCount = saved
+    ? Object.keys(saved.answers.rather).length + Object.keys(saved.answers.tend).length + Object.keys(saved.answers.calls).length
+    : 0;
 
   function fly(e: { clientX: number; clientY: number }, color: string) {
     const target = skyRef.current?.getBoundingClientRect();
@@ -144,18 +171,38 @@ export default function Game({ defaultName, needsTerms, link, stats, retake }: P
     setStage("title");
     tone(STEP_TONE.E, 0.25);
     tone(STEP_TONE.H, 0.35);
+    onSection?.(["rather", "tend", "calls", "ranks", "sliders", "values", "checks", "duel"].indexOf(section));
   }
 
-  function finishedSection(current: Section, a: Answers) {
-    const order: Section[] = ["story", "pairs", "ranks", "agree", "sliders", "values"];
-    const i = order.indexOf(current);
-    if (i >= 0 && i < order.length - 1) return goTo(order[i + 1]);
+  function finished(current: Section, a: Answers) {
+    const i = ORDER.indexOf(current);
+    if (i >= 0 && i < ORDER.length - 1) return goTo(ORDER[i + 1]);
     if (current === "values") {
       const need = checksNeeded(a);
       setCheckIds(need);
       return goTo(need.length ? "checks" : "duel");
     }
     if (current === "checks") return goTo("duel");
+  }
+
+  function begin(resume: boolean) {
+    setSoundState(soundOn());
+    buzz(20);
+    started.current = performance.now();
+    if (resume && saved) {
+      setAnswers(saved.answers);
+      setCheckIds(checksNeeded(saved.answers));
+      goTo(resumeSection(saved.answers));
+    } else {
+      try {
+        localStorage.removeItem(PROGRESS_KEY);
+      } catch {
+        /* ignore */
+      }
+      setSeed(Math.random().toString(36).slice(2));
+      setAnswers(emptyAnswers());
+      goTo("rather");
+    }
   }
 
   async function save(final: Answers) {
@@ -169,6 +216,12 @@ export default function Game({ defaultName, needsTerms, link, stats, retake }: P
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Couldn't save that.");
+      try {
+        localStorage.removeItem(PROGRESS_KEY);
+      } catch {
+        /* ignore */
+      }
+      const linkSlug = link && !data.linkError ? link.slug : null;
       setReveal({
         name,
         answers: final,
@@ -179,11 +232,10 @@ export default function Game({ defaultName, needsTerms, link, stats, retake }: P
         rarity: data.rarity,
         players: data.players,
         know: data.know,
-        next: link
-          ? data.linkError
-            ? { href: `/brain-mate/${link.slug}`, label: "Back to the link" }
-            : { href: `/brain-mate/${link.slug}?reveal=1`, label: `Now: your Wavelength with ${link.sender}` }
-          : { href: "/brain-mate/me", label: "See your Brain-Mate card" },
+        next: {
+          label: linkSlug ? `Now: your Wavelength with ${link!.sender}` : "See your Brain-Mate card",
+          onClick: () => onDone({ archetype: data.archetype, linkSlug }),
+        },
         note: data.linkError ?? null,
       });
       setStage("reveal");
@@ -199,26 +251,28 @@ export default function Game({ defaultName, needsTerms, link, stats, retake }: P
   if (stage === "ready") {
     return (
       <main className="bm-shell">
-        <TopBar />
-        <div className="flex flex-1 flex-col justify-center gap-6 py-6">
+        <div className="flex flex-1 flex-col justify-center gap-5 py-6">
           <div className="bm-fade-up">
             <p className="text-[13px] font-bold tracking-[0.18em] text-[var(--bm-brand)]">
-              {link ? `${link.sender.toUpperCase()} IS WAITING` : retake ? "THE NEW BRAIN-MATE" : "A DAY IN YOUR MIND"}
+              {link ? `${link.sender.toUpperCase()} IS WAITING` : previous ? "READY FOR A REMATCH?" : "READY FOR A SMALL GAME? 🎲"}
             </p>
-            <h1 className="bm-display mt-2 text-[2.4rem]">What should your card call you?</h1>
+            <h1 className="bm-display mt-2 text-[2.3rem]">{previous ? "Brain-Mate got sharper." : "Which of 12 minds are you?"}</h1>
             <p className="mt-2 text-[15px] text-[var(--bm-soft)]">
-              Seven sections, about 3 minutes. Swipe, rank, drag and duel — no right answers, only yours.
+              {previous
+                ? `Last time you were ${ARCHETYPES[previous].name}. New questions, a sharper read — see if it holds.`
+                : "Seven quick sections, about 3 minutes. Then see who you click with."}
             </p>
           </div>
-          <input
-            className="bm-input bm-fade-up text-[1.3rem] font-bold"
-            value={name}
-            maxLength={40}
-            autoFocus={!name}
-            placeholder="Your first name"
-            onChange={(e) => setName(e.target.value)}
-            aria-label="Your name"
-          />
+          <label className="block">
+            <span className="text-[13px] font-semibold text-[var(--bm-soft)]">What should your card call you?</span>
+            <input
+              className="bm-input mt-1.5 text-[1.2rem] font-bold"
+              value={name}
+              maxLength={40}
+              placeholder="Your first name"
+              onChange={(e) => setName(e.target.value)}
+            />
+          </label>
           {needsTerms && (
             <label className="flex items-start gap-3 text-[13px] leading-[1.45] text-[var(--bm-soft)]">
               <input type="checkbox" className="mt-0.5 h-5 w-5 accent-[#FF6B4A]" checked={terms} onChange={(e) => setTerms(e.target.checked)} />
@@ -235,6 +289,10 @@ export default function Game({ defaultName, needsTerms, link, stats, retake }: P
               </span>
             </label>
           )}
+          <div className="rounded-[1.1rem] bg-white/70 p-3.5 text-[13.5px] leading-[1.5]">
+            <b>Answer as the real you</b> — when life gives you a choice. A busy season (a new job, a little one, exams) doesn&apos;t change
+            who you are.
+          </div>
           <button
             type="button"
             className="flex items-center gap-3 self-start rounded-full border-[1.5px] border-[var(--bm-line)] bg-white px-4 py-2 text-[14px] font-semibold"
@@ -249,84 +307,100 @@ export default function Game({ defaultName, needsTerms, link, stats, retake }: P
             <span aria-hidden="true">{sound ? "🔊" : "🔇"}</span>
             {sound ? "Sound on" : "Best with sound"}
           </button>
-          <p className="text-[13px] text-[var(--bm-soft)]">Answer as you are on an ordinary day — not your best day, not your worst.</p>
-          <button
-            className="bm-btn bm-btn-brand text-[1.1rem]"
-            disabled={name.trim().length < 2 || !terms}
-            onClick={() => {
-              setSoundState(soundOn());
-              buzz(20);
-              started.current = performance.now();
-              goTo("story");
-            }}
-          >
-            Start my day
-          </button>
+          {saved && savedCount > 0 ? (
+            <div className="flex flex-col gap-2.5">
+              <button className="bm-btn bm-btn-brand text-[1.05rem]" disabled={name.trim().length < 2 || !terms} onClick={() => begin(true)}>
+                Pick up where you left off
+              </button>
+              <button className="bm-btn bm-btn-ghost" disabled={name.trim().length < 2 || !terms} onClick={() => begin(false)}>
+                Start over
+              </button>
+            </div>
+          ) : (
+            <button className="bm-btn bm-btn-brand text-[1.1rem]" disabled={name.trim().length < 2 || !terms} onClick={() => begin(false)}>
+              {previous ? "Rematch · 3 min" : "Let's play"}
+            </button>
+          )}
         </div>
       </main>
     );
   }
 
-  const storyDone = Object.keys(answers.story).length;
-  const sky = stage === "story" ? SKY[STORY[Math.min(storyDone, STORY.length - 1)].sky] : undefined;
-  const darkUi = stage === "story" && STORY[Math.min(storyDone, STORY.length - 1)].sky === "night";
+  const night = stage !== "title" || next !== "rather";
 
   return (
-    <main
-      className={`min-h-[100dvh] transition-[background,color] duration-700 ${night ? "bm-dark" : ""}`}
-      style={{ background: sky ?? (night ? "#14102a" : undefined), color: darkUi || night ? "#fff" : undefined }}
-    >
+    <main className={`bm-full transition-[background,color] duration-700 ${night ? "bm-dark" : ""}`} style={{ background: night ? "#14102a" : undefined }}>
       <div className="bm-shell">
-        <Ring alive={alive} dark={night || darkUi} />
+        <Ring alive={alive} dark={night} />
         <Constellation innerRef={skyRef} answers={answers} />
 
         <div className="flex flex-1 flex-col">
           {stage === "title" && <TitleCard key={next} section={next} onDone={() => setStage(next)} />}
 
-          {stage === "story" && storyDone < STORY.length && (
-            <StoryView
-              key={storyDone}
-              beat={STORY[storyDone]}
-              index={storyDone}
-              seed={seed}
-              stats={stats}
-              dark={darkUi}
-              onUndo={
-                storyDone
-                  ? () => {
-                      const s = { ...answers.story };
-                      delete s[STORY[storyDone - 1].id];
-                      setAnswers({ ...answers, story: s });
-                    }
-                  : null
-              }
-              onChoose={(optId, trait, e) => {
-                buzz(12);
-                tone(STEP_TONE[trait]);
-                fly(e, TRAIT_COLOR[trait]);
-                const a = { ...answers, story: { ...answers.story, [STORY[storyDone].id]: optId } };
-                setAnswers(a);
-                if (storyDone + 1 >= STORY.length) window.setTimeout(() => finishedSection("story", a), 250);
-              }}
-            />
-          )}
-
-          {stage === "pairs" && (
-            <PairsView
+          {stage === "rather" && (
+            <RatherView
               answers={answers}
               seed={seed}
               onUndo={(id) => {
-                const p = { ...answers.pairs };
-                delete p[id];
-                setAnswers({ ...answers, pairs: p });
+                const r = { ...answers.rather };
+                delete r[id];
+                setAnswers({ ...answers, rather: r });
               }}
               onChoose={(id, hi, trait, e) => {
                 buzz(10);
                 tone(STEP_TONE[trait] + (hi ? 2 : 0), 0.08);
                 fly(e, TRAIT_COLOR[trait]);
-                const a = { ...answers, pairs: { ...answers.pairs, [id]: hi ? 1 : 0 } };
+                const a = { ...answers, rather: { ...answers.rather, [id]: hi ? 1 : 0 } };
                 setAnswers(a);
-                if (Object.keys(a.pairs).length === PAIRS.length) window.setTimeout(() => finishedSection("pairs", a), 300);
+                if (Object.keys(a.rather).length === RATHER.length) window.setTimeout(() => finished("rather", a), 300);
+              }}
+            />
+          )}
+
+          {stage === "tend" && (
+            <TendView
+              answers={answers}
+              seed={seed}
+              onUndo={(id) => {
+                const t = { ...answers.tend };
+                delete t[id];
+                setAnswers({ ...answers, tend: t });
+              }}
+              onAnswer={(id, v, trait, e) => {
+                buzz(v === 0 || v === 3 ? 16 : 8);
+                tone(STEP_TONE[trait] + v, 0.08);
+                if (v >= 2) fly(e, TRAIT_COLOR[trait]);
+                const a = { ...answers, tend: { ...answers.tend, [id]: v } };
+                setAnswers(a);
+                if (Object.keys(a.tend).length === TENDENCIES.length) window.setTimeout(() => finished("tend", a), 300);
+              }}
+            />
+          )}
+
+          {stage === "calls" && Object.keys(answers.calls).length < CALLS.length && (
+            <CallView
+              key={Object.keys(answers.calls).length}
+              call={CALLS[Object.keys(answers.calls).length]}
+              index={Object.keys(answers.calls).length}
+              seed={seed}
+              stats={stats}
+              onUndo={
+                Object.keys(answers.calls).length
+                  ? () => {
+                      const c = { ...answers.calls };
+                      delete c[CALLS[Object.keys(answers.calls).length - 1].id];
+                      setAnswers({ ...answers, calls: c });
+                    }
+                  : null
+              }
+              onChoose={(side, trait, e) => {
+                buzz(12);
+                tone(STEP_TONE[trait]);
+                fly(e, TRAIT_COLOR[trait]);
+                const call = CALLS[Object.keys(answers.calls).length];
+                const a = { ...answers, calls: { ...answers.calls, [call.id]: side } };
+                setAnswers(a);
+                if (Object.keys(a.calls).length === CALLS.length) window.setTimeout(() => finished("calls", a), 250);
               }}
             />
           )}
@@ -353,27 +427,7 @@ export default function Game({ defaultName, needsTerms, link, stats, retake }: P
                 const id = RANKS[Object.keys(answers.ranks).length].id;
                 const a = { ...answers, ranks: { ...answers.ranks, [id]: order } };
                 setAnswers(a);
-                if (Object.keys(a.ranks).length === RANKS.length) window.setTimeout(() => finishedSection("ranks", a), 250);
-              }}
-            />
-          )}
-
-          {stage === "agree" && (
-            <AgreeView
-              cards={ORDERED_AGREES}
-              given={answers.agree}
-              onUndo={(id) => {
-                const g = { ...answers.agree };
-                delete g[id];
-                setAnswers({ ...answers, agree: g });
-              }}
-              onAnswer={(card, yes, e) => {
-                buzz(yes ? 14 : 8);
-                tone(STEP_TONE[card.trait] + (yes ? 4 : 0), 0.08);
-                if (yes) fly(e, TRAIT_COLOR[card.trait]);
-                const a = { ...answers, agree: { ...answers.agree, [card.id]: yes ? 1 : 0 } };
-                setAnswers(a);
-                if (Object.keys(a.agree).length === AGREES.length) window.setTimeout(() => finishedSection("agree", a), 350);
+                if (Object.keys(a.ranks).length === RANKS.length) window.setTimeout(() => finished("ranks", a), 250);
               }}
             />
           )}
@@ -382,6 +436,7 @@ export default function Game({ defaultName, needsTerms, link, stats, retake }: P
             <SlidersView
               key={Object.keys(answers.sliders).length}
               index={Object.keys(answers.sliders).length}
+              initial={name.trim().charAt(0).toUpperCase() || "•"}
               onUndo={
                 Object.keys(answers.sliders).length
                   ? () => {
@@ -391,13 +446,13 @@ export default function Game({ defaultName, needsTerms, link, stats, retake }: P
                     }
                   : null
               }
-              initial={name.trim().charAt(0).toUpperCase() || "•"}
               onSet={(value) => {
                 const sl = SLIDERS[Object.keys(answers.sliders).length];
+                if (!sl) return;
                 tone(STEP_TONE[sl.trait] + Math.round((value + 1) * 3), 0.1);
                 const a = { ...answers, sliders: { ...answers.sliders, [sl.id]: Math.round(value * 100) / 100 } };
                 setAnswers(a);
-                if (Object.keys(a.sliders).length === SLIDERS.length) window.setTimeout(() => finishedSection("sliders", a), 250);
+                if (Object.keys(a.sliders).length === SLIDERS.length) window.setTimeout(() => finished("sliders", a), 250);
               }}
             />
           )}
@@ -414,16 +469,15 @@ export default function Game({ defaultName, needsTerms, link, stats, retake }: P
                 fly(e, "#FF6B4A");
                 const a = { ...answers, values: ids };
                 setAnswers(a);
-                finishedSection("values", a);
+                finished("values", a);
               }}
             />
           )}
 
           {stage === "checks" && (
-            <AgreeView
+            <CheckView
               cards={checkIds.map((id) => CHECKS.find((c) => c.id === id)!)}
               given={answers.checks}
-              title="Double-check"
               onUndo={(id) => {
                 const c = { ...answers.checks };
                 delete c[id];
@@ -434,7 +488,7 @@ export default function Game({ defaultName, needsTerms, link, stats, retake }: P
                 tone(STEP_TONE[card.trait] + (yes ? 4 : 0), 0.08);
                 const a = { ...answers, checks: { ...answers.checks, [card.id]: yes ? 1 : 0 } };
                 setAnswers(a);
-                if (Object.keys(a.checks).length === checkIds.length) window.setTimeout(() => finishedSection("checks", a), 350);
+                if (Object.keys(a.checks).length === checkIds.length) window.setTimeout(() => finished("checks", a), 350);
               }}
             />
           )}
@@ -470,17 +524,6 @@ export default function Game({ defaultName, needsTerms, link, stats, retake }: P
 }
 
 // ------------------------------------------------------------- chrome
-function TopBar() {
-  return (
-    <div className="flex items-center justify-between py-1">
-      <Link href="/brain-mate" className="text-[13px] font-extrabold tracking-[0.18em] text-[var(--bm-brand)]">
-        BRAIN-MATE
-      </Link>
-      <span className="text-[12px] text-[var(--bm-soft)]">by OpenNetworks</span>
-    </div>
-  );
-}
-
 function Ring({ alive, dark }: { alive: Set<ArchetypeId>; dark: boolean }) {
   return (
     <div className="flex items-center justify-between gap-1 pt-1" aria-label={`${alive.size} of 12 archetypes still possible`}>
@@ -493,21 +536,20 @@ function Ring({ alive, dark }: { alive: Set<ArchetypeId>; dark: boolean }) {
   );
 }
 
-/** Eight unlabelled stars, one per trait, brightening as evidence comes in. */
 function Constellation({ innerRef, answers }: { innerRef: React.RefObject<HTMLDivElement | null>; answers: Answers }) {
   const light = starLight(answers);
   const lit = TRAITS.filter((k) => light[k] > 0.15);
   return (
     <div className="flex justify-center py-2">
-      <div ref={innerRef} className="relative h-[92px] w-[92px]">
+      <div ref={innerRef} className="relative h-[84px] w-[84px]">
         <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full overflow-visible">
-          {lit.map((k, i) => {
-            const nextK = lit[(i + 1) % lit.length];
-            if (lit.length < 2 || !nextK) return null;
-            const [x1, y1] = STAR_POS[k];
-            const [x2, y2] = STAR_POS[nextK];
-            return <line key={k} x1={x1} y1={y1} x2={x2} y2={y2} stroke="currentColor" strokeOpacity={0.18} strokeWidth={0.8} />;
-          })}
+          {lit.length > 1 &&
+            lit.map((k, i) => {
+              const nextK = lit[(i + 1) % lit.length];
+              const [x1, y1] = STAR_POS[k];
+              const [x2, y2] = STAR_POS[nextK];
+              return <line key={k} x1={x1} y1={y1} x2={x2} y2={y2} stroke="currentColor" strokeOpacity={0.18} strokeWidth={0.8} />;
+            })}
           {TRAITS.map((k) => {
             const [x, y] = STAR_POS[k];
             const l = light[k];
@@ -526,14 +568,12 @@ function Constellation({ innerRef, answers }: { innerRef: React.RefObject<HTMLDi
 
 function TitleCard({ section, onDone }: { section: Section; onDone: () => void }) {
   const t = SECTION_TITLE[section];
-  // The latest callback, kept in a ref so a parent re-render (a spark
-  // landing, say) can't restart the card's timer.
   const done = useRef(onDone);
   useEffect(() => {
     done.current = onDone;
   });
   useEffect(() => {
-    const id = window.setTimeout(() => done.current(), 1300);
+    const id = window.setTimeout(() => done.current(), 1500);
     return () => window.clearTimeout(id);
   }, []);
   return (
@@ -547,98 +587,28 @@ function TitleCard({ section, onDone }: { section: Section; onDone: () => void }
   );
 }
 
-function Undo({ onClick, dark }: { onClick: (() => void) | null; dark?: boolean }) {
+function Undo({ onClick }: { onClick: (() => void) | null }) {
   return (
-    <button
-      onClick={onClick ?? undefined}
-      disabled={!onClick}
-      className={`text-[13px] font-semibold disabled:opacity-0 ${dark ? "text-white/60" : "text-[var(--bm-soft)]"}`}
-    >
+    <button onClick={onClick ?? undefined} disabled={!onClick} className="text-[13px] font-semibold text-white/60 disabled:opacity-0">
       ↩ undo
     </button>
   );
 }
 
-function Head({ kicker, prompt, meta, dark }: { kicker: string; prompt: string; meta?: string; dark?: boolean }) {
+function Head({ kicker, prompt, meta }: { kicker: string; prompt: string; meta?: string }) {
   return (
     <div className="bm-fade-up mb-4">
-      <p className={`flex justify-between text-[12px] font-extrabold tracking-[0.2em] ${dark ? "text-[#FFB59E]" : "text-[var(--bm-brand)]"}`}>
+      <p className="flex justify-between text-[12px] font-extrabold tracking-[0.2em] text-[#FFB59E]">
         <span>{kicker.toUpperCase()}</span>
         {meta && <span className="opacity-60">{meta}</span>}
       </p>
-      <h2 className="bm-display mt-1 text-[1.75rem]">{prompt}</h2>
+      <h2 className="bm-display mt-1 text-[1.65rem]">{prompt}</h2>
     </div>
   );
 }
 
-// -------------------------------------------------- 1. a day in your mind
-function StoryView({
-  beat,
-  index,
-  seed,
-  stats,
-  dark,
-  onUndo,
-  onChoose,
-}: {
-  beat: StoryBeat;
-  index: number;
-  seed: string;
-  stats: CrowdStats | null;
-  dark: boolean;
-  onUndo: (() => void) | null;
-  onChoose: (optionId: string, trait: Trait, e: React.MouseEvent) => void;
-}) {
-  const [chosen, setChosen] = useState<string | null>(null);
-  const [split, setSplit] = useState<{ text: string; rare: boolean } | null>(null);
-  const options = shuffle(beat.options, `${seed}:${beat.id}`);
-  return (
-    <section className="flex flex-1 flex-col">
-      <Head kicker={`${beat.time} · ${index + 1} of ${STORY.length}`} prompt={beat.prompt} dark={dark} />
-      <div className="flex flex-col gap-2.5">
-        {options.map((o, i) => (
-          <button
-            key={o.id}
-            className="bm-option flex items-center gap-3"
-            style={{ animationDelay: `${i * 60}ms`, color: "var(--bm-ink)" }}
-            data-state={chosen ? (chosen === o.id ? "chosen" : "gone") : "idle"}
-            onClick={(e) => {
-              if (chosen) return;
-              setChosen(o.id);
-              const share = stats && stats.n >= MIN_CROWD ? stats.share[`${beat.id}:${o.id}`] : undefined;
-              if (share !== undefined) {
-                const p = Math.max(1, Math.round(share * 100));
-                setSplit(p < 12 ? { text: `Only ${p}% chose this`, rare: true } : { text: `${p}% chose this too`, rare: false });
-              }
-              const trait = (Object.keys(o.load)[0] ?? "O") as Trait;
-              const ev = { clientX: e.clientX, clientY: e.clientY } as React.MouseEvent;
-              window.setTimeout(() => onChoose(o.id, trait, ev), share !== undefined ? 1000 : 520);
-            }}
-          >
-            <span className="text-[1.5rem]" aria-hidden="true">
-              {o.emoji}
-            </span>
-            <span>{o.label}</span>
-          </button>
-        ))}
-      </div>
-      <div className="mt-3 flex min-h-[40px] justify-center">
-        {split && (
-          <span className={`bm-split rounded-full px-4 py-2 text-[14px] font-bold ${split.rare ? "bm-rare" : "bg-[var(--bm-ink)] text-white"}`}>
-            {split.rare ? "✨ " : ""}
-            {split.text}
-          </span>
-        )}
-      </div>
-      <div className="mt-auto pt-2">
-        <Undo onClick={onUndo} dark={dark} />
-      </div>
-    </section>
-  );
-}
-
-// ---------------------------------------------------------- 2. this or that
-function PairsView({
+// ------------------------------------------------------ 1. would you rather
+function RatherView({
   answers,
   seed,
   onUndo,
@@ -649,77 +619,169 @@ function PairsView({
   onUndo: (id: string) => void;
   onChoose: (id: string, hi: boolean, trait: Trait, e: React.MouseEvent) => void;
 }) {
-  const order = shuffle(PAIRS, `${seed}:pairs`);
-  const done = order.filter((p) => answers.pairs[p.id] !== undefined).length;
-  const pair = order[done];
-  const [picked, setPicked] = useState<"l" | "r" | null>(null);
-  if (!pair) return <div className="flex flex-1 items-center justify-center text-[1.4rem] font-extrabold">⚡ Nice.</div>;
-  const flip = seeded(`${seed}:${pair.id}:side`) > 0.5;
-  const left = flip ? { ...pair.lo, hi: false } : { ...pair.hi, hi: true };
-  const right = flip ? { ...pair.hi, hi: true } : { ...pair.lo, hi: false };
-  const tile = (side: "l" | "r", o: typeof left) => (
+  const order = shuffle(RATHER, `${seed}:rather`);
+  const done = order.filter((x) => answers.rather[x.id] !== undefined).length;
+  const q = order[done];
+  const [picked, setPicked] = useState<"a" | "b" | null>(null);
+  if (!q) return <div className="flex flex-1 items-center justify-center text-[1.4rem] font-extrabold">⚡ Nice.</div>;
+  const flip = seeded(`${seed}:${q.id}:side`) > 0.5;
+  const first = flip ? { ...q.lo, hi: false } : { ...q.hi, hi: true };
+  const second = flip ? { ...q.hi, hi: true } : { ...q.lo, hi: false };
+  const card = (slot: "a" | "b", o: typeof first, cls: string) => (
     <button
-      className="bm-option flex aspect-[3/4] flex-col items-center justify-center gap-3 !p-3 text-center !text-[1.05rem]"
+      className={`bm-option ${cls} flex items-center gap-4 !p-5 text-left !text-[1.15rem]`}
       style={{ color: "var(--bm-ink)" }}
-      data-state={picked ? (picked === side ? "chosen" : "gone") : "idle"}
+      data-state={picked ? (picked === slot ? "chosen" : "gone") : "idle"}
       onClick={(e) => {
         if (picked) return;
-        setPicked(side);
+        setPicked(slot);
         const ev = { clientX: e.clientX, clientY: e.clientY } as React.MouseEvent;
         window.setTimeout(() => {
           setPicked(null);
-          onChoose(pair.id, o.hi, pair.trait, ev);
-        }, 260);
+          onChoose(q.id, o.hi, q.trait, ev);
+        }, 300);
       }}
     >
-      <span className="text-[3rem]" aria-hidden="true">
+      <span className="text-[2.2rem]" aria-hidden="true">
         {o.emoji}
       </span>
-      <span className="font-extrabold">{o.label}</span>
+      <span className="font-extrabold leading-snug">{o.label}</span>
     </button>
   );
   return (
-    <section className="flex flex-1 flex-col">
-      <Head kicker="This or that" prompt="Which one's you?" meta={`${done + 1} / ${PAIRS.length}`} dark />
-      <div key={pair.id} className="relative grid grid-cols-2 gap-3">
-        {tile("l", left)}
-        {tile("r", right)}
-        <span className="pointer-events-none absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-[var(--bm-brand)] text-[13px] font-extrabold text-white shadow-lg">
-          <svg viewBox="0 0 36 36" className="absolute inset-0 h-full w-full -rotate-90">
-            <circle cx="18" cy="18" r="16" fill="none" stroke="#fff" strokeOpacity="0.35" strokeWidth="3" />
-            <circle
-              cx="18"
-              cy="18"
-              r="16"
-              fill="none"
-              stroke="#fff"
-              strokeWidth="3"
-              strokeDasharray="100.5"
-              className="bm-timer"
-              key={pair.id}
-            />
-          </svg>
-          VS
-        </span>
+    <section key={q.id} className="flex flex-1 flex-col">
+      <Head kicker="Would you rather…" prompt="Pick the real you." meta={`${done + 1} / ${RATHER.length}`} />
+      <div className="flex flex-col gap-3">
+        {card("a", first, "bm-duel-left")}
+        <div className="text-center text-[13px] font-extrabold tracking-[0.25em] text-white/50">OR</div>
+        {card("b", second, "bm-duel-right")}
       </div>
-      <div className="mt-4 flex items-center justify-between text-[13px] font-semibold">
-        <Undo
-          dark
-          onClick={
-            done
-              ? () => {
-                  onUndo(order[done - 1].id);
-                }
-              : null
-          }
-        />
-        <span className="text-white/60">{done >= 3 ? `⚡ streak ×${done}` : "gut only"}</span>
+      <div className="mt-auto flex items-center justify-between pt-4 text-[13px]">
+        <Undo onClick={done ? () => onUndo(order[done - 1].id) : null} />
+        <span className="text-white/50">{done >= 3 ? `⚡ ×${done}` : "both are good"}</span>
       </div>
     </section>
   );
 }
 
-// ------------------------------------------------------------ 3. prioritise
+// ---------------------------------------------------------- 2. is this you
+function TendView({
+  answers,
+  seed,
+  onUndo,
+  onAnswer,
+}: {
+  answers: Answers;
+  seed: string;
+  onUndo: (id: string) => void;
+  onAnswer: (id: string, v: number, trait: Trait, e: React.MouseEvent) => void;
+}) {
+  const order = shuffle(TENDENCIES, `${seed}:tend`);
+  const done = order.filter((x) => answers.tend[x.id] !== undefined).length;
+  const t = order[done];
+  const [chosen, setChosen] = useState<number | null>(null);
+  if (!t) return <div className="flex flex-1 items-center justify-center text-[1.4rem] font-extrabold">✔ Got it.</div>;
+  const colours = ["#3B82F6", "#93C5FD", "#FDBA74", "#FF6B4A"];
+  return (
+    <section key={t.id} className="flex flex-1 flex-col">
+      <Head kicker="Is this you?" prompt="How often is this you?" meta={`${done + 1} / ${TENDENCIES.length}`} />
+      <div className="flex flex-1 items-center">
+        <div className="bm-stamp w-full rounded-[1.6rem] bg-white px-6 py-9 text-center text-[1.35rem] font-extrabold leading-snug text-[var(--bm-ink)]" style={{ animationDuration: "0.35s" }}>
+          “{t.text}”
+        </div>
+      </div>
+      <div className="mt-5">
+        <div className="mb-2 h-2 overflow-hidden rounded-full bg-white/10">
+          <div className="h-full rounded-full transition-[width] duration-300" style={{ width: `${chosen === null ? 0 : ((chosen + 1) / 4) * 100}%`, background: chosen === null ? "transparent" : colours[chosen] }} />
+        </div>
+        <div className="grid grid-cols-4 gap-2">
+          {TENDENCY_SCALE.map((label, v) => (
+            <button
+              key={label}
+              className="flex min-h-[60px] items-center justify-center rounded-[1rem] px-1 text-center text-[13px] font-extrabold leading-tight transition-transform active:scale-90"
+              style={{ background: colours[v], color: v === 1 || v === 2 ? "#17110e" : "#fff", outline: chosen === v ? "3px solid #fff" : "none" }}
+              onClick={(e) => {
+                if (chosen !== null) return;
+                setChosen(v);
+                const ev = { clientX: e.clientX, clientY: e.clientY } as React.MouseEvent;
+                window.setTimeout(() => {
+                  setChosen(null);
+                  onAnswer(t.id, v, t.trait, ev);
+                }, 260);
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="mt-3 flex justify-between text-[12px] text-white/50">
+        <Undo onClick={done ? () => onUndo(order[done - 1].id) : null} />
+        <span>the real you, not this week</span>
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------- 3. tough calls
+function CallView({
+  call,
+  index,
+  seed,
+  stats,
+  onUndo,
+  onChoose,
+}: {
+  call: Call;
+  index: number;
+  seed: string;
+  stats: CrowdStats | null;
+  onUndo: (() => void) | null;
+  onChoose: (side: "a" | "b", trait: Trait, e: React.MouseEvent) => void;
+}) {
+  const [chosen, setChosen] = useState<"a" | "b" | null>(null);
+  const [split, setSplit] = useState<string | null>(null);
+  const sides = seeded(`${seed}:${call.id}`) > 0.5 ? (["b", "a"] as const) : (["a", "b"] as const);
+  return (
+    <section className="flex flex-1 flex-col">
+      <Head kicker={`Tough call · ${index + 1} of ${CALLS.length}`} prompt={call.prompt} />
+      <div className="flex flex-col gap-3">
+        {sides.map((side, i) => {
+          const o = call[side];
+          return (
+            <button
+              key={side}
+              className={`bm-option ${i ? "bm-duel-right" : "bm-duel-left"} flex items-center gap-3 !p-4 text-left`}
+              style={{ color: "var(--bm-ink)" }}
+              data-state={chosen ? (chosen === side ? "chosen" : "gone") : "idle"}
+              onClick={(e) => {
+                if (chosen) return;
+                setChosen(side);
+                const share = stats && stats.n >= MIN_CROWD ? stats.share[`${call.id}:${side}`] : undefined;
+                if (share !== undefined) setSplit(`${Math.max(1, Math.round(share * 100))}% of people chose this too`);
+                const ev = { clientX: e.clientX, clientY: e.clientY } as React.MouseEvent;
+                window.setTimeout(() => onChoose(side, o.trait, ev), share !== undefined ? 1000 : 520);
+              }}
+            >
+              <span className="text-[1.8rem]" aria-hidden="true">
+                {o.emoji}
+              </span>
+              <span className="font-extrabold leading-snug">{o.label}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-3 flex min-h-[40px] justify-center">
+        {split && <span className="bm-split rounded-full bg-white px-4 py-2 text-[14px] font-bold text-[var(--bm-ink)]">{split}</span>}
+      </div>
+      <div className="mt-auto pt-2">
+        <Undo onClick={onUndo} />
+      </div>
+    </section>
+  );
+}
+
+// ----------------------------------------------------------- 4. prioritise
 function RankView({
   round,
   index,
@@ -735,7 +797,7 @@ function RankView({
 }) {
   const [order, setOrder] = useState(() => shuffle(round.cards, `${seed}:${round.id}`).map((c) => c.id));
   const [moved, setMoved] = useState(false);
-  const ROW = 68;
+  const ROW = 64;
   const medals = ["🥇", "🥈", "🥉", "4", "5"];
   function move(id: string, dir: -1 | 1) {
     const i = order.indexOf(id);
@@ -750,7 +812,7 @@ function RankView({
   }
   return (
     <section className="flex flex-1 flex-col">
-      <Head kicker={`Prioritise · round ${index + 1} of ${RANKS.length}`} prompt={round.prompt} dark />
+      <Head kicker={`Prioritise · round ${index + 1} of ${RANKS.length}`} prompt={round.prompt} />
       <p className="-mt-2 mb-3 text-[13px] text-white/60">Push the most “you” to the top.</p>
       <div className="relative" style={{ height: order.length * ROW }}>
         {round.cards.map((c) => {
@@ -759,18 +821,13 @@ function RankView({
             <div
               key={c.id}
               className="absolute inset-x-0 flex items-center gap-3 rounded-[1.1rem] bg-white px-3 text-[var(--bm-ink)] shadow-[0_10px_24px_-16px_rgba(0,0,0,0.7)]"
-              style={{
-                top: pos * ROW,
-                height: ROW - 8,
-                transition: "top 0.35s cubic-bezier(0.34,1.56,0.64,1)",
-                border: pos === 0 ? "2px solid #FFB800" : "2px solid transparent",
-              }}
+              style={{ top: pos * ROW, height: ROW - 8, transition: "top 0.35s cubic-bezier(0.34,1.56,0.64,1)", border: pos === 0 ? "2px solid #FFB800" : "2px solid transparent" }}
             >
-              <span className="w-7 text-center text-[1.2rem] font-extrabold">{medals[pos]}</span>
-              <span className="text-[1.4rem]" aria-hidden="true">
+              <span className="w-7 text-center text-[1.15rem] font-extrabold">{medals[pos]}</span>
+              <span className="text-[1.35rem]" aria-hidden="true">
                 {c.emoji}
               </span>
-              <span className="flex-1 text-[15px] font-bold leading-tight">{c.label}</span>
+              <span className="flex-1 text-[14.5px] font-bold leading-tight">{c.label}</span>
               <span className="flex flex-col">
                 <button
                   className="grid h-6 w-9 place-items-center rounded-t-lg bg-[var(--bm-line)] text-[13px] font-extrabold disabled:opacity-30"
@@ -797,85 +854,13 @@ function RankView({
         {moved ? "Lock it in 🔒" : "Already perfect? Lock it in"}
       </button>
       <div className="mt-3">
-        <Undo onClick={onUndo} dark />
+        <Undo onClick={onUndo} />
       </div>
     </section>
   );
 }
 
-// -------------------------------------------------------- 4. agree / don't
-function AgreeView({
-  cards,
-  given,
-  title = "Agree or don't",
-  onUndo,
-  onAnswer,
-}: {
-  cards: AgreeCard[];
-  given: Record<string, number>;
-  title?: string;
-  onUndo: (id: string) => void;
-  onAnswer: (card: AgreeCard, yes: boolean, e: { clientX: number; clientY: number }) => void;
-}) {
-  const done = cards.filter((c) => given[c.id] !== undefined).length;
-  const card = cards[done];
-  const [dx, setDx] = useState(0);
-  const [stamp, setStamp] = useState<"yes" | "no" | null>(null);
-  const start = useRef<number | null>(null);
-  if (!card) return <div className="flex flex-1 items-center justify-center text-[1.4rem] font-extrabold">✔ Got it.</div>;
-  function answer(yes: boolean, at: { clientX: number; clientY: number }) {
-    if (stamp) return;
-    setStamp(yes ? "yes" : "no");
-    window.setTimeout(() => {
-      setStamp(null);
-      setDx(0);
-      onAnswer(card, yes, at);
-    }, 280);
-  }
-  const shift = stamp ? (stamp === "yes" ? 420 : -420) : dx;
-  return (
-    <section className="flex flex-1 flex-col">
-      <Head kicker={title} prompt="Is this you?" meta={`${done + 1} / ${cards.length}`} dark />
-      <div className="relative flex flex-1 items-center justify-center">
-        <div
-          key={card.id}
-          className="bm-swipe-card bm-fade-up relative w-full rounded-[1.6rem] bg-white px-6 py-12 text-center text-[1.5rem] font-extrabold leading-tight text-[var(--bm-ink)] shadow-[0_30px_60px_-30px_rgba(0,0,0,0.8)]"
-          style={{ transform: `translateX(${shift}px) rotate(${shift / 20}deg)`, opacity: stamp ? 0 : 1 }}
-          onPointerDown={(e) => {
-            start.current = e.clientX;
-            (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-          }}
-          onPointerMove={(e) => start.current !== null && setDx(e.clientX - start.current)}
-          onPointerUp={(e) => {
-            const moved = start.current === null ? 0 : e.clientX - start.current;
-            start.current = null;
-            if (moved > 70) answer(true, e);
-            else if (moved < -70) answer(false, e);
-            else setDx(0);
-          }}
-        >
-          {dx > 30 && <span className="absolute left-4 top-4 rotate-[-12deg] rounded-md border-[3px] border-[#2FA84F] px-2 text-[14px] text-[#2FA84F]">AGREE</span>}
-          {dx < -30 && <span className="absolute right-4 top-4 rotate-[12deg] rounded-md border-[3px] border-[#E0266B] px-2 text-[14px] text-[#E0266B]">NOPE</span>}
-          “{card.text}”
-        </div>
-      </div>
-      <div className="mt-5 grid grid-cols-2 gap-3">
-        <button className="bm-btn !bg-[#E0266B] !py-4 text-[1.05rem]" onClick={(e) => answer(false, e)}>
-          ✕ Nope
-        </button>
-        <button className="bm-btn !bg-[#2FA84F] !py-4 text-[1.05rem]" onClick={(e) => answer(true, e)}>
-          ✓ Agree
-        </button>
-      </div>
-      <div className="mt-3 flex justify-between text-[12px] text-white/50">
-        <Undo dark onClick={done ? () => onUndo(cards[done - 1].id) : null} />
-        <span>swipe or tap</span>
-      </div>
-    </section>
-  );
-}
-
-// ------------------------------------------------------ 5. where do you sit?
+// ---------------------------------------------------- 5. where do you sit?
 function SlidersView({
   index,
   initial,
@@ -908,7 +893,7 @@ function SlidersView({
   const pct = value === null ? 50 : ((value + 1) / 2) * 100;
   return (
     <section className="flex flex-1 flex-col">
-      <Head kicker={`Where do you sit? · ${index + 1} of ${SLIDERS.length}`} prompt={sl.prompt} dark />
+      <Head kicker={`Where do you sit? · ${index + 1} of ${SLIDERS.length}`} prompt={sl.prompt} />
       <div className="flex flex-1 flex-col justify-center">
         <div className="mb-4 flex justify-between gap-4 text-[15px] font-extrabold">
           <span className="max-w-[45%]" style={{ opacity: value === null ? 0.9 : 0.5 + Math.max(0, -value) * 0.5 }}>
@@ -930,7 +915,6 @@ function SlidersView({
           onPointerMove={(e) => dragging && at(e.clientX)}
           onPointerUp={() => {
             setDragging(false);
-            // Let go and it locks in; grab it again within a beat to adjust.
             timer.current = window.setTimeout(() => value !== null && onSet(value), 650);
           }}
         >
@@ -950,13 +934,13 @@ function SlidersView({
         <p className="mt-4 text-center text-[13px] text-white/60">{value === null ? "Tap or drag to place yourself" : "Let go to lock it in"}</p>
       </div>
       <div className="mt-3">
-        <Undo onClick={onUndo} dark />
+        <Undo onClick={onUndo} />
       </div>
     </section>
   );
 }
 
-// ---------------------------------------------------------- 6. pack your bag
+// -------------------------------------------------------- 6. pack your bag
 function PickView({
   prompt,
   options,
@@ -974,8 +958,8 @@ function PickView({
   const full = ids.length === count;
   return (
     <section className="flex flex-1 flex-col">
-      <Head kicker="Pack your bag" prompt={prompt} dark />
-      <div className="mb-3 flex min-h-[60px] items-center justify-center gap-3 rounded-[1.4rem] border-2 border-dashed border-white/20 p-3">
+      <Head kicker="Pack your bag" prompt={prompt} />
+      <div className="mb-3 flex min-h-[56px] items-center justify-center gap-3 rounded-[1.4rem] border-2 border-dashed border-white/20 p-3">
         {ids.length === 0 && <span className="text-[14px] text-white/60">🎒 Your bag is empty</span>}
         {ids.map((id) => {
           const o = options.find((x) => x.id === id)!;
@@ -1022,7 +1006,58 @@ function PickView({
   );
 }
 
-// --------------------------------------------------------- 7. the final duel
+// ----------------------------------------------------------- double-check
+function CheckView({
+  cards,
+  given,
+  onUndo,
+  onAnswer,
+}: {
+  cards: CheckCard[];
+  given: Record<string, number>;
+  onUndo: (id: string) => void;
+  onAnswer: (card: CheckCard, yes: boolean) => void;
+}) {
+  const done = cards.filter((c) => given[c.id] !== undefined).length;
+  const card = cards[done];
+  const [stamp, setStamp] = useState<"yes" | "no" | null>(null);
+  if (!card) return <div className="flex flex-1 items-center justify-center text-[1.4rem] font-extrabold">✔ Thanks.</div>;
+  function answer(yes: boolean) {
+    if (stamp) return;
+    setStamp(yes ? "yes" : "no");
+    window.setTimeout(() => {
+      setStamp(null);
+      onAnswer(card, yes);
+    }, 280);
+  }
+  return (
+    <section className="flex flex-1 flex-col">
+      <Head kicker="Double-check" prompt="Is this you?" meta={`${done + 1} / ${cards.length}`} />
+      <div className="flex flex-1 items-center">
+        <div
+          key={card.id}
+          className="bm-fade-up w-full rounded-[1.6rem] bg-white px-6 py-10 text-center text-[1.4rem] font-extrabold leading-tight text-[var(--bm-ink)]"
+          style={{ transform: stamp ? `translateX(${stamp === "yes" ? 420 : -420}px)` : undefined, transition: "transform 0.28s" }}
+        >
+          “{card.text}”
+        </div>
+      </div>
+      <div className="mt-5 grid grid-cols-2 gap-3">
+        <button className="bm-btn !bg-[#E0266B] !py-4" onClick={() => answer(false)}>
+          ✕ Not me
+        </button>
+        <button className="bm-btn !bg-[#2FA84F] !py-4" onClick={() => answer(true)}>
+          ✓ That&apos;s me
+        </button>
+      </div>
+      <div className="mt-3">
+        <Undo onClick={done ? () => onUndo(cards[done - 1].id) : null} />
+      </div>
+    </section>
+  );
+}
+
+// ----------------------------------------------------------- the final duel
 function DuelStage({
   answers,
   saving,

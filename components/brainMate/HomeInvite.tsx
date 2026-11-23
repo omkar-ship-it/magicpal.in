@@ -138,7 +138,7 @@ export function HomePanelBanner({ status }: { status: BrainMateStatus }) {
  * card in miniature; for everyone else, a quiet way in — the loud one is on
  * the home map.
  */
-export function ProfileBrainMate({ status }: { status: BrainMateStatus }) {
+export function ProfileBrainMate({ status, onOpen }: { status: BrainMateStatus; onOpen?: () => void }) {
   if (status.state !== "played") {
     return (
       <Link
@@ -163,7 +163,7 @@ export function ProfileBrainMate({ status }: { status: BrainMateStatus }) {
   const a = ARCHETYPES[status.archetype];
   return (
     <div className="mb-4 overflow-hidden rounded-2xl" style={{ background: a.color, color: a.ink }}>
-      <Link href="/brain-mate/me" className="flex items-center gap-3 p-3.5">
+      <button type="button" onClick={onOpen} className="flex w-full items-center gap-3 p-3.5 text-left">
         <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full" style={{ background: "rgba(255,255,255,0.18)" }}>
           <ArchetypeMark id={a.id} size={30} color={a.ink} stroke={7} />
         </span>
@@ -175,26 +175,28 @@ export function ProfileBrainMate({ status }: { status: BrainMateStatus }) {
         <span className="text-[20px] font-extrabold" aria-hidden="true">
           ›
         </span>
-      </Link>
+      </button>
       <div className="px-3.5 pb-3.5">
         <p className="rounded-xl px-3 py-2 text-[13px] font-semibold leading-snug" style={{ background: "rgba(255,255,255,0.16)" }}>
           ✦ {a.superpower}
         </p>
         <div className="mt-2.5 flex gap-2">
-          <Link
-            href="/brain-mate/me"
+          <button
+            type="button"
+            onClick={onOpen}
             className="flex-1 rounded-full py-2 text-center text-[13px] font-extrabold"
             style={{ background: a.ink, color: a.color }}
           >
             Open my card
-          </Link>
-          <Link
-            href="/brain-mate/me"
+          </button>
+          <button
+            type="button"
+            onClick={onOpen}
             className="flex-1 rounded-full py-2 text-center text-[13px] font-extrabold"
             style={{ border: `1.5px solid ${a.ink}`, color: a.ink }}
           >
             Find my Wavelength
-          </Link>
+          </button>
         </div>
       </div>
     </div>

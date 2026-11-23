@@ -25,6 +25,24 @@
   color-scheme: light;
 }
 
+/* A full-screen surface on its own page; the whole window inside the overlay. */
+.bm-full {
+  min-height: 100dvh;
+}
+/* No height here: this sheet is unlayered and would beat the overlay's
+   Tailwind sizing (see AGENT_HANDOFF §6.4). The overlay sizes the window. */
+.bm-embedded {
+  min-height: 0;
+}
+.bm-embedded .bm-shell,
+.bm-embedded .bm-full {
+  min-height: 100%;
+}
+/* Room for the window's close button, so nothing sits under it. */
+.bm-embedded .bm-shell {
+  padding-top: max(env(safe-area-inset-top, 0px), 56px);
+}
+
 .bm-shell {
   max-width: 30rem;
   margin: 0 auto;

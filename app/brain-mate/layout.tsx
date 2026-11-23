@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import "./brainmate.css";
+import "@/components/brainMate/brainmate.css";
 import TzCookie from "@/components/brainMate/TzCookie";
 
 export const metadata: Metadata = {

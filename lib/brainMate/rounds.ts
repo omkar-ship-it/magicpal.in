@@ -1,129 +1,108 @@
 import type { Trait } from "./archetypes";
 
 /**
- * Brain-Mate v3 — "A Day in Your Mind". The question bank.
+ * Brain-Mate v4 — the question bank.
  *
- * Five ways of answering, so each trait is measured 7–10 times by at least
- * four different methods and one careless tap can't move a result much:
+ * Built so the answer reflects the person, not their circumstances. A new
+ * parent, a carer, a student in exam season and a founder in launch week
+ * should all be able to answer as "the real you, when life gives you a
+ * choice":
  *
- *   1. A day in your mind  — 7 story moments, 4 options, one trait each
- *   2. This or that        — 8 quick pairs, one trait each
- *   3. Prioritise          — 3 rounds, push 5 cards up and down
- *   4. Agree / don't       — 12 statements, 4 of them reverse-worded
- *   5. Where do you sit?   — 6 sliders
- *   + Pack your bag (values, similarity only)
- *   + Double-check (only when answers contradict) and the final duel.
+ *  - Tendencies, never recent behaviour ("how often is this you?", not
+ *    "last month did you…") — a busy season isn't a personality.
+ *  - Preferences over logistics — what you'd choose, which circumstances
+ *    constrain far less than what you did.
+ *  - Settings everyone has: conversations, decisions, disagreements,
+ *    someone close to you, any group. No parties, travel, free Saturdays
+ *    or office life assumed; "any team — work, family or friends".
  *
- * Every option in a moment or a round is written to be equally attractive,
- * so answers reflect habit rather than self-image. Changing a loading here
- * changes what the scores mean: re-run scripts/brain-mate-sim and refit the
- * norms in score.ts before shipping.
+ * Five ways of answering, each trait measured 6–8 times across them:
+ *
+ *   1. Would you rather   8 pairs — the two ends of ONE trait, both appealing
+ *   2. Is this you?       8 tendencies — Rarely / Sometimes / Often / Almost always
+ *   3. Tough calls        6 dilemmas — two traits pulled against each other
+ *   4. Prioritise         3 rounds — push 5 cards up and down
+ *   5. Where do you sit?  6 sliders
+ *   + Pack your bag (values, similarity only), double-checks when answers
+ *     contradict, and the adaptive final duel.
+ *
+ * Changing a loading changes what the scores mean: re-run
+ * scripts/brain-mate-sim (final4 / export4) and refit score.ts.
  */
 
 export type Loading = Partial<Record<Trait, number>>;
+export type Side = { label: string; emoji: string };
 
-export type StoryOption = { id: string; label: string; emoji: string; load: Loading; word: string };
-export type StoryBeat = { id: string; time: string; sky: string; prompt: string; options: StoryOption[] };
+/** Would you rather: `hi` is the end that scores high on the trait. Order on screen is shuffled. */
+export type Rather = { id: string; trait: Trait; hi: Side; lo: Side };
 
-export const STORY: StoryBeat[] = [
-  {
-    id: "b1",
-    time: "7:00",
-    sky: "dawn",
-    prompt: "Your alarm goes off. First thought?",
-    options: [
-      { id: "o", emoji: "💡", label: "That idea from last night", load: { O: 1 }, word: "last night's idea" },
-      { id: "s", emoji: "📋", label: "Today's list", load: { S: 1 }, word: "the list" },
-      { id: "e", emoji: "👋", label: "Who I'm seeing today", load: { E: 1 }, word: "who I'm seeing" },
-      { id: "i", emoji: "❓", label: "Something I need to figure out", load: { I: 1 }, word: "a puzzle" },
-    ],
-  },
-  {
-    id: "b2",
-    time: "10:00",
-    sky: "morning",
-    prompt: "Your team's project is stuck.",
-    options: [
-      { id: "o", emoji: "🔄", label: "Reframe the whole problem", load: { O: 1 }, word: "reframed it" },
-      { id: "i", emoji: "🔍", label: "Hunt down the real cause", load: { I: 1 }, word: "found the cause" },
-      { id: "a", emoji: "🧭", label: "Take charge, reset the plan", load: { A: 1 }, word: "took charge" },
-      { id: "c", emoji: "💬", label: "Check how everyone's doing", load: { C: 1 }, word: "checked in" },
-    ],
-  },
-  {
-    id: "b3",
-    time: "1:00",
-    sky: "noon",
-    prompt: "Lunch with people you've never met.",
-    options: [
-      { id: "e", emoji: "😂", label: "Get the table laughing", load: { E: 1 }, word: "the laughs" },
-      { id: "c", emoji: "🫶", label: "Ask one person something real", load: { C: 1 }, word: "something real" },
-      { id: "q", emoji: "👀", label: "Listen and take it all in", load: { E: -1 }, word: "took it all in" },
-      { id: "a", emoji: "📍", label: "Pick the place, lead the way", load: { A: 1 }, word: "led the way" },
-    ],
-  },
-  {
-    id: "b4",
-    time: "3:30",
-    sky: "afternoon",
-    prompt: "Someone in a meeting says something you think is wrong.",
-    options: [
-      { id: "a", emoji: "🥊", label: "Push back, right there", load: { A: 1, H: -1 }, word: "pushed back" },
-      { id: "i", emoji: "🎯", label: "Ask the question that exposes the gap", load: { I: 1 }, word: "the killer question" },
-      { id: "c", emoji: "☕", label: "Talk it through with them after", load: { C: 1 }, word: "talked after" },
-      { id: "h", emoji: "🧱", label: "Build on the part that's right", load: { H: 1 }, word: "built on it" },
-    ],
-  },
-  {
-    id: "b5",
-    time: "6:00",
-    sky: "dusk",
-    prompt: "Surprise — a free evening.",
-    options: [
-      { id: "d", emoji: "✅", label: "Finish what you started", load: { D: 1 }, word: "finished it" },
-      { id: "s", emoji: "🗓️", label: "Plan the rest of your week", load: { S: 1 }, word: "planned the week" },
-      { id: "o", emoji: "🗺️", label: "Go somewhere you've never been", load: { O: 1 }, word: "somewhere new" },
-      { id: "e", emoji: "📞", label: "Call people over", load: { E: 1 }, word: "called people over" },
-    ],
-  },
-  {
-    id: "b6",
-    time: "8:30",
-    sky: "evening",
-    prompt: "Group dinner. Nobody can decide where.",
-    options: [
-      { id: "a", emoji: "👆", label: "Just pick", load: { A: 1 }, word: "just picked" },
-      { id: "h", emoji: "🤝", label: "Find the place everyone's happy with", load: { H: 1 }, word: "found the middle" },
-      { id: "o", emoji: "✨", label: "Suggest somewhere nobody's tried", load: { O: 1 }, word: "somewhere untried" },
-      { id: "i", emoji: "⭐", label: "Check reviews, pick the best", load: { I: 1 }, word: "read the reviews" },
-    ],
-  },
-  {
-    id: "b7",
-    time: "11:45",
-    sky: "night",
-    prompt: "Can't sleep.",
-    options: [
-      { id: "s", emoji: "🗂️", label: "Sort out tomorrow", load: { S: 1 }, word: "sorted tomorrow" },
-      { id: "d", emoji: "🔨", label: "Finish one more thing", load: { D: 1 }, word: "one more thing" },
-      { id: "c", emoji: "💛", label: "Message a friend who's had a rough week", load: { C: 1 }, word: "messaged a friend" },
-      { id: "i", emoji: "📖", label: "Read until it makes sense", load: { I: 1 }, word: "read till it clicked" },
-    ],
-  },
+export const RATHER: Rather[] = [
+  { id: "w1", trait: "O", hi: { emoji: "🌶️", label: "Try the thing you've never had" }, lo: { emoji: "🍛", label: "Order your favourite" } },
+  { id: "w2", trait: "I", hi: { emoji: "⚙️", label: "Know exactly how your phone works" }, lo: { emoji: "✨", label: "Never have to think about it" } },
+  { id: "w3", trait: "D", hi: { emoji: "🏁", label: "Finish one thing properly" }, lo: { emoji: "🚀", label: "Start three things you're excited about" } },
+  { id: "w4", trait: "S", hi: { emoji: "🗓️", label: "A day planned to the hour" }, lo: { emoji: "🌤️", label: "A day with nothing planned" } },
+  { id: "w5", trait: "E", hi: { emoji: "🎉", label: "Be at the centre of a big gathering" }, lo: { emoji: "☕", label: "A long conversation with one person" } },
+  { id: "w6", trait: "A", hi: { emoji: "🧭", label: "Be the captain who makes the call" }, lo: { emoji: "🗺️", label: "Be the navigator who makes the captain look good" } },
+  { id: "w7", trait: "C", hi: { emoji: "💛", label: "Be known as the kindest person in the room" }, lo: { emoji: "🔭", label: "Be known as the sharpest" } },
+  { id: "w8", trait: "H", hi: { emoji: "🕊️", label: "Be in a group that never argues" }, lo: { emoji: "🥊", label: "Be in a group that argues well" } },
 ];
 
-/** This or that: `hi` is the pole that scores high on the trait. Sides are shuffled on screen. */
-export type Pair = { id: string; trait: Trait; hi: { label: string; emoji: string }; lo: { label: string; emoji: string } };
+/** Is this you? Tendencies in settings everyone has. Agreeing scores high. */
+export type Tendency = { id: string; trait: Trait; text: string };
 
-export const PAIRS: Pair[] = [
-  { id: "p1", trait: "O", hi: { emoji: "🍜", label: "Try the new dish" }, lo: { emoji: "🍛", label: "Order your favourite" } },
-  { id: "p2", trait: "I", hi: { emoji: "⚙️", label: "How it works" }, lo: { emoji: "✅", label: "That it works" } },
-  { id: "p3", trait: "D", hi: { emoji: "🏁", label: "Finish line" }, lo: { emoji: "🚦", label: "Starting line" } },
-  { id: "p4", trait: "S", hi: { emoji: "🗓️", label: "Itinerary" }, lo: { emoji: "🎒", label: "Wing it" } },
-  { id: "p5", trait: "E", hi: { emoji: "🎉", label: "House party" }, lo: { emoji: "☕", label: "Deep chat for two" } },
-  { id: "p6", trait: "A", hi: { emoji: "🧭", label: "Captain" }, lo: { emoji: "🚣", label: "Crew" } },
-  { id: "p7", trait: "C", hi: { emoji: "💛", label: "Feelings first" }, lo: { emoji: "📊", label: "Facts first" } },
-  { id: "p8", trait: "H", hi: { emoji: "🕊️", label: "Keep the peace" }, lo: { emoji: "🥊", label: "Win the debate" } },
+export const TENDENCIES: Tendency[] = [
+  { id: "t1", trait: "O", text: "I suggest doing things a new way." },
+  { id: "t2", trait: "I", text: "I keep digging until I understand why." },
+  { id: "t3", trait: "D", text: "I finish what I start, even when it gets dull." },
+  { id: "t4", trait: "S", text: "I like to know the plan before the day starts." },
+  { id: "t5", trait: "E", text: "I start conversations with people I don't know — in a queue, a waiting room, at the school gate or an event." },
+  { id: "t6", trait: "A", text: "When a group can't decide, I end up making the call." },
+  { id: "t7", trait: "C", text: "I notice when someone close to me is off, before they say anything." },
+  { id: "t8", trait: "H", text: "I let things go to keep the peace." },
+];
+export const TENDENCY_SCALE = ["Rarely", "Sometimes", "Often", "Almost always"] as const;
+export const TENDENCY_VALUE = [-1.5, -0.5, 0.5, 1.5];
+
+/** Tough calls: two choices, each scoring for a different trait, pulled against each other. */
+export type Call = { id: string; prompt: string; a: Side & { trait: Trait }; b: Side & { trait: Trait } };
+
+export const CALLS: Call[] = [
+  {
+    id: "c1",
+    prompt: "A friend shows you an idea they love. It has a big flaw.",
+    a: { trait: "A", emoji: "🎯", label: "Tell them straight, today" },
+    b: { trait: "C", emoji: "🫶", label: "Ask questions until they see it themselves" },
+  },
+  {
+    id: "c2",
+    prompt: "Your group — at work, at home or with friends — picks a plan you think is wrong.",
+    a: { trait: "H", emoji: "🤝", label: "Back it fully and make it work" },
+    b: { trait: "A", emoji: "✋", label: "Push to change it before it's too late" },
+  },
+  {
+    id: "c3",
+    prompt: "Halfway through something, a better idea hits you.",
+    a: { trait: "O", emoji: "💡", label: "Switch to the better idea" },
+    b: { trait: "D", emoji: "🏁", label: "Finish this one first" },
+  },
+  {
+    id: "c4",
+    prompt: "You've got the next hour planned. Someone suggests something fun, right now.",
+    a: { trait: "S", emoji: "🗓️", label: "Stick to the plan" },
+    b: { trait: "E", emoji: "🎈", label: "Join in" },
+  },
+  {
+    id: "c5",
+    prompt: "Someone you care about is upset about a mistake that was clearly theirs.",
+    a: { trait: "I", emoji: "🔍", label: "Work out together what went wrong" },
+    b: { trait: "C", emoji: "💛", label: "Comfort them first, fix it later" },
+  },
+  {
+    id: "c6",
+    prompt: "Something's due soon and the person you're working with is struggling.",
+    a: { trait: "D", emoji: "⚡", label: "Take over their part and get it done" },
+    b: { trait: "H", emoji: "🌱", label: "Slow down and help them through it" },
+  },
 ];
 
 /** Prioritise: five cards, pushed into order. Position 1 scores highest. */
@@ -133,32 +112,32 @@ export type RankRound = { id: string; prompt: string; cards: RankCard[] };
 export const RANKS: RankRound[] = [
   {
     id: "r1",
-    prompt: "Your perfect Saturday",
+    prompt: "A free day, all yours",
     cards: [
-      { id: "d", emoji: "🔨", label: "Making something", trait: "D" },
-      { id: "o", emoji: "🗺️", label: "Somewhere new", trait: "O" },
-      { id: "c", emoji: "☕", label: "A long talk with one friend", trait: "C" },
-      { id: "e", emoji: "🎉", label: "A big group plan", trait: "E" },
-      { id: "s", emoji: "🗂️", label: "Sorting out my space", trait: "S" },
+      { id: "d", emoji: "🔨", label: "Making or fixing something", trait: "D" },
+      { id: "o", emoji: "🗺️", label: "Somewhere or something new", trait: "O" },
+      { id: "c", emoji: "☕", label: "A long talk with someone close", trait: "C" },
+      { id: "e", emoji: "🎉", label: "Getting a bunch of people together", trait: "E" },
+      { id: "s", emoji: "🗂️", label: "Sorting out my space and my week", trait: "S" },
     ],
   },
   {
     id: "r2",
-    prompt: "At work, what do you bring first?",
+    prompt: "In any team — work, family or friends — what do you bring first?",
     cards: [
-      { id: "o", emoji: "💡", label: "Big ideas", trait: "O" },
+      { id: "o", emoji: "💡", label: "Fresh ideas", trait: "O" },
       { id: "i", emoji: "🔍", label: "The hard questions", trait: "I" },
       { id: "a", emoji: "🧭", label: "A clear call", trait: "A" },
-      { id: "h", emoji: "🤝", label: "Keeping the team together", trait: "H" },
-      { id: "d", emoji: "🚀", label: "Getting it shipped", trait: "D" },
+      { id: "h", emoji: "🤝", label: "Keeping everyone together", trait: "H" },
+      { id: "d", emoji: "🚀", label: "Getting it done", trait: "D" },
     ],
   },
   {
     id: "r3",
-    prompt: "What makes a great day?",
+    prompt: "What makes a really good day?",
     cards: [
       { id: "s", emoji: "🗓️", label: "Everything went to plan", trait: "S" },
-      { id: "e", emoji: "🎤", label: "I got the room going", trait: "E" },
+      { id: "e", emoji: "🎤", label: "Great time with lots of people", trait: "E" },
       { id: "a", emoji: "🏆", label: "I led something that worked", trait: "A" },
       { id: "c", emoji: "💛", label: "I helped someone", trait: "C" },
       { id: "h", emoji: "🕊️", label: "Nobody fell out", trait: "H" },
@@ -166,56 +145,33 @@ export const RANKS: RankRound[] = [
   },
 ];
 
-/** Agree / don't. `sign` -1 means agreeing scores *low* on the trait. */
-export type AgreeCard = { id: string; text: string; trait: Trait; sign: 1 | -1 };
-
-export const AGREES: AgreeCard[] = [
-  { id: "g1", text: "I get bored doing things the same way twice.", trait: "O", sign: 1 },
-  { id: "g2", text: "I'll fall down a Wikipedia rabbit hole at 2am.", trait: "I", sign: 1 },
-  { id: "g3", text: "Unfinished tasks bug me until they're done.", trait: "D", sign: 1 },
-  { id: "g4", text: "I have a system for almost everything.", trait: "S", sign: 1 },
-  { id: "g5", text: "I'll happily talk to strangers in a queue.", trait: "E", sign: 1 },
-  { id: "g6", text: "I'm comfortable making the call for the group.", trait: "A", sign: 1 },
-  { id: "g7", text: "Friends come to me when something's wrong.", trait: "C", sign: 1 },
-  { id: "g8", text: "I'll bend so everyone gets along.", trait: "H", sign: 1 },
-  { id: "g9", text: "I lose interest once the exciting part's done.", trait: "D", sign: -1 },
-  { id: "g10", text: "Too much planning kills the fun.", trait: "S", sign: -1 },
-  { id: "g11", text: "After a party, I need a full day alone.", trait: "E", sign: -1 },
-  { id: "g12", text: "I enjoy a good argument, even about small things.", trait: "H", sign: -1 },
-];
-
-/** Shown interleaved so the two cards for one trait never sit together. */
-export const AGREE_ORDER = ["g1", "g11", "g6", "g3", "g12", "g7", "g10", "g2", "g5", "g9", "g8", "g4"];
-
 /** Where do you sit? -1 is the left end, +1 the right; the right end scores high. */
 export type Slider = { id: string; trait: Trait; prompt: string; left: string; right: string };
 
 export const SLIDERS: Slider[] = [
-  { id: "l1", trait: "D", prompt: "Projects", left: "I start lots", right: "I finish what I start" },
+  { id: "l1", trait: "D", prompt: "Things you start", left: "I start lots", right: "I finish what I start" },
   { id: "l2", trait: "S", prompt: "Plans", left: "Loose", right: "Detailed" },
   { id: "l3", trait: "H", prompt: "When there's tension", left: "I say it straight", right: "I smooth it over" },
   { id: "l4", trait: "A", prompt: "In a group", left: "I follow a good lead", right: "I end up leading" },
-  { id: "l5", trait: "E", prompt: "After a big party", left: "I need a quiet day", right: "I want another one" },
-  { id: "l6", trait: "C", prompt: "When a friend vents", left: "I offer solutions", right: "I offer comfort" },
+  { id: "l5", trait: "E", prompt: "After a busy, people-heavy day", left: "I need quiet", right: "I want more" },
+  { id: "l6", trait: "C", prompt: "When someone vents to you", left: "I offer solutions", right: "I offer comfort" },
 ];
 
-/**
- * Double-check cards: two per trait, one each way, worded differently from
- * everything before. Only asked for traits where a player's choice-style
- * answers and strength-style answers disagree sharply (see score.ts).
- */
-export const CHECKS: AgreeCard[] = [
-  { id: "cO1", text: "I'd take a new route over the fastest one.", trait: "O", sign: 1 },
+/** Double-check cards: two per trait, one each way. Agree / not me. */
+export type CheckCard = { id: string; text: string; trait: Trait; sign: 1 | -1 };
+
+export const CHECKS: CheckCard[] = [
+  { id: "cO1", text: "I get restless doing things the same way.", trait: "O", sign: 1 },
   { id: "cO2", text: "If it isn't broken, I don't fix it.", trait: "O", sign: -1 },
   { id: "cI1", text: "I ask “why” more than most people.", trait: "I", sign: 1 },
   { id: "cI2", text: "I don't need the theory if it works.", trait: "I", sign: -1 },
-  { id: "cD1", text: "I finish books, even the slow ones.", trait: "D", sign: 1 },
-  { id: "cD2", text: "I have more half-done projects than finished ones.", trait: "D", sign: -1 },
-  { id: "cS1", text: "I pack the night before.", trait: "S", sign: 1 },
-  { id: "cS2", text: "My plans usually change on the day.", trait: "S", sign: -1 },
-  { id: "cE1", text: "Crowds give me energy.", trait: "E", sign: 1 },
+  { id: "cD1", text: "Unfinished things nag at me until they're done.", trait: "D", sign: 1 },
+  { id: "cD2", text: "I have more half-done things than finished ones.", trait: "D", sign: -1 },
+  { id: "cS1", text: "I feel better when the plan is clear.", trait: "S", sign: 1 },
+  { id: "cS2", text: "Too much planning takes the fun out of things.", trait: "S", sign: -1 },
+  { id: "cE1", text: "Being around people gives me energy.", trait: "E", sign: 1 },
   { id: "cE2", text: "I'd rather one deep chat than ten quick ones.", trait: "E", sign: -1 },
-  { id: "cA1", text: "I'd rather decide than wait for someone else.", trait: "A", sign: 1 },
+  { id: "cA1", text: "I'd rather decide than wait for someone else to.", trait: "A", sign: 1 },
   { id: "cA2", text: "I'm happy letting others lead.", trait: "A", sign: -1 },
   { id: "cC1", text: "I notice when someone goes quiet.", trait: "C", sign: 1 },
   { id: "cC2", text: "I'd rather fix the problem than talk about feelings.", trait: "C", sign: -1 },
@@ -237,13 +193,28 @@ export const VALUES: PickOption[] = [
 ];
 export const VALUE_BY_ID = new Map(VALUES.map((v) => [v.id, v]));
 
-/** What two people's shared Saturday favourite suggests they do together. */
-export const SATURDAY_ACTIVITY: Record<string, string> = {
-  d: "Build something small together in an afternoon.",
-  o: "Explore a neighbourhood neither of you knows.",
+/**
+ * Optional, after the reveal, never scored: what's taking most of your
+ * energy these days. Not relationship status — a gentle signal that lets
+ * the pilot check whether any life stage is being nudged toward particular
+ * archetypes (and, later, family-friendly suggestions).
+ */
+export const ENERGY: PickOption[] = [
+  { id: "work", emoji: "💼", label: "Work" },
+  { id: "studies", emoji: "📚", label: "Studies" },
+  { id: "family", emoji: "🏡", label: "Family & home" },
+  { id: "building", emoji: "🛠️", label: "Building something" },
+  { id: "next", emoji: "🧭", label: "Finding my next thing" },
+  { id: "mix", emoji: "🌈", label: "A bit of everything" },
+];
+
+/** What two people's shared favourite free-day choice suggests they do together. */
+export const FREE_DAY_ACTIVITY: Record<string, string> = {
+  d: "Make or fix something together — an afternoon project.",
+  o: "Try something neither of you has done — a new place, a new dish.",
   c: "A long walk and a longer chai. Phones away.",
-  e: "Throw a small get-together and co-host it.",
-  s: "Plan a weekend trip — one of you books, one of you improvises.",
+  e: "Get a small group together and co-host it.",
+  s: "Plan something together — one of you books, one of you improvises.",
 };
 
 /** The friend's view: eight quick sliders about the other person. */

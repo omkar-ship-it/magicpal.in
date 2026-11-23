@@ -1,69 +1,67 @@
 import { ARCHETYPES, ARCHETYPE_IDS, TRAITS, TRAIT_INFO, type ArchetypeId, type Trait } from "./archetypes";
-import { AGREES, CHECKS, PAIRS, RANKS, SLIDERS, STORY, VALUES, type Loading } from "./rounds";
+import { CALLS, CHECKS, ENERGY, RANKS, RATHER, SLIDERS, TENDENCIES, TENDENCY_VALUE, VALUES, type Loading } from "./rounds";
 
 /**
- * Brain-Mate v3 scoring: five answer formats → eight trait scores →
+ * Brain-Mate v4 scoring: five answer formats → eight trait scores →
  * nearest archetype, with double-checks where the formats disagree.
  *
  * Pure and deterministic. The server recomputes everything from the raw
- * answers (a client can't post an archetype); the game runs the same code
- * live for the narrowing ring, the constellation, the double-checks and
- * each duel card.
+ * answers; the game runs the same code live for the narrowing ring, the
+ * constellation, the double-checks and each duel card.
  *
- * Constants fitted by simulation (scripts/brain-mate-sim): 20,000 synthetic
- * players with known traits answering with realistic noise. There, trait
- * scores correlate 0.86–0.90 with the truth, clearly-high/low traits read
- * right 99% of the time, the true archetype sits in the top-3 mix 93%, and
- * clear types get their archetype 83% (74% on a retake). Refit NORMS and
- * BIAS from real answers once a few hundred people have played.
+ * Constants fitted by simulation (scripts/brain-mate-sim: final4/export4).
+ * Refit NORM and BIAS from real answers once a few hundred people have
+ * played — and use the optional "energy" answer to check no life stage is
+ * being nudged toward particular archetypes.
  */
 
-export const VERSION = 3;
+export const VERSION = 4;
 
 export type DuelAnswer = { a: ArchetypeId; b: ArchetypeId; pick: ArchetypeId };
 
 export type Answers = {
-  v: 3;
-  /** story beat → option id */
-  story: Record<string, string>;
-  /** pair id → 1 if the high pole was chosen, 0 if the low one */
-  pairs: Record<string, number>;
+  v: 4;
+  /** would-you-rather id → 1 if the high end was chosen */
+  rather: Record<string, number>;
+  /** tendency id → 0..3 (Rarely … Almost always) */
+  tend: Record<string, number>;
+  /** tough call id → "a" | "b" */
+  calls: Record<string, string>;
   /** rank round → card ids, top first */
   ranks: Record<string, string[]>;
-  /** agree card → 1 agree, 0 don't */
-  agree: Record<string, number>;
-  /** slider → -1 (left) … +1 (right), two decimals */
+  /** slider → -1 … +1 */
   sliders: Record<string, number>;
   values: string[];
-  /** double-check card → 1 agree, 0 don't (only the ones that were asked) */
+  /** double-check card → 1 agree, 0 not me (only those asked) */
   checks: Record<string, number>;
   duels: DuelAnswer[];
   ms?: number;
+  /** Optional, after the reveal, never scored. */
+  energy?: string;
 };
 
 export type Traits = Record<Trait, number>;
 
-// Norms from the simulation: all methods, choice-style only, strength-style only.
-const NORM = { mu: [0.2432, 0.2993, 0.1164, 0.1713, 0.0954, 0.2272, 0.2039, 0.0543], sd: [0.5887, 0.551, 0.6615, 0.6595, 0.6313, 0.6495, 0.6077, 0.6974] };
-const NORM_CHOICE = { mu: [0.277, 0.342, 0.1918, 0.2581, 0.1378, 0.2991, 0.2678, 0.0787], sd: [0.5874, 0.5441, 0.653, 0.6405, 0.6122, 0.6314, 0.5833, 0.6923] };
-const NORM_LEVEL = { mu: [0.0065, 0.0003, -0.0013, 0.0084, 0.0027, -0.0018, 0.0009, 0.0085], sd: [1, 1, 0.814, 0.8325, 0.8153, 0.8904, 0.874, 0.8355] };
+const NORM = { mu: [0.0041, 0.0055, 0.0012, 0, -0.0031, 0.0048, -0.0003, -0.0046], sd: [0.7817, 0.7964, 0.7375, 0.8076, 0.7751, 0.7671, 0.7297, 0.7836] };
+const NORM_CHOICE = { mu: [0.0055, 0.0046, 0.001, -0.0012, -0.0031, 0.0037, 0.0018, -0.0033], sd: [0.7661, 0.7678, 0.7091, 0.7857, 0.7644, 0.742, 0.6999, 0.7522] };
+const NORM_LEVEL = { mu: [-0.0006, 0.0075, 0.0018, 0.0022, -0.0031, 0.0071, -0.0047, -0.0072], sd: [1.1286, 1.1389, 0.9647, 0.9969, 0.9588, 0.9791, 0.9591, 0.9991] };
 const BIAS: Record<ArchetypeId, number> = {
-  dreamer: 0.105,
-  explorer: 0.023,
-  creator: 0.044,
-  maverick: -0.033,
-  detective: -0.01,
+  dreamer: 0.089,
+  explorer: 0,
+  creator: 0.081,
+  maverick: -0.037,
+  detective: 0.008,
   strategist: -0.004,
-  spark: -0.013,
-  maker: 0.061,
-  doer: -0.055,
-  connector: 0.012,
-  mentor: -0.012,
-  peacemaker: -0.118,
+  spark: 0.002,
+  maker: 0.07,
+  doer: -0.081,
+  connector: 0.025,
+  mentor: -0.01,
+  peacemaker: -0.143,
 };
 
-/** A trait whose choice-style and strength-style scores differ by this much gets double-checked (≈1 player in 4). */
-const CONTRADICTION = 1.8;
+/** Choice-style vs strength-style disagreement that triggers double-checks (≈1 player in 4). */
+const CONTRADICTION = 1.7;
 const MAX_CHECKED_TRAITS = 3;
 export const DUEL_COUNT = 3;
 const DUEL_STEP = 0.45;
@@ -78,7 +76,7 @@ const PROFILE: Record<ArchetypeId, number[]> = Object.fromEntries(
 
 type Part = "all" | "choice" | "level";
 
-function raw(a: Partial<Answers>, part: Part = "all", withChecks = true): number[] {
+function raw(a: Partial<Answers>, part: Part = "all"): (number | null)[] {
   const sum = TRAITS.map(() => 0);
   const n = TRAITS.map(() => 0);
   const add = (load: Loading, value: number, w = 1) =>
@@ -89,14 +87,15 @@ function raw(a: Partial<Answers>, part: Part = "all", withChecks = true): number
       sum[i] += x * value * w;
     });
   if (part !== "level") {
-    for (const b of STORY) {
-      const chosen = a.story?.[b.id];
-      if (chosen === undefined) continue;
-      for (const o of b.options) add(o.load, o.id === chosen ? 2 : 0);
+    for (const r of RATHER) {
+      const v = a.rather?.[r.id];
+      if (v !== undefined) add({ [r.trait]: 1 }, v ? 1 : -1, 1.2);
     }
-    for (const p of PAIRS) {
-      const v = a.pairs?.[p.id];
-      if (v !== undefined) add({ [p.trait]: 1 }, v ? 1 : -1);
+    for (const c of CALLS) {
+      const v = a.calls?.[c.id];
+      if (v === undefined) continue;
+      add({ [c.a.trait]: 1 }, v === "a" ? 1 : -1);
+      add({ [c.b.trait]: 1 }, v === "b" ? 1 : -1);
     }
     for (const r of RANKS) {
       const order = a.ranks?.[r.id];
@@ -109,25 +108,25 @@ function raw(a: Partial<Answers>, part: Part = "all", withChecks = true): number
     }
   }
   if (part !== "choice") {
-    for (const g of AGREES) {
-      const v = a.agree?.[g.id];
-      if (v !== undefined) add({ [g.trait]: g.sign }, v ? 1 : -1);
+    for (const t of TENDENCIES) {
+      const v = a.tend?.[t.id];
+      if (v !== undefined) add({ [t.trait]: 1 }, TENDENCY_VALUE[v], 1.3);
     }
     for (const l of SLIDERS) {
       const v = a.sliders?.[l.id];
       if (v !== undefined) add({ [l.trait]: 1 }, v * 1.8, 1.2);
     }
   }
-  if (part === "all" && withChecks) {
+  if (part === "all") {
     for (const c of CHECKS) {
       const v = a.checks?.[c.id];
       if (v !== undefined) add({ [c.trait]: c.sign }, v ? 1 : -1, 1.5);
     }
   }
-  return sum.map((x, i) => (n[i] ? x / n[i] : null) as number);
+  return sum.map((x, i) => (n[i] ? x / n[i] : null));
 }
 
-function standard(r: number[], nm: { mu: number[]; sd: number[] }): number[] {
+function standard(r: (number | null)[], nm: { mu: number[]; sd: number[] }): number[] {
   return r.map((x, i) => (x === null ? 0 : (x - nm.mu[i]) / nm.sd[i]));
 }
 
@@ -151,7 +150,6 @@ function withDuels(z: number[], duels: DuelAnswer[]): number[] {
   return out;
 }
 
-/** Silhouettes still lit on the ring, by how far the player has got. */
 export function stillInPlay(a: Partial<Answers>, fraction: number): ArchetypeId[] {
   const keep = Math.max(2, Math.round(12 - 10 * Math.min(1, fraction)));
   return ranked(withDuels(traitVector(a), a.duels ?? []))
@@ -159,13 +157,11 @@ export function stillInPlay(a: Partial<Answers>, fraction: number): ArchetypeId[
     .map((x) => x.id);
 }
 
-// --------------------------------------------------------- double-checks
 /**
- * The cards to ask when answers contradict: for each trait where the
- * choice-style answers (story, this-or-that, prioritise) and the
- * strength-style answers (agree, sliders) disagree by CONTRADICTION or more,
- * the two double-check cards for that trait — at most three traits, worst
- * first. Empty for consistent players, who skip the section.
+ * Double-checks: for each trait where choice-style answers (would you
+ * rather, tough calls, prioritise) and strength-style answers (is this you,
+ * sliders) disagree sharply, the two check cards for it — at most three
+ * traits, worst first. Empty for consistent players.
  */
 export function checksNeeded(a: Partial<Answers>): string[] {
   const zc = standard(raw(a, "choice"), NORM_CHOICE);
@@ -177,14 +173,8 @@ export function checksNeeded(a: Partial<Answers>): string[] {
     .flatMap((x) => CHECKS.filter((c) => c.trait === x.k).map((c) => c.id));
 }
 
-// ------------------------------------------------------------------ duels
 export type DuelCard = { a: ArchetypeId; b: ArchetypeId; lineA: string; lineB: string };
 
-/**
- * The next duel card: the current top two (or the next pair down if that
- * pair was already asked), contrasted on the two traits that split their
- * profiles most. Null once all duels are answered.
- */
 export function nextDuel(a: Partial<Answers>): DuelCard | null {
   const done = a.duels ?? [];
   if (done.length >= DUEL_COUNT) return null;
@@ -206,29 +196,27 @@ export function nextDuel(a: Partial<Answers>): DuelCard | null {
   return { a: A, b: B, lineA, lineB };
 }
 
-// ------------------------------------------------------------- validation
-/**
- * Only answers the game could have produced: every question answered with
- * a real option, every ranking a full ordering, exactly the double-checks
- * the earlier answers call for, and each duel exactly the card those
- * answers lead to. Anything else is refused.
- */
+/** Only answers the game could have produced; anything else is refused. */
 export function cleanAnswers(input: unknown): Answers | null {
   if (!input || typeof input !== "object") return null;
-  const r = input as Record<string, Record<string, unknown> | unknown[] | number>;
+  const r = input as Record<string, unknown>;
   const obj = (k: string) => (r[k] && typeof r[k] === "object" && !Array.isArray(r[k]) ? (r[k] as Record<string, unknown>) : {});
-  const out: Answers = { v: 3, story: {}, pairs: {}, ranks: {}, agree: {}, sliders: {}, values: [], checks: {}, duels: [] };
+  const out: Answers = { v: 4, rather: {}, tend: {}, calls: {}, ranks: {}, sliders: {}, values: [], checks: {}, duels: [] };
   const bit = (v: unknown) => (v === 0 || v === 1 ? v : null);
-
-  for (const b of STORY) {
-    const v = obj("story")[b.id];
-    if (typeof v !== "string" || !b.options.some((o) => o.id === v)) return null;
-    out.story[b.id] = v;
-  }
-  for (const p of PAIRS) {
-    const v = bit(obj("pairs")[p.id]);
+  for (const x of RATHER) {
+    const v = bit(obj("rather")[x.id]);
     if (v === null) return null;
-    out.pairs[p.id] = v;
+    out.rather[x.id] = v;
+  }
+  for (const t of TENDENCIES) {
+    const v = obj("tend")[t.id];
+    if (typeof v !== "number" || !Number.isInteger(v) || v < 0 || v > 3) return null;
+    out.tend[t.id] = v;
+  }
+  for (const c of CALLS) {
+    const v = obj("calls")[c.id];
+    if (v !== "a" && v !== "b") return null;
+    out.calls[c.id] = v;
   }
   for (const rr of RANKS) {
     const v = obj("ranks")[rr.id];
@@ -236,11 +224,6 @@ export function cleanAnswers(input: unknown): Answers | null {
     const ids = v.filter((x): x is string => typeof x === "string");
     if (new Set(ids).size !== rr.cards.length || !rr.cards.every((c) => ids.includes(c.id))) return null;
     out.ranks[rr.id] = ids;
-  }
-  for (const g of AGREES) {
-    const v = bit(obj("agree")[g.id]);
-    if (v === null) return null;
-    out.agree[g.id] = v;
   }
   for (const l of SLIDERS) {
     const v = Number(obj("sliders")[l.id]);
@@ -250,7 +233,6 @@ export function cleanAnswers(input: unknown): Answers | null {
   const values = Array.isArray(r.values) ? [...new Set(r.values.filter((x): x is string => typeof x === "string"))] : [];
   if (values.length !== 2 || !values.every((id) => VALUES.some((o) => o.id === id))) return null;
   out.values = values;
-
   const need = checksNeeded(out);
   const given = obj("checks");
   if (Object.keys(given).length !== need.length) return null;
@@ -259,7 +241,6 @@ export function cleanAnswers(input: unknown): Answers | null {
     if (v === null) return null;
     out.checks[id] = v;
   }
-
   const duels = Array.isArray(r.duels) ? (r.duels as Record<string, unknown>[]) : [];
   if (duels.length !== DUEL_COUNT) return null;
   for (const d of duels) {
@@ -272,6 +253,7 @@ export function cleanAnswers(input: unknown): Answers | null {
   return out;
 }
 
+export const isEnergy = (v: unknown): v is string => typeof v === "string" && ENERGY.some((e) => e.id === v);
 export const isCurrent = (a: unknown): a is Answers => Boolean(a && typeof a === "object" && (a as { v?: number }).v === VERSION);
 
 // ------------------------------------------------------------------ result
@@ -279,7 +261,6 @@ export type Result = {
   archetype: ArchetypeId;
   streak: ArchetypeId;
   cusp: boolean;
-  /** Top three as percentages summing to 100 — the honest headline. */
   mix: { id: ArchetypeId; pct: number }[];
   traits: Traits;
 };
@@ -298,24 +279,73 @@ export function resultFromVector(z: number[]): Result {
   const total = w.reduce((s, x) => s + x, 0);
   const pct = w.map((x) => Math.round((x / total) * 100));
   pct[0] += 100 - pct.reduce((s, x) => s + x, 0);
-  return {
-    archetype: r[0].id,
-    streak: r[1].id,
-    cusp: r[0].c - r[1].c < 0.05,
-    mix: top.map((x, i) => ({ id: x.id, pct: pct[i] })),
-    traits: toTraits(z),
-  };
+  return { archetype: r[0].id, streak: r[1].id, cusp: r[0].c - r[1].c < 0.05, mix: top.map((x, i) => ({ id: x.id, pct: pct[i] })), traits: toTraits(z) };
 }
 
-/** Your traits with the duels applied — what comparisons blend friends' views into. */
 export function selfVector(a: Answers): number[] {
   return withDuels(traitVector(a), a.duels);
+}
+
+export const mixLine = (mix: Result["mix"]) => mix.map((m) => `${m.pct}% ${ARCHETYPES[m.id].name.replace("The ", "")}`).join(" · ");
+
+// ------------------------------------------------------- how you show up
+/**
+ * Three practical lines built from the person's own trait scores — what
+ * they're like in a team, in conversation and under pressure. Always
+ * framed as how they help, never as a deficit.
+ */
+export function showUp(t: Traits): { team: string; talk: string; pressure: string } {
+  const team =
+    t.A >= 0.6 && t.D >= 0.4
+      ? "You set the direction and see it through."
+      : t.A >= 0.6
+        ? "You're the one who makes the call when everyone's stuck."
+        : t.D >= 0.6
+          ? "You're the one who gets it over the line."
+          : t.O >= 0.6
+            ? "You bring the ideas nobody else thought of."
+            : t.H >= 0.6
+              ? "You're the glue — people work better with you around."
+              : t.I >= 0.6
+                ? "You ask the question that saves everyone a week."
+                : t.S >= 0.6
+                  ? "You turn a mess into a plan people can follow."
+                  : "You fit the gap — whatever the team is missing, you lean into it.";
+  const talk =
+    t.E >= 0.6 && t.C >= 0.4
+      ? "You light up a room and make everyone in it feel included."
+      : t.E >= 0.6
+        ? "You get conversations going — and keep them going."
+        : t.E <= -0.6 && t.C >= 0.4
+          ? "You go deep with one person rather than wide with ten — and they remember it."
+          : t.E <= -0.6
+            ? "You listen more than you talk, so when you speak, people lean in."
+            : t.C >= 0.6
+              ? "People open up to you — you notice what isn't being said."
+              : t.I >= 0.6
+                ? "Your questions make conversations better."
+                : "You read the room and meet people where they are.";
+  const pressure =
+    t.H >= 0.6
+      ? "You keep people together when it gets tense."
+      : t.H <= -0.6
+        ? "You say the hard thing early, so it doesn't become a bigger one."
+        : t.S >= 0.6
+          ? "You go back to the plan, and calm spreads from there."
+          : t.D >= 0.6
+            ? "You put your head down and get it done."
+            : t.O >= 0.6
+              ? "You find another way round when the obvious one is blocked."
+              : t.C >= 0.6
+                ? "You check everyone's okay before you check the deadline."
+                : "You stay steady and adapt to what's in front of you.";
+  return { team, talk, pressure };
 }
 
 // ------------------------------------------------------ "how did it know"
 export type CrowdStats = {
   n: number;
-  /** "b3:q", "p5:1" or "g7:1" → share of players who answered that, 0–1. */
+  /** "w3:1", "t5:3", "c2:a" → share of players, 0–1. */
   share: Record<string, number>;
   archetypes: Record<string, number>;
 };
@@ -343,52 +373,45 @@ export const LOW_PHRASE: Record<Trait, string> = {
   H: "not afraid of the hard thing",
 };
 
-export const storyLabel = (key: string) => {
-  const [bid, oid] = key.split(":");
-  return STORY.find((b) => b.id === bid)?.options.find((o) => o.id === oid)?.label ?? "";
+export const callLabel = (key: string) => {
+  const [cid, side] = key.split(":");
+  const c = CALLS.find((x) => x.id === cid);
+  return c ? (side === "a" ? c.a.label : c.b.label) : "";
 };
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const short = (id: ArchetypeId) => ARCHETYPES[id].name.replace("The ", "");
 
-/**
- * One line that proves the result came from *your* answers. Picked by rule,
- * in a fixed priority order; nothing here is invented.
- */
 export function howDidItKnow(a: Answers, stats: CrowdStats | null): string {
   const res = resultFor(a);
   const me = ARCHETYPES[res.archetype];
-
-  // A trait you showed the same way in three different formats.
   const order = TRAITS.map((k) => ({ k, z: res.traits[k] })).sort((x, y) => Math.abs(y.z) - Math.abs(x.z));
   for (const { k, z } of order) {
     if (Math.abs(z) < 1) break;
     const high = z > 0;
-    const story = STORY.some((b) => {
-      const o = b.options.find((x) => x.id === a.story[b.id]);
-      return o && (o.load[k] ?? 0) * (high ? 1 : -1) > 0;
+    const rather = RATHER.some((x) => x.trait === k && a.rather[x.id] === (high ? 1 : 0));
+    const tend = TENDENCIES.some((x) => x.trait === k && (high ? a.tend[x.id] >= 2 : a.tend[x.id] <= 1));
+    const call = CALLS.some((c) => {
+      const chosen = a.calls[c.id] === "a" ? c.a.trait : c.b.trait;
+      const passed = a.calls[c.id] === "a" ? c.b.trait : c.a.trait;
+      return high ? chosen === k : passed === k;
     });
-    const pair = PAIRS.some((p) => p.trait === k && a.pairs[p.id] === (high ? 1 : 0));
-    const agreed = AGREES.some((g) => g.trait === k && a.agree[g.id] === 1 && g.sign === (high ? 1 : -1));
     const slid = SLIDERS.some((l) => l.trait === k && (a.sliders[l.id] ?? 0) * (high ? 1 : -1) > 0.4);
-    const ways = [story, pair, agreed, slid].filter(Boolean).length;
+    const ways = [rather, tend, call, slid].filter(Boolean).length;
     if (ways >= 3) return `${cap(high ? HIGH_PHRASE[k] : LOW_PHRASE[k])} — you said it ${ways} different ways, without being asked the same thing twice.`;
   }
-
   if (stats && stats.n >= MIN_CROWD) {
     let rare: { key: string; share: number } | null = null;
-    for (const [bid, oid] of Object.entries(a.story)) {
-      const share = stats.share[`${bid}:${oid}`];
-      if (share !== undefined && share < 0.12 && (!rare || share < rare.share)) rare = { key: `${bid}:${oid}`, share };
+    for (const [cid, side] of Object.entries(a.calls)) {
+      const share = stats.share[`${cid}:${side}`];
+      if (share !== undefined && share < 0.2 && (!rare || share < rare.share)) rare = { key: `${cid}:${side}`, share };
     }
-    if (rare) return `You chose “${storyLabel(rare.key)}”. Only ${Math.max(1, Math.round(rare.share * 100))}% of people do.`;
+    if (rare) return `On a tough call you chose “${callLabel(rare.key)}”. Only ${Math.max(1, Math.round(rare.share * 100))}% of people do.`;
   }
-
   const sorted = TRAITS.map((k) => ({ k, z: res.traits[k] })).sort((x, y) => y.z - x.z);
   const hi = sorted[0];
   const lo = sorted[sorted.length - 1];
   if (hi.z > 0.8 && lo.z < -0.5) return `${cap(HIGH_PHRASE[hi.k])}, and ${LOW_PHRASE[lo.k]}. That mix is what makes ${me.name}.`;
-
   const last = a.duels[a.duels.length - 1];
   if (last) {
     const other = last.pick === last.a ? last.b : last.a;
@@ -397,13 +420,17 @@ export function howDidItKnow(a: Answers, stats: CrowdStats | null): string {
   return `${cap(HIGH_PHRASE[hi.k])}. That's the heart of ${me.name}.`;
 }
 
-/** Words flashed in the recap montage, in the order the day was played. */
+/** Words flashed in the recap montage — from the tough calls, in order. */
 export function montageWords(a: Partial<Answers>): string[] {
-  return STORY.map((b) => b.options.find((o) => o.id === a.story?.[b.id])?.word).filter((w): w is string => Boolean(w));
+  return CALLS.map((c) => {
+    const side = a.calls?.[c.id];
+    return side === "a" ? c.a.label : side === "b" ? c.b.label : null;
+  })
+    .filter((w): w is string => Boolean(w))
+    .map((w) => (w.length > 26 ? `${w.split(" ").slice(0, 4).join(" ")}…` : w));
 }
 
 // ------------------------------------------------------- constellation
-/** Fixed star positions for the eight traits, on a 100×100 sky. */
 export const STAR_POS: Record<Trait, [number, number]> = {
   O: [50, 10],
   I: [80, 22],
@@ -426,30 +453,21 @@ export const TRAIT_COLOR: Record<Trait, string> = {
   H: "#1D5C45",
 };
 
-/**
- * How lit each star is, 0–1: how much evidence there is for that trait so
- * far, scaled by how strongly it's showing. Unlabelled on purpose — the
- * player sees their sky taking shape without being told what it means.
- */
 export function starLight(a: Partial<Answers>): Record<Trait, number> {
   const z = traitVector(a);
   const answered = TRAITS.map((k) => {
     let n = 0;
-    for (const b of STORY) if (a.story?.[b.id] && b.options.some((o) => o.load[k])) n++;
-    n += PAIRS.filter((p) => p.trait === k && a.pairs?.[p.id] !== undefined).length;
+    n += RATHER.filter((x) => x.trait === k && a.rather?.[x.id] !== undefined).length;
+    n += TENDENCIES.filter((x) => x.trait === k && a.tend?.[x.id] !== undefined).length;
+    n += CALLS.filter((c) => a.calls?.[c.id] && (c.a.trait === k || c.b.trait === k)).length;
     n += RANKS.filter((r) => a.ranks?.[r.id] && r.cards.some((c) => c.trait === k)).length;
-    n += AGREES.filter((g) => g.trait === k && a.agree?.[g.id] !== undefined).length;
     n += SLIDERS.filter((l) => l.trait === k && a.sliders?.[l.id] !== undefined).length;
-    return Math.min(1, n / 7);
+    return Math.min(1, n / 6);
   });
-  return Object.fromEntries(TRAITS.map((k, i) => [k, answered[i] * (0.45 + 0.55 * Math.min(1, Math.max(0, (z[i] + 1.5) / 3)))])) as Record<
-    Trait,
-    number
-  >;
+  return Object.fromEntries(TRAITS.map((k, i) => [k, answered[i] * (0.45 + 0.55 * Math.min(1, Math.max(0, (z[i] + 1.5) / 3)))])) as Record<Trait, number>;
 }
 
 // ------------------------------------------------------------- the strands
-/** The card art: one strand per answer, coloured by the trait it spoke to. */
 export type Strand = { d: string; color: string; width: number; opacity: number };
 
 function hash(s: string): number {
@@ -479,18 +497,19 @@ export function strandsFor(a: Partial<Answers>, seed = ""): Strand[] {
           : `M ${p(r1, angle)} C ${p(r2, angle + sweep / 3)} ${p(r1 * 0.6, angle + (sweep * 2) / 3)} ${p(r2, angle + sweep)}`;
     out.push({ d, color: TRAIT_COLOR[trait], width: 2 + weight * 2.5, opacity: 0.35 + weight * 0.2 });
   };
-  for (const b of STORY) {
-    const o = b.options.find((x) => x.id === a.story?.[b.id]);
-    const k = o ? (Object.keys(o.load)[0] as Trait) : null;
-    if (o && k) push(`${b.id}:${o.id}`, k, 1.4);
+  for (const x of RATHER) if (a.rather?.[x.id] !== undefined) push(`${x.id}:${a.rather[x.id]}`, x.trait, a.rather[x.id] ? 1 : 0.5);
+  for (const t of TENDENCIES) {
+    const v = a.tend?.[t.id];
+    if (v !== undefined && v >= 2) push(`${t.id}:${v}`, t.trait, v === 3 ? 1.2 : 0.7);
   }
-  for (const p of PAIRS) if (a.pairs?.[p.id] !== undefined) push(`${p.id}:${a.pairs[p.id]}`, p.trait, 0.6);
+  for (const c of CALLS) {
+    const side = a.calls?.[c.id];
+    if (side) push(`${c.id}:${side}`, side === "a" ? c.a.trait : c.b.trait, 1.4);
+  }
   for (const r of RANKS) {
-    const top = a.ranks?.[r.id]?.[0];
-    const card = r.cards.find((c) => c.id === top);
-    if (card) push(`${r.id}:${top}`, card.trait, 1);
+    const card = r.cards.find((c) => c.id === a.ranks?.[r.id]?.[0]);
+    if (card) push(`${r.id}:${card.id}`, card.trait, 1);
   }
-  for (const g of AGREES) if (a.agree?.[g.id] === 1) push(`${g.id}`, g.trait, 0.5);
   for (const l of SLIDERS) {
     const v = a.sliders?.[l.id];
     if (v !== undefined && Math.abs(v) > 0.4) push(`${l.id}:${Math.sign(v)}`, l.trait, 0.8);

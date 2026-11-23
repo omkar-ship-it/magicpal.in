@@ -6,8 +6,9 @@ import { brainMateLinks, brainMates, users } from "@/lib/db/schema";
 import { ARCHETYPE_IDS, type ArchetypeId } from "./archetypes";
 import { compare, type Comparison } from "./compare";
 import { ARCHETYPES, TRAITS } from "./archetypes";
-import { AGREES, PAIRS, STORY } from "./rounds";
-import { isCurrent, resultFor, type Answers, type CrowdStats, type Traits } from "./score";
+import { CALLS, RATHER, TENDENCIES } from "./rounds";
+import { howDidItKnow, isCurrent, resultFor, type Answers, type CrowdStats, type Traits } from "./score";
+import type { CardPayload, LinkPayload } from "./payload";
 
 /**
  * Brain-Mate's database layer. Everything that reads or writes the two
@@ -80,9 +81,9 @@ export async function crowdStats(): Promise<CrowdStats> {
   const bump = (k: string) => (counts[k] = (counts[k] ?? 0) + 1);
   for (const row of rows) {
     const a = row.answers as Answers;
-    for (const b of STORY) if (a.story[b.id]) bump(`${b.id}:${a.story[b.id]}`);
-    for (const p of PAIRS) if (a.pairs[p.id] !== undefined) bump(`${p.id}:${a.pairs[p.id]}`);
-    for (const g of AGREES) if (a.agree[g.id] !== undefined) bump(`${g.id}:${a.agree[g.id]}`);
+    for (const x of RATHER) if (a.rather[x.id] !== undefined) bump(`${x.id}:${a.rather[x.id]}`);
+    for (const t of TENDENCIES) if (a.tend[t.id] !== undefined) bump(`${t.id}:${a.tend[t.id]}`);
+    for (const c of CALLS) if (a.calls[c.id]) bump(`${c.id}:${a.calls[c.id]}`);
     arche[row.archetype] = (arche[row.archetype] ?? 0) + 1;
   }
   const share: Record<string, number> = {};
@@ -383,4 +384,86 @@ export async function sentToday(userId: string, tz: string): Promise<boolean> {
     .where(and(eq(brainMateLinks.senderId, userId), eq(brainMateLinks.senderDay, day)))
     .limit(1);
   return Boolean(row);
+}
+
+// ----------------------------------------------------------- the overlay
+/** Optional, never scored: what's taking most of their energy. Kept with their answers. */
+export async function saveEnergy(userId: string, energy: string): Promise<boolean> {
+  const me = await getBrainMate(userId);
+  if (!me || !me.current) return false;
+  await need()
+    .update(brainMates)
+    .set({ answers: { ...me.answers, energy } })
+    .where(eq(brainMates.userId, userId));
+  return true;
+}
+
+/** Everything the identity card needs, for the person themselves. */
+export async function cardFor(userId: string, tz: string, origin: string): Promise<CardPayload | null> {
+  const me = await getBrainMate(userId);
+  if (!me || !me.current) return null;
+  const [stats, links, views, intent] = await Promise.all([crowdStats(), myLinks(userId, tz), viewsOf(userId), intentOf(userId)]);
+  const res = resultFor(me.answers);
+  const todays = links.find((l) => l.sentToday) ?? null;
+  return {
+    name: me.displayName,
+    answers: me.answers,
+    archetype: res.archetype,
+    streak: res.streak,
+    cusp: res.cusp,
+    mix: res.mix,
+    traits: res.traits,
+    rarity: stats.n >= 20 ? (stats.archetypes[res.archetype] ?? null) : null,
+    know: howDidItKnow(me.answers, stats),
+    views: views.map((v) => ({ by: v.by, traits: v.traits })),
+    today: todays ? { slug: todays.slug, recipient: todays.otherName, state: todays.state } : null,
+    links: links.map((l) => ({
+      slug: l.slug,
+      direction: l.direction,
+      otherName: l.otherName,
+      relation: l.relation,
+      state: l.state,
+      otherArchetype: l.otherArchetype,
+      outcome: l.outcome,
+      similarity: l.similarity,
+    })),
+    origin,
+    intentMissing: !intent.lookingFor?.length || !intent.canHelpWith?.length,
+    energy: me.answers.energy ?? null,
+  };
+}
+
+/** One Wavelength link, as the viewer should see it. */
+export async function linkFor(slug: string, viewerId: string | null, origin: string): Promise<LinkPayload | null> {
+  const link = await getLink(slug);
+  if (!link) return null;
+  const [sender, viewer] = await Promise.all([getBrainMate(link.senderId), viewerId ? getBrainMate(viewerId) : null]);
+  const state = stateOf(link);
+  const role = !viewerId ? "guest" : viewerId === link.senderId ? "sender" : viewerId === link.recipientId ? "recipient" : "other";
+  const comparison = state === "done" ? await comparisonFor(link) : null;
+  let waitingOnRetake: string[] = [];
+  if (state === "done" && !comparison) {
+    const need = await needsRetake(link);
+    const recipient = link.recipientId ? await getBrainMate(link.recipientId) : null;
+    waitingOnRetake = [
+      need.sender ? (sender?.displayName ?? "Your friend").split(" ")[0] : null,
+      need.recipient ? (recipient?.displayName ?? link.recipientName).split(" ")[0] : null,
+    ].filter((x): x is string => Boolean(x));
+  }
+  const viewGiven = role === "sender" ? Boolean(link.viewOfRecipient) : role === "recipient" ? Boolean(link.viewOfSender) : true;
+  return {
+    slug,
+    state,
+    role,
+    senderName: (sender?.displayName ?? "Your friend").split(" ")[0],
+    recipientName: link.recipientName.split(" ")[0],
+    relation: link.relation as "friend" | "colleague",
+    expiresAt: link.expiresAt.toISOString(),
+    nudged: Boolean(link.nudgedAt),
+    viewerPlayed: Boolean(viewer?.current),
+    comparison: role === "sender" || role === "recipient" ? comparison : comparison ? { ...comparison, replay: [] } : null,
+    waitingOnRetake,
+    viewGiven,
+    origin,
+  };
 }

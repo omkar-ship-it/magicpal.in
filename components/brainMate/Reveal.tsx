@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { ARCHETYPES, streakLine, type ArchetypeId } from "@/lib/brainMate/archetypes";
 import { TRAITS } from "@/lib/brainMate/archetypes";
 import { MIN_CROWD, STAR_POS, TRAIT_COLOR, montageWords, starLight, strandsFor, type Answers } from "@/lib/brainMate/score";
@@ -20,7 +19,8 @@ export type RevealData = {
   rarity: number;
   players: number;
   know: string;
-  next: { href: string; label: string };
+  /** The final button: hands control back to whoever opened the game. */
+  next: { label: string; onClick: () => void };
   note: string | null;
 };
 
@@ -93,7 +93,7 @@ export default function Reveal({ data }: { data: RevealData }) {
 
   return (
     <main
-      className="bm-flood relative min-h-[100dvh] overflow-hidden"
+      className="bm-flood bm-full relative overflow-hidden"
       style={{ background: bloomed ? a.color : "#120c0a", color: bloomed ? a.ink : "#fff" }}
     >
       <div className="bm-shell">
@@ -293,13 +293,14 @@ export default function Reveal({ data }: { data: RevealData }) {
                   {data.cusp ? `${a.name.replace("The ", "")}–${ARCHETYPES[data.streak].name.replace("The ", "")} cusp` : streakLine(data.streak)}
                 </span>
                 {data.note && <p className="text-[13px] font-semibold opacity-80">{data.note}</p>}
-                <Link
-                  href={data.next.href}
+                <button
+                  type="button"
+                  onClick={data.next.onClick}
                   className="bm-btn bm-fade-up mt-2 w-full"
                   style={{ background: a.ink, color: a.color, animationDelay: "0.5s" }}
                 >
                   {data.next.label} →
-                </Link>
+                </button>
               </div>
             )}
           </div>

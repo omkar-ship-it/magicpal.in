@@ -1,6 +1,6 @@
-import { ARCHETYPES, TRAITS, matrixCode, type ArchetypeId, type MatrixCode, type Trait } from "./archetypes";
-import { AGREES, RANKS, SATURDAY_ACTIVITY, STORY, VALUE_BY_ID } from "./rounds";
-import { MIN_CROWD, resultFor, selfVector, storyLabel, toTraits, type Answers, type CrowdStats, type Traits } from "./score";
+import { ARCHETYPES, TRAITS, TRAIT_PRAISE, matrixCode, type ArchetypeId, type MatrixCode, type Trait } from "./archetypes";
+import { CALLS, FREE_DAY_ACTIVITY, RANKS, RATHER, TENDENCIES, TENDENCY_SCALE, VALUE_BY_ID } from "./rounds";
+import { MIN_CROWD, callLabel, resultFor, selfVector, toTraits, type Answers, type CrowdStats, type Traits } from "./score";
 
 /**
  * Two people's Wavelength, built on their eight trait scores.
@@ -60,6 +60,10 @@ export type Comparison = {
   intentKnown: boolean;
   outcome: Outcome;
   dynamic: string;
+  /** What each will appreciate in the other — the affirming heart of the card. */
+  loves: { aSees: string; bSees: string };
+  /** Up to two genuinely shared things. */
+  click: string[];
   roles: string;
   twins: string;
   opposites: string;
@@ -103,9 +107,9 @@ export function fitParts(a: Traits, b: Traits) {
   };
 }
 
-// Where a raw score sits among simulated pairs — 21 quantiles each (v3 fit).
-const SIM_Q = [0.0568, 0.2216, 0.2589, 0.2866, 0.3094, 0.3306, 0.3491, 0.3681, 0.385, 0.4015, 0.4188, 0.4365, 0.4543, 0.4724, 0.4914, 0.5128, 0.5353, 0.5623, 0.5968, 0.6564, 0.9078];
-const COMP_Q = [0.1963, 0.4565, 0.4992, 0.5297, 0.5535, 0.5735, 0.5921, 0.609, 0.6254, 0.6416, 0.6572, 0.6731, 0.6897, 0.7065, 0.7234, 0.7425, 0.764, 0.7888, 0.8168, 0.855, 0.9901];
+// Where a raw score sits among simulated pairs — 21 quantiles each (v4 fit).
+const SIM_Q = [0.0493,  0.2177,  0.255,  0.2806,  0.3052,  0.3256,  0.3463,  0.3652,  0.3827,  0.4,  0.4179,  0.4364,  0.455,  0.4726,  0.492,  0.5126,  0.5357,  0.5623,  0.5973,  0.6579,  0.9313];
+const COMP_Q = [0.1582,  0.4551,  0.4995,  0.5302,  0.5554,  0.5763,  0.5951,  0.6125,  0.6288,  0.6457,  0.6616,  0.678,  0.6948,  0.7125,  0.7306,  0.7508,  0.7726,  0.7965,  0.8258,  0.8654,  0.9924];
 /** Blend a person's self-scores with what others say, when anyone has rated them. */
 export function blendedTraits(p: Person): Traits {
   const self = selfVector(p.answers);
@@ -239,7 +243,7 @@ export function compare(pa: Person, pb: Person, stats: CrowdStats | null = null)
   const satA = pa.answers.ranks.r1?.slice(0, 2) ?? [];
   const sharedTop = satA.find((id) => pb.answers.ranks.r1?.slice(0, 2).includes(id));
   const activity = sharedTop
-    ? SATURDAY_ACTIVITY[sharedTop]
+    ? FREE_DAY_ACTIVITY[sharedTop]
     : (za.E + zb.E) / 2 < 0
       ? "A long one-to-one coffee. Phones away."
       : "A meetup together — then compare notes on who you met.";
@@ -265,6 +269,27 @@ export function compare(pa: Person, pb: Person, stats: CrowdStats | null = null)
           ? `Two ${A.name.replace("The ", "")}s: you both ${lower(A.does)}.`
           : `${an} ${A.does}. ${bn} ${B.does}.`;
 
+  // lovedFor is written to "you"; about someone else it has to say "they".
+  const knack = (x: typeof A) =>
+    lower(x.lovedFor.replace(/\.$/, ""))
+      .replace(/\byour\b/g, "their")
+      .replace(/\byou\b/g, "they");
+  const loves = {
+    aSees: `${an} will love ${bn}'s knack for ${knack(B)}.`,
+    bSees: `${bn} will love ${an}'s knack for ${knack(A)}.`,
+  };
+  const click: string[] = [];
+  const shared = TRAITS.map((k) => ({ k, a: za[k], b: zb[k] }))
+    .filter((x) => (x.a >= 0.5 && x.b >= 0.5) || (x.a <= -0.5 && x.b <= -0.5))
+    .sort((x, y) => Math.abs(y.a + y.b) - Math.abs(x.a + x.b));
+  if (shared[0]) {
+    const high = shared[0].a > 0;
+    const [label, line] = TRAIT_PRAISE[shared[0].k][high ? "hi" : "lo"];
+    click.push(`You both bring ${label.toLowerCase()} — ${lower(line).replace(/^you /, "you both ")}`);
+  }
+  if (twins && !twins.startsWith("Not one")) click.push(twins);
+  if (!click.length) click.push("Different on paper — which is exactly why there's a lot to talk about.");
+
   return {
     a: { name: an, archetype: A.id, streak: ra.streak, traits: za },
     b: { name: bn, archetype: B.id, streak: rb.streak, traits: zb },
@@ -275,6 +300,8 @@ export function compare(pa: Person, pb: Person, stats: CrowdStats | null = null)
     intentKnown,
     outcome,
     dynamic,
+    loves,
+    click,
     roles,
     twins,
     opposites,
@@ -297,46 +324,46 @@ function fromCode(code: MatrixCode): Outcome {
   return "beautiful_chaos";
 }
 
-/** The most telling thing two people share: a rare story pick, a value, a strong opinion, a Saturday. */
+/** The most telling thing two people share: a rare tough call, a value, the same instinct. */
 function sharedThing(a: Answers, b: Answers, stats: CrowdStats | null): string | null {
   const crowd = stats && stats.n >= MIN_CROWD ? stats : null;
   let rarest: { key: string; share: number } | null = null;
-  for (const beat of STORY) {
-    if (a.story[beat.id] && a.story[beat.id] === b.story[beat.id]) {
-      const key = `${beat.id}:${a.story[beat.id]}`;
-      const share = crowd?.share[key] ?? 1 / beat.options.length;
+  for (const c of CALLS) {
+    if (a.calls[c.id] && a.calls[c.id] === b.calls[c.id]) {
+      const key = `${c.id}:${a.calls[c.id]}`;
+      const share = crowd?.share[key] ?? 0.5;
       if (!rarest || share < rarest.share) rarest = { key, share };
     }
   }
-  if (rarest && crowd && rarest.share < 0.2)
-    return `Both of you: “${storyLabel(rarest.key)}”. Only ${Math.max(1, Math.round(rarest.share * 100))}% of people pick that.`;
+  if (rarest && crowd && rarest.share < 0.3)
+    return `On a tough call you both chose “${callLabel(rarest.key)}” — only ${Math.max(1, Math.round(rarest.share * 100))}% of people do.`;
   const value = a.values.find((v) => b.values.includes(v));
   if (value) return `You both packed ${VALUE_BY_ID.get(value)?.label.toLowerCase()}.`;
-  if (rarest) return `Both of you, at ${STORY.find((x) => x.id === rarest!.key.split(":")[0])?.time}: “${storyLabel(rarest.key)}”.`;
+  if (rarest) return `On a tough call you both chose “${callLabel(rarest.key)}”.`;
   const topA = a.ranks.r1?.[0];
   if (topA && topA === b.ranks.r1?.[0]) {
     const card = RANKS[0].cards.find((c) => c.id === topA);
-    if (card) return `Your perfect Saturday starts the same way: ${card.label.toLowerCase()}.`;
+    if (card) return `Your ideal free day starts the same way: ${card.label.toLowerCase()}.`;
   }
-  const g = AGREES.find((x) => a.agree[x.id] === 1 && b.agree[x.id] === 1);
-  if (g) return `You both agreed: “${g.text}”`;
   return null;
 }
 
 function replay(a: Answers, b: Answers): Comparison["replay"] {
-  const rows: Comparison["replay"] = STORY.map((beat) => ({
-    title: `${beat.time} · ${beat.prompt}`,
-    a: beat.options.find((o) => o.id === a.story[beat.id])?.label ?? "—",
-    b: beat.options.find((o) => o.id === b.story[beat.id])?.label ?? "—",
-    same: a.story[beat.id] === b.story[beat.id],
+  const side = (x: (typeof RATHER)[number], v?: number) => (v === undefined ? "—" : v ? x.hi.label : x.lo.label);
+  const rows: Comparison["replay"] = RATHER.map((x) => ({
+    title: "Would you rather…",
+    a: side(x, a.rather[x.id]),
+    b: side(x, b.rather[x.id]),
+    same: a.rather[x.id] === b.rather[x.id],
   }));
+  for (const c of CALLS)
+    rows.push({ title: c.prompt, a: callLabel(`${c.id}:${a.calls[c.id]}`), b: callLabel(`${c.id}:${b.calls[c.id]}`), same: a.calls[c.id] === b.calls[c.id] });
+  for (const t of TENDENCIES.filter((x) => Math.abs((a.tend[x.id] ?? 0) - (b.tend[x.id] ?? 0)) >= 2).slice(0, 3))
+    rows.push({ title: `“${t.text}”`, a: TENDENCY_SCALE[a.tend[t.id]], b: TENDENCY_SCALE[b.tend[t.id]], same: false });
   for (const r of RANKS) {
     const top = (o?: string[]) => (o ? r.cards.find((c) => c.id === o[0])?.label ?? "—" : "—");
     rows.push({ title: `${r.prompt} — number one`, a: top(a.ranks[r.id]), b: top(b.ranks[r.id]), same: a.ranks[r.id]?.[0] === b.ranks[r.id]?.[0] });
   }
-  // Agree cards you split on — the "you said WHAT?" ones.
-  for (const g of AGREES.filter((x) => a.agree[x.id] !== b.agree[x.id]).slice(0, 3))
-    rows.push({ title: `“${g.text}”`, a: a.agree[g.id] ? "Agree" : "Nope", b: b.agree[g.id] ? "Agree" : "Nope", same: false });
   const lab = (ids: string[]) => ids.map((id) => VALUE_BY_ID.get(id)?.label ?? id).join(", ");
   rows.push({ title: "Pack your bag", a: lab(a.values), b: lab(b.values), same: jaccard(a.values, b.values) === 1 });
   return rows;

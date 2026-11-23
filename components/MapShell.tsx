@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useIsNarrow } from "@/lib/useIsNarrow";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { MapProfile } from "@/lib/profiles";
 import type { FeedItem } from "@/lib/feed";
@@ -41,6 +42,7 @@ import SignInPanel from "./SignInPanel";
 import ProfilePanel from "./ProfilePanel";
 import PublicOptIn from "./PublicOptIn";
 import { ProfileBrainMate, type BrainMateStatus } from "./brainMate/HomeInvite";
+import BrainMateOverlay, { type OverlayMode } from "./brainMate/Overlay";
 import ForYouPanel from "./ForYouPanel";
 import { IconChat, IconHidden, IconX } from "./Icons";
 import { BRAND_NAME } from "@/lib/brand";
@@ -90,6 +92,7 @@ export default function MapShell({
   myVisibility,
   me,
   brainMate = null,
+  brainMateOpen = null,
 }: {
   initial: ShellPayload;
   /** From ?panel= — lets /you, /login and friends stay real addresses. */
@@ -112,7 +115,24 @@ export default function MapShell({
   me: { name: string; photoUrl: string | null } | null;
   /** Null for visitors; otherwise whether they've played Brain-Mate. */
   brainMate?: BrainMateStatus | null;
+  /** From ?bm= / ?wl= — open Brain-Mate over the map on arrival. */
+  brainMateOpen?: OverlayMode | null;
 }) {
+  // Brain-Mate plays in a window over the map, never a new page.
+  const [bmMode, setBmMode] = useState<OverlayMode | null>(brainMateOpen);
+  const bmRouter = useRouter();
+  const closeBrainMate = useCallback(() => {
+    setBmMode(null);
+    // Drop ?bm / ?wl so a reload doesn't reopen it, and refresh the server
+    // data so the profile shows a card that was just earned.
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("bm") || url.searchParams.has("wl")) {
+      url.searchParams.delete("bm");
+      url.searchParams.delete("wl");
+      window.history.replaceState(null, "", url.pathname + url.search);
+    }
+    bmRouter.refresh();
+  }, [bmRouter]);
 
   const [data, setData] = useState<ShellPayload>(initial);
   const [facets, setFacets] = useState<Facets>(NO_FACETS);
@@ -1029,7 +1049,11 @@ export default function MapShell({
           // Brain-Mate is paused as an invitation (no prompt on the map or in
           // the Home panel) while the flows are refined; members who have
           // already played still see their own card here.
-          brainMate={signedIn && onboarded && brainMate?.state === "played" ? <ProfileBrainMate status={brainMate} /> : null}
+          brainMate={
+            signedIn && onboarded && brainMate?.state === "played" ? (
+              <ProfileBrainMate status={brainMate} onOpen={() => setBmMode({ kind: "card" })} />
+            ) : null
+          }
           networks={data.networks}
           connections={data.connections}
           // The reason to finish: somebody is already there.
@@ -1178,6 +1202,18 @@ export default function MapShell({
         onSelect={openTab}
         onProfile={() => openWin(signedIn ? "profile" : "signin")}
       />
+
+      {bmMode && (
+        <BrainMateOverlay
+          mode={bmMode}
+          onClose={closeBrainMate}
+          // Each new section, the map behind drifts to another part of the city.
+          onSection={(i) => {
+            const c = data.centre ?? initial.centre ?? { lat: 17.4065, lng: 78.4772 };
+            setGoTo({ lat: c.lat + 0.018 * Math.sin(i * 1.7), lng: c.lng + 0.022 * Math.cos(i * 1.7), at: Date.now() });
+          }}
+        />
+      )}
 
       {/* Members of a board who aren't on the public map get the one-tap
           way in, where the decision actually comes up. */}

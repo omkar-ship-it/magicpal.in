@@ -199,15 +199,15 @@ async function main() {
     const { nextDuel, checksNeeded } = await loadBrainMate();
     const game = (tilt) => {
       const a = {
-        v: 3,
-        story: tilt
-          ? { b1: "o", b2: "o", b3: "e", b4: "a", b5: "o", b6: "o", b7: "i" }
-          : { b1: "s", b2: "c", b3: "c", b4: "h", b5: "d", b6: "h", b7: "c" },
-        pairs: Object.fromEntries([...Array(8)].map((_, i) => [`p${i + 1}`, tilt ? 1 : 0])),
+        v: 4,
+        rather: Object.fromEntries([...Array(8)].map((_, i) => [`w${i + 1}`, tilt ? 1 : 0])),
+        tend: Object.fromEntries([...Array(8)].map((_, i) => [`t${i + 1}`, tilt ? 3 : 1])),
+        calls: tilt
+          ? { c1: "a", c2: "b", c3: "a", c4: "b", c5: "a", c6: "a" }
+          : { c1: "b", c2: "a", c3: "b", c4: "a", c5: "b", c6: "b" },
         ranks: tilt
           ? { r1: ["o", "e", "d", "c", "s"], r2: ["o", "i", "a", "d", "h"], r3: ["e", "a", "s", "c", "h"] }
           : { r1: ["c", "s", "d", "o", "e"], r2: ["h", "d", "i", "o", "a"], r3: ["c", "h", "s", "a", "e"] },
-        agree: Object.fromEntries([...Array(12)].map((_, i) => [`g${i + 1}`, tilt ? (i < 8 ? 1 : 0) : i % 2])),
         sliders: Object.fromEntries([...Array(6)].map((_, i) => [`l${i + 1}`, tilt ? 0.8 : -0.4])),
         values: tilt ? ["freedom", "adventure"] : ["helping", "stability"],
         checks: {},
@@ -229,8 +229,8 @@ async function main() {
     const forgedRes = await api("/api/brain-mate/result", { method: "POST", jar: bmD.jar, body: { name: "Dee", answers: forged } });
     assert(forgedRes.status === 400, "a duel card the answers don't lead to is refused");
     const mine = await pool.query("select archetype, answers->>'v' as v from brain_mates where user_id = (select id from users where email = $1)", [bmEmailD]);
-    assert(mine.rows[0]?.archetype === saved.data.archetype && mine.rows[0]?.v === "3", "the stored archetype is the server's, on the current version");
-    const bad = await api("/api/brain-mate/result", { method: "POST", jar: bmD.jar, body: { name: "Dee", answers: { ...game(true), sliders: { ...game(true).sliders, l2: 7 } } } });
+    assert(mine.rows[0]?.archetype === saved.data.archetype && mine.rows[0]?.v === "4", "the stored archetype is the server's, on the current version");
+    const bad = await api("/api/brain-mate/result", { method: "POST", jar: bmD.jar, body: { name: "Dee", answers: { ...game(true), tend: { ...game(true).tend, t3: 9 } } } });
     assert(bad.status === 400, "an answer the game can't produce is refused");
 
     const noGame = await api("/api/brain-mate/links", { method: "POST", jar: bmE.jar, body: { name: "Dee" } });
@@ -253,10 +253,16 @@ async function main() {
     const linkRow = await pool.query("select completed_at, recipient_id from brain_mate_links where slug = $1", [bmSlug]);
     assert(linkRow.rows[0]?.completed_at && linkRow.rows[0]?.recipient_id, "…and the link is marked done with its recipient");
 
-    const asPlayer = await fetch(`${BASE}/brain-mate/${bmSlug}`, { headers: bmD.jar.headers() }).then((r) => r.text());
-    const asStranger = await fetch(`${BASE}/brain-mate/${bmSlug}`).then((r) => r.text());
-    assert(asPlayer.includes("ANSWER REPLAY"), "a player sees the full comparison");
-    assert(!asStranger.includes("ANSWER REPLAY") && asStranger.includes("Find your Brain-Mates"), "anyone else sees only the compact card");
+    const asPlayer = await api(`/api/brain-mate/links/${bmSlug}`, { jar: bmD.jar });
+    const asStranger = await api(`/api/brain-mate/links/${bmSlug}`);
+    assert(asPlayer.data.role === "sender" && asPlayer.data.comparison?.replay?.length > 0, "a player gets the full comparison");
+    assert(asStranger.data.role === "guest" && asStranger.data.comparison?.replay?.length === 0, "anyone else gets the card without the answer replay");
+    const linkPage = await fetch(`${BASE}/brain-mate/${bmSlug}`).then((r) => r.text());
+    assert(linkPage.includes(`/?wl=${bmSlug}`), "a shared link opens the Wavelength over the home map");
+    const energy = await api("/api/brain-mate/energy", { method: "POST", jar: bmD.jar, body: { energy: "family" } });
+    assert(energy.status === 200, "the optional energy answer saves");
+    const energyRow = await pool.query("select answers->>'energy' as e, archetype from brain_mates where user_id = (select id from users where email = $1)", [bmEmailD]);
+    assert(energyRow.rows[0]?.e === "family" && energyRow.rows[0]?.archetype === saved.data.archetype, "…without touching the result");
     const view = Object.fromEntries(["O", "I", "D", "S", "E", "A", "C", "H"].map((k) => [k, 0.5]));
     const bmEmailF = `flowtest.bm-f.${stamp}@example.com`;
     emails.push(bmEmailF);

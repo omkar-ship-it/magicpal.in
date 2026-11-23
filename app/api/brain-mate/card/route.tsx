@@ -3,6 +3,7 @@ import { getSessionUser } from "@/lib/session";
 import { crowdStats, getBrainMate } from "@/lib/brainMate/server";
 import { IdentityCard, cardFonts, siteFrom } from "@/lib/brainMate/cards";
 import { MIN_CROWD, resultFor } from "@/lib/brainMate/score";
+import { TRAITS, TRAIT_PRAISE } from "@/lib/brainMate/archetypes";
 
 /**
  * Your own Brain-Mate card as a story-sized PNG, for download and for the
@@ -27,6 +28,13 @@ export async function GET(req: Request) {
         site={siteFrom(req)}
         colleague={colleague}
         mix={resultFor(me.answers).mix}
+        strengths={(() => {
+          const t = resultFor(me.answers).traits;
+          return TRAITS.map((k) => ({ k, z: t[k] }))
+            .sort((x, y) => Math.abs(y.z) - Math.abs(x.z))
+            .slice(0, 3)
+            .map(({ k, z }) => TRAIT_PRAISE[k][z >= 0 ? "hi" : "lo"][0]);
+        })()}
       />
     ),
     {

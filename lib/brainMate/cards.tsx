@@ -103,8 +103,11 @@ export function IdentityCard({
   site,
   colleague = false,
   mix,
+  strengths,
 }: {
   mix?: { id: ArchetypeId; pct: number }[];
+  /** The person's own top three strengths — shown instead of generic traits. */
+  strengths?: string[];
   name: string;
   archetype: ArchetypeId;
   streak: ArchetypeId;
@@ -154,7 +157,7 @@ export function IdentityCard({
           ) : null}
         </div>
         <div style={{ display: "flex", marginTop: 34, gap: 16 }}>
-          {a.traits.map((t) => (
+          {(strengths?.length ? strengths : a.traits).map((t) => (
             <div key={t} style={{ display: "flex", padding: "12px 24px", borderRadius: 999, background: chip, fontSize: 30, fontWeight: 800 }}>
               {t}
             </div>
@@ -166,9 +169,12 @@ export function IdentityCard({
             <div style={{ display: "flex", fontSize: 42, fontWeight: 800, marginTop: 6 }}>{a.superpower}</div>
           </div>
           <div style={{ display: "flex", flexDirection: "column" }}>
-            <div style={{ display: "flex", fontSize: 26, letterSpacing: 3, fontWeight: 800, color: soft }}>BLIND SPOT</div>
-            <div style={{ display: "flex", fontSize: 42, fontWeight: 800, marginTop: 6 }}>{colleague ? a.blindSpot : a.roast}</div>
+            <div style={{ display: "flex", fontSize: 26, letterSpacing: 3, fontWeight: 800, color: soft }}>PEOPLE LOVE ME FOR</div>
+            <div style={{ display: "flex", fontSize: 40, fontWeight: 800, marginTop: 6 }}>{a.lovedFor}</div>
           </div>
+          {colleague ? null : (
+            <div style={{ display: "flex", fontSize: 32, color: soft }}>{`Guilty habit 😅  ${a.roast}`}</div>
+          )}
           <div style={{ display: "flex", fontSize: 34, color: soft }}>
             {`My Power Duo: ${short(a.powerDuo[0])}  ·  ${a.edge.kind === "clash" ? "I clash with" : "My opposite"}: ${short(a.edge.id)}`}
           </div>
@@ -246,8 +252,8 @@ export function CompareCard({ c, site, slug }: { c: Comparison; site: string; sl
           {`“${c.dynamic}”`}
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignSelf: "stretch", marginTop: 50, gap: 14, fontSize: 32 }}>
-          <div style={{ display: "flex" }}>{`Twins on: ${c.twins}`}</div>
-          <div style={{ display: "flex", color: "#7A6B63" }}>{`Opposites on: ${c.opposites}`}</div>
+          <div style={{ display: "flex" }}>{`💛 ${c.loves.aSees}`}</div>
+          <div style={{ display: "flex" }}>{`💛 ${c.loves.bSees}`}</div>
         </div>
         <div style={{ display: "flex", flex: 1 }} />
         <div style={{ display: "flex", alignSelf: "stretch", justifyContent: "space-between", alignItems: "flex-end" }}>

@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
  * but the page stays where it is, so an invitation is still on screen while
  * the code arrives.
  */
-export default function AuthGate({ cta = "Send me a code" }: { cta?: string }) {
+export default function AuthGate({ cta = "Send me a code", onDone }: { cta?: string; onDone?: () => void }) {
   const router = useRouter();
   const [step, setStep] = useState<"email" | "code">("email");
   const [email, setEmail] = useState("");
@@ -35,6 +35,7 @@ export default function AuthGate({ cta = "Send me a code" }: { cta?: string }) {
       } else {
         await post("/api/auth/verify-otp", { email, code });
         router.refresh();
+        onDone?.();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");

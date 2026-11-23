@@ -251,7 +251,7 @@ export function DailyLink({
 }
 
 /** On someone else's waiting link, once you've already played: answer it without replaying. */
-export function ClaimButton({ slug, label }: { slug: string; label: string }) {
+export function ClaimButton({ slug, label, onDone }: { slug: string; label: string; onDone?: () => void }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -267,8 +267,11 @@ export function ClaimButton({ slug, label }: { slug: string; label: string }) {
           const data = await res.json().catch(() => ({}));
           if (res.ok) {
             buzz([20, 40, 60]);
-            router.push(`/brain-mate/${slug}?reveal=1`);
-            router.refresh();
+            if (onDone) onDone();
+            else {
+              router.push(`/brain-mate/${slug}?reveal=1`);
+              router.refresh();
+            }
           } else {
             setError(data.error ?? "Couldn't open it.");
             setBusy(false);

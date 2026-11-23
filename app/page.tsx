@@ -19,9 +19,18 @@ import { ARCHETYPES } from "@/lib/brainMate/archetypes";
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ net?: string; panel?: string; join?: string; event?: string; li?: string }>;
+  searchParams: Promise<{ net?: string; panel?: string; join?: string; event?: string; li?: string; bm?: string; wl?: string }>;
 }) {
-  const { net, panel, join, event, li } = await searchParams;
+  const { net, panel, join, event, li, bm: bmParam, wl } = await searchParams;
+  // Brain-Mate opens as a window over this map: ?bm=play | card, or ?wl=<link>.
+  const brainMateOpen =
+    wl && /^[a-z0-9-]{3,64}$/.test(wl)
+      ? ({ kind: "link", slug: wl } as const)
+      : bmParam === "card"
+        ? ({ kind: "card" } as const)
+        : bmParam === "play"
+          ? ({ kind: "play" } as const)
+          : null;
   const user = await getSessionUser();
 
   // Brain-Mate: a prominent invitation on the map for members who haven't
@@ -81,6 +90,7 @@ export default async function Home({
       myVisibility={user?.visibility ?? "off"}
       me={user ? { name: user.name ?? user.email, photoUrl: user.photoUrl } : null}
       brainMate={brainMate}
+      brainMateOpen={brainMateOpen}
     />
   );
 }
