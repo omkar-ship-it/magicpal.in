@@ -211,10 +211,7 @@ export default function ProfilePanel({
           baseLat: d.baseLat,
           baseLng: d.baseLng,
           visibility: d.visibility,
-          // Never placed yet: the public-network question hasn't really been
-          // answered, so it starts ticked as it does for everyone (somebody who
-          // arrived through Brain-Mate is stored as not-yet-public until here).
-          publicOptIn: d.visibility === "off" && d.lat == null && d.baseLat == null ? true : d.publicOptIn,
+          publicOptIn: d.publicOptIn,
         }}
         setDraft={(fn) => setD((prev) => (prev ? { ...prev, ...fn(prev as never) } : prev))}
         needsConsent={termsAccepted === false}

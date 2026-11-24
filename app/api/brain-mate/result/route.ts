@@ -39,16 +39,13 @@ export async function POST(req: Request) {
   /**
    * Someone who arrives through the game has told us their name once; the
    * profile shouldn't ask again. Only fills an empty profile name, never
-   * overwrites one.
-   *
-   * They are also marked not-yet-public. Naming an account is what lists it
-   * in the open directory, and somebody who has only played a game has never
-   * been asked whether they want to be on the public network — that answer
-   * comes in onboarding, as it does for everyone.
+   * overwrites one. A named account is listed in the People directory, so
+   * game players are findable straight away; the map then nudges them,
+   * with their completion percentage, to finish the profile.
    */
   await db
     .update(users)
-    .set({ name, publicOptIn: false })
+    .set({ name })
     .where(and(eq(users.id, user.id), or(isNull(users.name), eq(users.name, ""))));
   const stats = await crowdStats();
 

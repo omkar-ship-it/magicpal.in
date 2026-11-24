@@ -318,6 +318,8 @@ export type ShellPayload = {
   you: SelfMarker | null;
   /** Whether the viewer has given the matcher anything to work with. */
   hasSignals: boolean;
+  /** Your own profile completion while it's under 100% (see lib/completion) — drives the map's nudge. */
+  progress: { percent: number; next: string } | null;
   /** Accepted connections — the product's one real conversion metric. */
   connections: number;
   /** Unread proximity alerts, for the badge on the bell. */
@@ -574,6 +576,7 @@ export async function shellPayload(opts: {
         centre: board.lat != null && board.lng != null ? { lat: board.lat, lng: board.lng } : null,
         you,
         hasSignals,
+        progress: selfCompletion,
         connections,
         alerts,
         legalNotice,
@@ -717,6 +720,7 @@ export async function shellPayload(opts: {
     centre,
     you,
     hasSignals,
+    progress: selfCompletion,
     connections,
     alerts,
     legalNotice,

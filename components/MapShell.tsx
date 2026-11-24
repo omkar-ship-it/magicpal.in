@@ -1257,8 +1257,8 @@ export default function MapShell({
         <PublicOptIn networkName={data.scope.name} onDone={() => void load({})} />
       )}
 
-      {signedIn && onboarded && (myVisibility === "off" || !data.hasSignals) && isOpenNet && !bmFull && (
-        <OffMapNudge needsPin={myVisibility === "off"} onProfile={() => openWin("profile")} />
+      {signedIn && onboarded && (myVisibility === "off" || !data.hasSignals || data.progress) && isOpenNet && !bmFull && !wins.profile.open && (
+        <OffMapNudge needsPin={myVisibility === "off"} progress={data.progress} onProfile={() => openWin("profile")} />
       )}
 
       {/* Members who joined before LinkedIn was required: asked once a day, one field. */}
@@ -1481,23 +1481,56 @@ function ReachOut({
  * Dismissible, and it stays dismissed for the session. A nudge that
  * cannot be put down is a modal wearing a smaller hat.
  */
-function OffMapNudge({ needsPin, onProfile }: { needsPin: boolean; onProfile: () => void }) {
+/**
+ * The nudge to finish a profile, with the number that shows how far along
+ * it is. Somebody who arrived through Brain-Mate is already listed in
+ * People by name — this is what turns that bare row into a profile worth
+ * opening.
+ */
+function OffMapNudge({
+  needsPin,
+  progress,
+  onProfile,
+}: {
+  needsPin: boolean;
+  progress: { percent: number; next: string } | null;
+  onProfile: () => void;
+}) {
   const [shown, setShown] = useState(true);
   if (!shown) return null;
+  const pct = progress?.percent ?? null;
   return (
-    <div className="pointer-events-auto absolute inset-x-3 bottom-[96px] z-20 lg:inset-x-auto lg:right-3 lg:max-w-[300px]">
+    <div className="pointer-events-auto absolute inset-x-3 bottom-[96px] z-20 lg:inset-x-auto lg:right-3 lg:max-w-[320px]">
       <div className="card p-3.5">
-        <p className="label label-icon m-0">
-          <IconHidden size={12} /> {needsPin ? "You're not on this map yet" : "Nobody can match you yet"}
-        </p>
-        <p className="mt-1 text-[12.5px] leading-[1.5] text-[var(--ink-soft)]">
-          {needsPin
-            ? "You can see everyone; nobody can see you. Your city is enough to be found without being locatable."
-            : "Say what you're looking for and what you can help with — it's what puts you in front of the right people."}
-        </p>
+        {pct !== null ? (
+          <>
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="m-0 text-[14px] font-semibold">Your profile is {pct}% there</p>
+              <span className="text-[12px] text-[var(--ink-soft)]">{Math.round(pct / 20)}/5</span>
+            </div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full" style={{ background: "var(--line)" }}>
+              <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "linear-gradient(90deg, var(--brand), var(--brand-deep))" }} />
+            </div>
+            <p className="mt-2 text-[12.5px] leading-[1.5] text-[var(--ink-soft)]">
+              {needsPin ? "You're listed in People — finish your profile so others know who they're meeting. " : ""}
+              Next: {progress!.next.charAt(0).toLowerCase() + progress!.next.slice(1)}.
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="label label-icon m-0">
+              <IconHidden size={12} /> {needsPin ? "You're not on this map yet" : "Nobody can match you yet"}
+            </p>
+            <p className="mt-1 text-[12.5px] leading-[1.5] text-[var(--ink-soft)]">
+              {needsPin
+                ? "You can see everyone; nobody can see you. Your city is enough to be found without being locatable."
+                : "Say what you're looking for and what you can help with — it's what puts you in front of the right people."}
+            </p>
+          </>
+        )}
         <div className="mt-2.5 flex gap-2">
           <button type="button" className="btn btn-primary btn-sm" onClick={onProfile}>
-            {needsPin ? "Choose what to show" : "Add what you're after"}
+            {pct !== null ? "Complete my profile" : needsPin ? "Choose what to show" : "Add what you're after"}
           </button>
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShown(false)}>
             Not now
