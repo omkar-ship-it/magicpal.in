@@ -239,9 +239,12 @@ async function main() {
     assert(made.status === 200 && /^dee-eve-[a-z2-9]{3}$/.test(made.data.slug ?? ""), "a link reads as both first names plus a short suffix");
     const bmSlug = made.data.slug;
     const second = await api("/api/brain-mate/links", { method: "POST", jar: bmD.jar, body: { name: "Fay", tz: "Asia/Kolkata" } });
-    assert(second.status === 200, "more than one challenge a day is fine now");
+    assert(second.status === 200, "a second challenge the same day is fine");
     const dupe = await api("/api/brain-mate/links", { method: "POST", jar: bmD.jar, body: { name: "fay", tz: "Asia/Kolkata" } });
     assert(dupe.status === 409, "…but not a second waiting one to the same person");
+    const third = await api("/api/brain-mate/links", { method: "POST", jar: bmD.jar, body: { name: "Gia", tz: "Asia/Kolkata" } });
+    const fourth = await api("/api/brain-mate/links", { method: "POST", jar: bmD.jar, body: { name: "Hal", tz: "Asia/Kolkata" } });
+    assert(third.status === 200 && fourth.status === 429, "three challenges a day, not four");
     const own = await api(`/api/brain-mate/links/${bmSlug}/claim`, { method: "POST", jar: bmD.jar, body: {} });
     assert(own.status === 409, "the sender can't answer their own link");
 

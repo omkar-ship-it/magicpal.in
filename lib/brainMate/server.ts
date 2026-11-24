@@ -1,4 +1,5 @@
 import "server-only";
+import { DAILY_CHALLENGES } from "./payload";
 import { and, eq, gt, isNull, or, sql, desc } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
 import { db } from "@/lib/db";
@@ -139,8 +140,8 @@ export type CreateLinkResult =
   | { ok: true; slug: string }
   | { ok: false; status: number; error: string };
 
-/** Challenges one person can send in a day — a spam guard, not a game rule. */
-export const DAILY_CEILING = 25;
+/** Wavelength challenges one person can send in a day (their local day). */
+export const DAILY_CEILING = DAILY_CHALLENGES;
 
 export async function createLink(opts: {
   senderId: string;
@@ -155,14 +156,14 @@ export async function createLink(opts: {
   const name = opts.recipientName.trim().replace(/\s+/g, " ").slice(0, 40);
   if (name.length < 2) return { ok: false, status: 400, error: "Who's it for? Type their name." };
 
-  // No daily limit any more — send as many challenges as you like. One
-  // generous ceiling stays, so a script can't turn this into a spam cannon.
+  // Three a day: enough to bring a few people in, few enough that each one
+  // is still a choice.
   const { day } = localDay(opts.tz);
   const [{ sent }] = await d
     .select({ sent: sql<number>`count(*)::int` })
     .from(brainMateLinks)
     .where(and(eq(brainMateLinks.senderId, opts.senderId), eq(brainMateLinks.senderDay, day)));
-  if (sent >= DAILY_CEILING) return { ok: false, status: 429, error: "That's a lot of challenges for one day — send more tomorrow." };
+  if (sent >= DAILY_CEILING) return { ok: false, status: 429, error: `You've sent your ${DAILY_CEILING} challenges for today — more tomorrow.` };
 
   const [pending] = await d
     .select({ slug: brainMateLinks.slug })
@@ -424,6 +425,7 @@ export async function cardFor(userId: string, tz: string, origin: string): Promi
     know: howDidItKnow(me.answers, stats),
     views: views.map((v) => ({ by: v.by, traits: v.traits })),
     today: todays ? { slug: todays.slug, recipient: todays.otherName, state: todays.state } : null,
+    sentToday: links.filter((l) => l.sentToday).length,
     links: links.map((l) => ({
       slug: l.slug,
       direction: l.direction,

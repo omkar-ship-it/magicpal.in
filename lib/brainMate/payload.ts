@@ -31,6 +31,8 @@ export type CardPayload = {
   know: string;
   views: { by: string; traits: Traits }[];
   today: { slug: string; recipient: string; state: "waiting" | "done" | "expired" } | null;
+  /** Challenges sent today (their local day), against DAILY_CHALLENGES. */
+  sentToday: number;
   links: MyLinkSummary[];
   origin: string;
   intentMissing: boolean;
@@ -68,3 +70,6 @@ export type LinkPayload = {
   viewGiven: boolean;
   origin: string;
 };
+
+/** Wavelength challenges one person can send in a day. Shared by the server check and the UI. */
+export const DAILY_CHALLENGES = 3;

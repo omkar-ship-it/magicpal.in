@@ -178,7 +178,7 @@ export default function IdentityCard({
 
       {/* ----------------------------- the one big action: find your Brain-Mate */}
       <section id="today" className="bm-card p-5" style={{ background: "var(--sunk)" }}>
-        <WavelengthCta myName={card.name} origin={card.origin} today={card.today} autoOpen={focusWavelength} onOpenLink={onOpenLink} />
+        <WavelengthCta myName={card.name} origin={card.origin} today={card.today} autoOpen={focusWavelength} onOpenLink={onOpenLink} sentToday={card.sentToday} />
       </section>
 
       {/* ------------------------------------------------ who you click with */}

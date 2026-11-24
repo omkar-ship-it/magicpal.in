@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { buzz } from "./feel";
+import { DAILY_CHALLENGES } from "@/lib/brainMate/payload";
 
 /**
  * Everything that leaves the app: the identity image, the one-a-day link,
@@ -152,9 +153,12 @@ export function DailyLink({
   origin,
   bare = false,
   onOpenLink,
+  sentToday = 0,
 }: {
   myName: string;
   origin: string;
+  /** Challenges already sent today, before this screen opened. */
+  sentToday?: number;
   /** Today's link if already sent. */
   today: { slug: string; recipient: string; state: "waiting" | "done" | "expired" } | null;
   /** Inside a screen that already says what this is: no heading of its own. */
@@ -170,6 +174,9 @@ export function DailyLink({
   /** "Challenge someone else": back to the name field, whatever was sent last. */
   const [another, setAnother] = useState(false);
 
+  /** How many more they can send today, counting ones sent from this screen. */
+  const [sentHere, setSentHere] = useState(0);
+  const left = Math.max(0, DAILY_CHALLENGES - sentToday - sentHere);
   const sent = made ?? (another ? null : today);
   if (sent) {
     const url = `${origin}/brain-mate/${sent.slug}`;
@@ -199,17 +206,34 @@ export function DailyLink({
             text={`${sent.recipient}, ${myName.split(" ")[0]} wants to find your Wavelength on Brain-Mate. About 3 minutes, then we see how we click:`}
           />
         ) : null}
-        <button
-          type="button"
-          className="text-[13px] font-medium text-[var(--bm-soft)] underline underline-offset-4"
-          onClick={() => {
-            buzz(8);
-            setMade(null);
-            setAnother(true);
-          }}
-        >
-          Challenge someone else
-        </button>
+        {left > 0 ? (
+          <button
+            type="button"
+            className="text-[13px] font-medium text-[var(--bm-soft)] underline underline-offset-4"
+            onClick={() => {
+              buzz(8);
+              setMade(null);
+              setAnother(true);
+            }}
+          >
+            Challenge someone else · {left} left today
+          </button>
+        ) : (
+          <p className="text-[12.5px] text-[var(--bm-soft)]">
+            That&apos;s your {DAILY_CHALLENGES} for today. <Countdown to="midnight" prefix="More in " done="More are ready — refresh" />
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  if (left === 0) {
+    return (
+      <div className="flex flex-col gap-1 text-center">
+        <p className="text-[1.05rem] font-semibold">That&apos;s your {DAILY_CHALLENGES} for today</p>
+        <p className="text-[13px] text-[var(--bm-soft)]">
+          <Countdown to="midnight" prefix="More in " done="More are ready — refresh" />
+        </p>
       </div>
     );
   }
@@ -231,6 +255,7 @@ export function DailyLink({
           if (!res.ok) throw new Error(data.error ?? "Couldn't make the link.");
           buzz([15, 30, 15]);
           setMade({ slug: data.slug, recipient: name.trim().split(" ")[0] });
+          setSentHere((n) => n + 1);
           router.refresh();
         } catch (err) {
           setError(err instanceof Error ? err.message : "Couldn't make the link.");
@@ -257,6 +282,9 @@ export function DailyLink({
       <button className="bm-btn bm-btn-brand" disabled={busy || name.trim().length < 2}>
         {busy ? "Making your link…" : "Send the challenge"}
       </button>
+      <p className="text-center text-[12px] text-[var(--bm-soft)]">
+        {left === DAILY_CHALLENGES ? `Up to ${DAILY_CHALLENGES} challenges a day` : `${left} of ${DAILY_CHALLENGES} left today`}
+      </p>
     </form>
   );
 }
@@ -318,7 +346,7 @@ export function NudgeButton({ slug, url, text }: { slug: string; url: string; te
 
 /**
  * The viral loop, as one call to action: find your Brain-Mate by sending a
- * Wavelength check — as many as you like. Collapsed, an invitation;
+ * Wavelength check — up to three a day. Collapsed, an invitation;
  * tapped, the name field; once sent, how it's going and a way to
  * challenge someone else. `autoOpen` jumps straight to the name field.
  */
@@ -328,21 +356,23 @@ export function WavelengthCta({
   today,
   autoOpen = false,
   onOpenLink,
+  sentToday = 0,
 }: {
   myName: string;
   origin: string;
   today: { slug: string; recipient: string; state: "waiting" | "done" | "expired" } | null;
   autoOpen?: boolean;
   onOpenLink?: (slug: string) => void;
+  sentToday?: number;
 }) {
   const [open, setOpen] = useState(autoOpen);
-  if (today || open) return <DailyLink myName={myName} origin={origin} today={today} onOpenLink={onOpenLink} />;
+  if (today || open) return <DailyLink myName={myName} origin={origin} today={today} onOpenLink={onOpenLink} sentToday={sentToday} />;
   return (
     <div className="flex flex-col gap-4 text-center">
       <div>
         <p className="bm-display text-[1.7rem] leading-tight">Find your Brain-Mate</p>
         <p className="mx-auto mt-1.5 max-w-[22rem] text-[14.5px] text-[var(--bm-soft)]">
-          Send a friend or colleague the challenge. When they play, you&apos;ll both see how you click — Mind Twins, Power Duo, or Beautiful Chaos?
+          Challenge up to three friends or colleagues a day. When they play, you&apos;ll both see how you click — Mind Twins, Power Duo, or Beautiful Chaos?
         </p>
       </div>
       <button

@@ -181,6 +181,7 @@ export default function Overlay({
             name={signedIn.card.name}
             origin={signedIn.card.origin}
             today={signedIn.card.today}
+            sentToday={signedIn.card.sentToday}
             onCard={() => setView({ v: "card" })}
             onOpenLink={async (slug) => {
               await loadLink(slug);
@@ -431,11 +432,13 @@ function ChallengeView({
   name,
   origin,
   today,
+  sentToday,
   onCard,
   onOpenLink,
 }: {
   name: string;
   origin: string;
+  sentToday: number;
   today: { slug: string; recipient: string; state: "waiting" | "done" | "expired" } | null;
   onCard: () => void;
   onOpenLink: (slug: string) => void;
@@ -449,13 +452,13 @@ function ChallengeView({
         />
         <div className="relative">
           <WaveDuo a={name} b="?" />
-          <p className="mt-6 text-[11px] font-semibold tracking-[0.14em] text-[var(--bm-brand)]">FIND YOUR BRAIN-MATE</p>
+          <p className="mt-6 text-[11px] font-semibold tracking-[0.14em] text-[var(--bm-brand)]">FIND YOUR BRAIN-MATE · 3 A DAY</p>
           <h2 className="bm-display mt-1.5 text-[1.75rem]">Who&apos;s on your wavelength?</h2>
           <p className="mx-auto mt-2 max-w-[20rem] text-[14px] leading-snug text-[var(--bm-soft)]">
-            Send a friend or colleague the challenge. When they play, you&apos;ll both see how you click.
+            Challenge up to three friends or colleagues a day. When they play, you&apos;ll both see how you click.
           </p>
           <div className="mt-5 text-left">
-            <DailyLink myName={name} origin={origin} today={today} bare onOpenLink={onOpenLink} />
+            <DailyLink myName={name} origin={origin} today={today} bare onOpenLink={onOpenLink} sentToday={sentToday} />
           </div>
         </div>
       </section>

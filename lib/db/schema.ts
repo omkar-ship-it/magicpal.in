@@ -1121,10 +1121,9 @@ export const brainMates = pgTable(
  * One Wavelength link: one sender, one named friend, one pair, kept for good.
  *
  * `senderDay` is the sender's local calendar date when they sent it. It
- * used to carry a unique index — the one-a-day rule. That rule is gone
- * (2026-11-24): challenges are unlimited, with only a generous daily
- * ceiling against spam, checked in createLink. The index stays, plain, for
- * that count.
+ * used to carry a unique index — the one-a-day rule. Since 2026-11-24 it's
+ * three a day, counted in createLink (DAILY_CEILING); the index stays,
+ * plain, for that count.
  *
  * The slug carries a random suffix (omkar-sunil-k7x): two first names alone
  * collide constantly and can be guessed, and a finished link shows the

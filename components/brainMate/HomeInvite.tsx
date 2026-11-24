@@ -221,7 +221,7 @@ export function ProfileBrainMate({ status, onOpen, onFindMate }: { status: Brain
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-[14px] font-semibold">Find your Brain-Mate</span>
-          <span className="block truncate text-[11.5px] text-[var(--ink-soft)]">Challenge a friend or colleague</span>
+          <span className="block truncate text-[11.5px] text-[var(--ink-soft)]">Challenge up to 3 people a day</span>
         </span>
         <span className="rounded-full bg-[var(--brand)] px-3 py-1 text-[12px] font-semibold text-white">Send</span>
       </button>
