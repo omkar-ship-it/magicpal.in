@@ -324,7 +324,7 @@ function LinkView({
       <div className="bm-shell items-center justify-center gap-4 text-center">
         <span className="text-[3rem]">⌛</span>
         <h2 className="bm-display text-[1.9rem]">{link.role === "sender" ? `${link.recipientName} missed it.` : "This one expired."}</h2>
-        <p className="text-[15px] text-[var(--bm-soft)]">Wavelength links last a day. {link.role === "sender" ? "Your next one comes back at midnight." : "You can still find your own Brain-Mate."}</p>
+        <p className="text-[15px] text-[var(--bm-soft)]">Wavelength links last a day. {link.role === "sender" ? "Send them another, or challenge someone else." : "You can still find your own Brain-Mate."}</p>
         <button className="bm-btn bm-btn-brand" onClick={link.role === "sender" ? onMyCard : onRetake}>
           {link.role === "sender" ? "Back to my card" : "Play Brain-Mate"}
         </button>
@@ -449,10 +449,10 @@ function ChallengeView({
         />
         <div className="relative">
           <WaveDuo a={name} b="?" />
-          <p className="mt-6 text-[11px] font-semibold tracking-[0.14em] text-[var(--bm-brand)]">FIND YOUR BRAIN-MATE · ONE A DAY</p>
+          <p className="mt-6 text-[11px] font-semibold tracking-[0.14em] text-[var(--bm-brand)]">FIND YOUR BRAIN-MATE</p>
           <h2 className="bm-display mt-1.5 text-[1.75rem]">Who&apos;s on your wavelength?</h2>
           <p className="mx-auto mt-2 max-w-[20rem] text-[14px] leading-snug text-[var(--bm-soft)]">
-            Send one person the challenge. When they play, you&apos;ll both see how you click.
+            Send a friend or colleague the challenge. When they play, you&apos;ll both see how you click.
           </p>
           <div className="mt-5 text-left">
             <DailyLink myName={name} origin={origin} today={today} bare onOpenLink={onOpenLink} />

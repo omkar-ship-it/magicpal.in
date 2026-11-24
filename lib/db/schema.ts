@@ -1120,9 +1120,11 @@ export const brainMates = pgTable(
 /**
  * One Wavelength link: one sender, one named friend, one pair, kept for good.
  *
- * `senderDay` is the sender's local calendar date when they sent it, and the
- * unique index on (sender, day) *is* the one-a-day rule — enforced by the
- * database, so two quick taps or two tabs can't both get through.
+ * `senderDay` is the sender's local calendar date when they sent it. It
+ * used to carry a unique index — the one-a-day rule. That rule is gone
+ * (2026-11-24): challenges are unlimited, with only a generous daily
+ * ceiling against spam, checked in createLink. The index stays, plain, for
+ * that count.
  *
  * The slug carries a random suffix (omkar-sunil-k7x): two first names alone
  * collide constantly and can be guessed, and a finished link shows the
@@ -1154,7 +1156,7 @@ export const brainMateLinks = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    uniqueIndex("brain_mate_links_daily").on(t.senderId, t.senderDay),
+    index("brain_mate_links_sender_day_idx").on(t.senderId, t.senderDay),
     index("brain_mate_links_recipient_idx").on(t.recipientId),
     check("brain_mate_links_relation", sql`${t.relation} in ('friend','colleague')`),
   ]

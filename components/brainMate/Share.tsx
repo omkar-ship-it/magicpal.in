@@ -167,15 +167,17 @@ export function DailyLink({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [made, setMade] = useState<{ slug: string; recipient: string } | null>(null);
+  /** "Challenge someone else": back to the name field, whatever was sent last. */
+  const [another, setAnother] = useState(false);
 
-  const sent = made ?? today;
+  const sent = made ?? (another ? null : today);
   if (sent) {
     const url = `${origin}/brain-mate/${sent.slug}`;
     const state = made ? "waiting" : (today?.state ?? "waiting");
     return (
       <div className="flex flex-col gap-3 text-center">
         <div>
-          <p className="text-[11px] font-medium tracking-[0.12em] text-[var(--bm-soft)]">TODAY&apos;S CHALLENGE</p>
+          <p className="text-[11px] font-medium tracking-[0.12em] text-[var(--bm-soft)]">YOUR LATEST CHALLENGE</p>
           <p className="mt-1 text-[1.15rem] font-semibold">
             {state === "done" ? `${sent.recipient} played ✓` : state === "expired" ? `${sent.recipient} missed it` : `Waiting for ${sent.recipient}`}
           </p>
@@ -197,9 +199,17 @@ export function DailyLink({
             text={`${sent.recipient}, ${myName.split(" ")[0]} wants to find your Wavelength on Brain-Mate. About 3 minutes, then we see how we click:`}
           />
         ) : null}
-        <p className="text-[12.5px] text-[var(--bm-soft)]">
-          <Countdown to="midnight" prefix="Your next challenge in " done="A new one is ready — refresh" />
-        </p>
+        <button
+          type="button"
+          className="text-[13px] font-medium text-[var(--bm-soft)] underline underline-offset-4"
+          onClick={() => {
+            buzz(8);
+            setMade(null);
+            setAnother(true);
+          }}
+        >
+          Challenge someone else
+        </button>
       </div>
     );
   }
@@ -230,7 +240,7 @@ export function DailyLink({
       }}
     >
       <div hidden={bare}>
-        <p className="text-[12px] font-extrabold tracking-[0.14em] text-[var(--bm-brand)]">FIND YOUR BRAIN-MATE · 1 TODAY</p>
+        <p className="text-[12px] font-extrabold tracking-[0.14em] text-[var(--bm-brand)]">FIND YOUR BRAIN-MATE</p>
         <p className="mt-1 text-[15px] text-[var(--bm-soft)]">
           Who&apos;s on your wavelength? Send them the game — when they play, you both see how you click.
         </p>
@@ -308,9 +318,9 @@ export function NudgeButton({ slug, url, text }: { slug: string; url: string; te
 
 /**
  * The viral loop, as one call to action: find your Brain-Mate by sending a
- * Wavelength check — one a day, so it's an event, not spam. Collapsed, an
- * invitation; tapped, the name field; once sent, today's check and when
- * the next one unlocks. `autoOpen` jumps straight to the name field.
+ * Wavelength check — as many as you like. Collapsed, an invitation;
+ * tapped, the name field; once sent, how it's going and a way to
+ * challenge someone else. `autoOpen` jumps straight to the name field.
  */
 export function WavelengthCta({
   myName,
@@ -329,13 +339,10 @@ export function WavelengthCta({
   if (today || open) return <DailyLink myName={myName} origin={origin} today={today} onOpenLink={onOpenLink} />;
   return (
     <div className="flex flex-col gap-4 text-center">
-      <div className="mx-auto flex items-center gap-1.5 rounded-full bg-[var(--bm-card)] px-3 py-1 text-[11.5px] font-bold tracking-[0.12em] text-[var(--bm-brand)]">
-        🌊 ONE A DAY
-      </div>
       <div>
         <p className="bm-display text-[1.7rem] leading-tight">Find your Brain-Mate</p>
         <p className="mx-auto mt-1.5 max-w-[22rem] text-[14.5px] text-[var(--bm-soft)]">
-          Send one person a Wavelength check. When they play, you&apos;ll both see how you click — Mind Twins, Power Duo, or Beautiful Chaos?
+          Send a friend or colleague the challenge. When they play, you&apos;ll both see how you click — Mind Twins, Power Duo, or Beautiful Chaos?
         </p>
       </div>
       <button

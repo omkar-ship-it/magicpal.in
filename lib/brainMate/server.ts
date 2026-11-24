@@ -139,6 +139,9 @@ export type CreateLinkResult =
   | { ok: true; slug: string }
   | { ok: false; status: number; error: string };
 
+/** Challenges one person can send in a day — a spam guard, not a game rule. */
+export const DAILY_CEILING = 25;
+
 export async function createLink(opts: {
   senderId: string;
   recipientName: string;
@@ -152,13 +155,14 @@ export async function createLink(opts: {
   const name = opts.recipientName.trim().replace(/\s+/g, " ").slice(0, 40);
   if (name.length < 2) return { ok: false, status: 400, error: "Who's it for? Type their name." };
 
+  // No daily limit any more — send as many challenges as you like. One
+  // generous ceiling stays, so a script can't turn this into a spam cannon.
   const { day } = localDay(opts.tz);
-  const [today] = await d
-    .select({ slug: brainMateLinks.slug })
+  const [{ sent }] = await d
+    .select({ sent: sql<number>`count(*)::int` })
     .from(brainMateLinks)
-    .where(and(eq(brainMateLinks.senderId, opts.senderId), eq(brainMateLinks.senderDay, day)))
-    .limit(1);
-  if (today) return { ok: false, status: 429, error: "Today's Wavelength is already sent. A new one at midnight." };
+    .where(and(eq(brainMateLinks.senderId, opts.senderId), eq(brainMateLinks.senderDay, day)));
+  if (sent >= DAILY_CEILING) return { ok: false, status: 429, error: "That's a lot of challenges for one day — send more tomorrow." };
 
   const [pending] = await d
     .select({ slug: brainMateLinks.slug })
@@ -189,10 +193,6 @@ export async function createLink(opts: {
       return { ok: true, slug };
     } catch (e) {
       const msg = String((e as { cause?: { message?: string }; message?: string })?.cause?.message ?? (e as Error)?.message ?? e);
-      // The (sender, day) index is the real one-a-day gate: a second tab
-      // that got past the read above lands here.
-      if (msg.includes("brain_mate_links_daily"))
-        return { ok: false, status: 429, error: "Today's Wavelength is already sent. A new one at midnight." };
       if (!msg.includes("slug")) throw e;
     }
   }
