@@ -406,6 +406,21 @@ export async function saveEnergy(userId: string, energy: string): Promise<boolea
   return true;
 }
 
+/**
+ * How the player reacted to the insight at the end of the reveal — stored
+ * beside their answers (like the energy answer), never scored. Read back
+ * to find which insight lines land and which need rewriting.
+ */
+export async function saveInsight(userId: string, id: string, verdict: string): Promise<boolean> {
+  const me = await getBrainMate(userId);
+  if (!me || !me.current) return false;
+  await need()
+    .update(brainMates)
+    .set({ answers: { ...me.answers, insight: { id, verdict, at: new Date().toISOString() } } })
+    .where(eq(brainMates.userId, userId));
+  return true;
+}
+
 /** Everything the identity card needs, for the person themselves. */
 export async function cardFor(userId: string, tz: string, origin: string): Promise<CardPayload | null> {
   const me = await getBrainMate(userId);

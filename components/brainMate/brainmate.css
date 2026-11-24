@@ -782,3 +782,16 @@
   max-width: 34rem;
   margin-inline: auto;
 }
+
+/* -------------------------------------------- the insight, landing */
+.bm-insight {
+  animation: bm-insight-in 0.9s var(--bm-ease) both;
+}
+@keyframes bm-insight-in {
+  0% { opacity: 0; transform: translateY(14px) scale(0.98); filter: blur(6px); }
+  60% { opacity: 1; filter: none; }
+  100% { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bm-insight { animation: none; }
+}

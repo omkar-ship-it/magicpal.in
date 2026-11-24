@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { ARCHETYPES, streakLine, type ArchetypeId } from "@/lib/brainMate/archetypes";
 import { TRAITS } from "@/lib/brainMate/archetypes";
-import { HIGH_PHRASE, LOW_PHRASE, MIN_CROWD, STAR_POS, TRAIT_COLOR, montageWords, starLight, strandsFor, traitVector, type Answers } from "@/lib/brainMate/score";
+import { HIGH_PHRASE, LOW_PHRASE, MIN_CROWD, STAR_POS, TRAIT_COLOR, montageWords, resultFor, starLight, strandsFor, traitVector, type Answers } from "@/lib/brainMate/score";
+import { insightFor, type InsightVerdict } from "@/lib/brainMate/insights";
 import { ArchetypeMark } from "@/lib/brainMate/symbols";
 import { buzz, tone } from "./feel";
 import { QuickShare } from "./Share";
@@ -48,7 +49,7 @@ export type RevealData = {
 /** Calibration first; everything after it is offset by CAL. */
 const CAL = 5600;
 const CAL_STEP = CAL / 6;
-const T = { montage: CAL, shatter: CAL + 1700, inhale: CAL + 2250, bloom: CAL + 2800, name: CAL + 3200, tagline: CAL + 3900, rarity: CAL + 4400, hand: CAL + 4900, actions: CAL + 5600 };
+const T = { montage: CAL, shatter: CAL + 1700, inhale: CAL + 2250, bloom: CAL + 2800, name: CAL + 3200, tagline: CAL + 3900, rarity: CAL + 4400, insight: CAL + 5000, hand: CAL + 6600, actions: CAL + 7300 };
 
 /** Six fleeting lines — generic where it must be, yours where it can be. */
 function calibrationLines(data: RevealData): string[] {
@@ -97,6 +98,7 @@ export default function Reveal({ data }: { data: RevealData }) {
   const words = montageWords(data.answers);
   const stars = starLight(data.answers);
   const [lines] = useState(() => calibrationLines(data));
+  const [insight] = useState(() => insightFor(resultFor(data.answers).traits));
   const [line, setLine] = useState(0);
 
   useEffect(() => {
@@ -115,6 +117,12 @@ export default function Reveal({ data }: { data: RevealData }) {
       tone(0, 0.5);
       tone(7, 0.6);
       tone(12, 0.8);
+    });
+    // The insight lands with its own soft pulse: the moment it says the thing they've felt.
+    at(T.insight, () => {
+      buzz([12, 40, 12]);
+      tone(4, 0.4);
+      tone(11, 0.6);
     });
     return () => timers.forEach((x) => window.clearTimeout(x));
     // Runs once: the sequence is the same however long the page stays open.
@@ -283,8 +291,22 @@ export default function Reveal({ data }: { data: RevealData }) {
             )}
 
             {/* One quiet card instead of a hand of flip cards: what you're like, your superpower, your blind spot. */}
+            {/* The insight: one line that gives words to something they've felt. */}
+            {t >= T.insight && (
+              <section
+                className="bm-insight mt-6 w-full rounded-[1.25rem] px-5 pb-4 pt-5 text-left"
+                style={{ background: `color-mix(in srgb, ${a.color} 9%, var(--bm-card))`, border: `1px solid color-mix(in srgb, ${a.color} 25%, var(--bm-line))` }}
+              >
+                <p className="text-[11px] font-semibold tracking-[0.14em]" style={{ color: a.color }}>
+                  SOMETHING YOU MIGHT NOT SAY OUT LOUD
+                </p>
+                <p className="mt-2 text-[1.14rem] font-semibold leading-snug">{insight.line}</p>
+                <InsightReaction id={insight.id} />
+              </section>
+            )}
+
             {t >= T.hand && (
-              <section className="bm-fade-up mt-6 w-full rounded-[1.25rem] border border-[var(--bm-line)] bg-[var(--bm-card)] p-5 text-left">
+              <section className="bm-fade-up mt-3 w-full rounded-[1.25rem] border border-[var(--bm-line)] bg-[var(--bm-card)] p-5 text-left">
                 <div className="flex flex-wrap gap-1.5">
                   {a.traits.map((tr) => (
                     <span key={tr} className="rounded-full px-3 py-1 text-[12.5px] font-medium" style={{ background: chip }}>
@@ -374,6 +396,55 @@ function EnergyAsk() {
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+/**
+ * "That's so me" / "Not quite" under the insight. Recorded (never scored)
+ * so the lines that don't land can be found and rewritten. The result may
+ * still be saving when they tap, so a refused send is retried once.
+ */
+function InsightReaction({ id }: { id: string }) {
+  const [verdict, setVerdict] = useState<InsightVerdict | null>(null);
+  const send = (v: InsightVerdict, retry = true) =>
+    fetch("/api/brain-mate/insight", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, verdict: v }) })
+      .then((r) => {
+        if (!r.ok && retry) window.setTimeout(() => void send(v, false), 2500);
+      })
+      .catch(() => {});
+  if (verdict)
+    return (
+      <p className="bm-fade-up mt-3 text-[13px]" style={{ color: "var(--bm-soft)" }}>
+        {verdict === "so_me" ? "We thought so." : "Thanks — that helps us sharpen it."}
+      </p>
+    );
+  return (
+    <div className="mt-3.5 flex gap-2">
+      {(
+        [
+          ["so_me", "That's so me"],
+          ["not_quite", "Not quite"],
+        ] as const
+      ).map(([v, label]) => (
+        <button
+          key={v}
+          type="button"
+          className="rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition-transform active:scale-95"
+          style={
+            v === "so_me"
+              ? { borderColor: "var(--bm-ink)", background: "var(--bm-ink)", color: "var(--bm-card)" }
+              : { borderColor: "var(--bm-line)", background: "var(--bm-card)", color: "var(--bm-ink)" }
+          }
+          onClick={() => {
+            buzz(v === "so_me" ? [10, 30, 10] : 8);
+            setVerdict(v);
+            void send(v);
+          }}
+        >
+          {label}
+        </button>
+      ))}
     </div>
   );
 }
