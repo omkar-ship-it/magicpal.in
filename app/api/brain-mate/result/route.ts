@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db, hasDb } from "@/lib/db";
-import { consents } from "@/lib/db/schema";
+import { and, eq, isNull, or } from "drizzle-orm";
+import { consents, users } from "@/lib/db/schema";
 import { getSessionUser } from "@/lib/session";
 import { hasAcceptedTerms } from "@/lib/profiles";
 import { LEGAL_VERSION, TERMS_CONSENT_KIND } from "@/lib/legal";
@@ -34,6 +35,21 @@ export async function POST(req: Request) {
   }
 
   const result = await saveBrainMate(user.id, name, answers);
+
+  /**
+   * Someone who arrives through the game has told us their name once; the
+   * profile shouldn't ask again. Only fills an empty profile name, never
+   * overwrites one.
+   *
+   * They are also marked not-yet-public. Naming an account is what lists it
+   * in the open directory, and somebody who has only played a game has never
+   * been asked whether they want to be on the public network — that answer
+   * comes in onboarding, as it does for everyone.
+   */
+  await db
+    .update(users)
+    .set({ name, publicOptIn: false })
+    .where(and(eq(users.id, user.id), or(isNull(users.name), eq(users.name, ""))));
   const stats = await crowdStats();
 
   let linkError: string | null = null;

@@ -230,6 +230,12 @@ async function main() {
     assert(forgedRes.status === 400, "a duel card the answers don't lead to is refused");
     const mine = await pool.query("select archetype, answers->>'v' as v from brain_mates where user_id = (select id from users where email = $1)", [bmEmailD]);
     assert(mine.rows[0]?.archetype === saved.data.archetype && mine.rows[0]?.v === "5", "the stored archetype is the server's, on the current version");
+    const prof = await pool.query("select name, public_opt_in from users where email = $1", [bmEmailD]);
+    assert(prof.rows[0]?.name === "Dee" && prof.rows[0]?.public_opt_in === false, "the game's name fills an empty profile name, and doesn't make them public");
+    await pool.query("update users set name = 'Dee Real' where email = $1", [bmEmailD]);
+    await api("/api/brain-mate/result", { method: "POST", jar: bmD.jar, body: { name: "Dee", answers: game(true) } });
+    const prof2 = await pool.query("select name from users where email = $1", [bmEmailD]);
+    assert(prof2.rows[0]?.name === "Dee Real", "…but never overwrites a name they already have");
     const bad = await api("/api/brain-mate/result", { method: "POST", jar: bmD.jar, body: { name: "Dee", answers: { ...game(true), tend: { ...game(true).tend, t3: 9 } } } });
     assert(bad.status === 400, "an answer the game can't produce is refused");
 
