@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { avatarTint, characterUrl } from "@/lib/avatar";
 
 /**
@@ -31,7 +32,14 @@ export default function Avatar({
   className?: string;
   title?: string;
 }) {
-  const src = photoUrl || characterUrl(style, name);
+  /**
+   * A photo that stops loading falls back to the character, never to an
+   * empty disc. LinkedIn picture links are signed and expire after a few
+   * weeks, so a stored one can die without anything else changing.
+   */
+  const [broken, setBroken] = useState<string | null>(null);
+  const photo = photoUrl && photoUrl !== broken ? photoUrl : null;
+  const src = photo || characterUrl(style, name);
   return (
     <span
       className={`relative inline-block flex-none overflow-hidden rounded-full ${className}`}
@@ -44,7 +52,19 @@ export default function Avatar({
       title={title ?? name}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt="" width={size} height={size} className="h-full w-full object-cover" loading="lazy" />
+      <img
+        src={src}
+        alt=""
+        width={size}
+        height={size}
+        className="h-full w-full object-cover"
+        loading="lazy"
+        onError={photo ? () => setBroken(photo) : undefined}
+        // A photo that failed before hydration never fires onError; catch it here.
+        ref={(el) => {
+          if (photo && el?.complete && el.naturalWidth === 0) setBroken(photo);
+        }}
+      />
     </span>
   );
 }

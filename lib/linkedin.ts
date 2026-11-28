@@ -16,6 +16,7 @@
  */
 
 import { eq } from "drizzle-orm";
+import { put } from "@vercel/blob";
 import { db, hasDb } from "./db";
 import { users } from "./db/schema";
 
@@ -186,6 +187,36 @@ export async function identityFromCode({
  * button they just pressed, instead of handing them a second, empty
  * account and a map that has forgotten them.
  */
+/** LinkedIn's CDN. Its picture links are signed and expire after a few weeks. */
+export const isLinkedInPhoto = (url: string | null | undefined) => !!url && /(^|\.)licdn\.com\//.test(url.replace(/^https?:\/\//, ""));
+
+/**
+ * Our own copy of a LinkedIn picture.
+ *
+ * The URL LinkedIn hands over carries an expiry (`e=`), and once it passes
+ * the image answers 403 and the member's face disappears from the map.
+ * So the bytes are copied into blob storage at sign-in and that permanent
+ * URL is what gets stored. Without blob storage, or if the copy fails, the
+ * LinkedIn link is kept as before: it still works for weeks, and the next
+ * LinkedIn sign-in refreshes it.
+ */
+export async function keepLinkedInPhoto(picture: string | null, userKey: string): Promise<string | null> {
+  if (!picture || !process.env.BLOB_READ_WRITE_TOKEN) return picture;
+  try {
+    const res = await fetch(picture, { signal: AbortSignal.timeout(5000) });
+    const type = res.headers.get("content-type") ?? "";
+    if (!res.ok || !type.startsWith("image/")) return picture;
+    const blob = await put(`profile-photos/${userKey}-linkedin`, await res.arrayBuffer(), {
+      access: "public",
+      addRandomSuffix: true,
+      contentType: type,
+    });
+    return blob.url;
+  } catch {
+    return picture;
+  }
+}
+
 export async function signInWithLinkedIn(
   who: LinkedInIdentity
 ): Promise<{ userId: string; created: boolean } | null> {
@@ -201,7 +232,12 @@ export async function signInWithLinkedIn(
     // onboarding step done before they have typed anything.
     const [made] = await db
       .insert(users)
-      .values({ email: who.email, linkedinSub: who.sub, name: who.name, photoUrl: who.picture })
+      .values({
+        email: who.email,
+        linkedinSub: who.sub,
+        name: who.name,
+        photoUrl: await keepLinkedInPhoto(who.picture, who.sub),
+      })
       .returning();
     return { userId: made.id, created: true };
   }
@@ -212,13 +248,18 @@ export async function signInWithLinkedIn(
    * Somebody who set their own name or uploaded their own photo chose
    * those, and a later LinkedIn sign-in is not a reason to overwrite
    * them with whatever their employer's profile picture happens to be.
+   *
+   * The exception is a photo that came from LinkedIn in the first place
+   * and is still a LinkedIn link: that one expires, so it is replaced
+   * with a fresh, permanent copy.
    */
+  const refresh = !user.photoUrl || isLinkedInPhoto(user.photoUrl);
   await db
     .update(users)
     .set({
       linkedinSub: who.sub,
       ...(user.name ? {} : { name: who.name }),
-      ...(user.photoUrl ? {} : { photoUrl: who.picture }),
+      ...(refresh && who.picture ? { photoUrl: await keepLinkedInPhoto(who.picture, user.id) } : {}),
     })
     .where(eq(users.id, user.id));
 
